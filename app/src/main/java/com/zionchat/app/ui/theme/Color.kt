@@ -1,0 +1,13 @@
+package com.zionchat.app.ui.theme
+
+import androidx.compose.ui.graphics.Color
+
+// iOS Style Colors
+val Background = Color(0xFFF5F5F7)
+val Surface = Color(0xFFFFFFFF)
+val TextPrimary = Color(0xFF1C1C1E)
+val TextSecondary = Color(0xFF8E8E93)
+val GrayLight = Color(0xFFE5E5EA)
+val GrayLighter = Color(0xFFF2F2F7)
+val AccentBlue = Color(0xFF007AFF)
+val SelectedToolBackground = Color(0xFFE8F4FD)
