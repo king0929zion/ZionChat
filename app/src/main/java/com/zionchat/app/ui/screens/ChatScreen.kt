@@ -712,7 +712,7 @@ fun ToolMenuBottomSheet(
 }
 
 @Composable
-fun QuickActionButton(
+fun RowScope.QuickActionButton(
     icon: String,
     label: String,
     onClick: () -> Unit
