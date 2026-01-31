@@ -7,12 +7,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -20,140 +16,161 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.zionchat.app.ui.theme.*
+import com.zionchat.app.ui.icons.AppIcons
 
 // Provider data class
 data class Provider(
     val id: String,
     val name: String,
-    val icon: String
+    val iconEmoji: String
 )
 
 @Composable
 fun ModelServicesScreen(navController: NavController) {
+    var searchQuery by remember { mutableStateOf("") }
+
     val providers = listOf(
-        Provider("qwen", "Qwen", "🔴"),
-        Provider("doubao", "Doubao", "🟢"),
-        Provider("openai", "ChatGPT", "⚫"),
-        Provider("anthropic", "Anthropic", "🟣"),
-        Provider("google", "Google", "🔵"),
-        Provider("ollama", "Ollama", "🦙"),
-        Provider("deepseek", "DeepSeek", "🔷"),
-        Provider("yi", "Yi", "🟡"),
-        Provider("moonshot", "Moonshot", "🌙"),
-        Provider("gemini", "Gemini", "💎"),
-        Provider("grok", "Grok", "🤖"),
-        Provider("mistral", "Mistral", "🌀"),
-        Provider("groq", "Groq", "⚡"),
-        Provider("azure", "Azure", "🔷"),
-        Provider("claude", "Claude", "🟣"),
-        Provider("baichuan", "Baichuan", "🟠"),
-        Provider("zhipu", "Zhipu", "🟢"),
-        Provider("minimax", "MiniMax", "🔴"),
-        Provider("stepfun", "StepFun", "🟡"),
-        Provider("hunyuan", "Hunyuan", "🔵"),
-        Provider("silicon", "Silicon", "⚪"),
-        Provider("together", "Together", "🟤"),
-        Provider("perplexity", "Perplexity", "🟢"),
-        Provider("openrouter", "OpenRouter", "🔴"),
-        Provider("fireworks", "Fireworks", "🎆"),
-        Provider("cerebras", "Cerebras", "⚫"),
-        Provider("meta", "Meta", "🔵")
+        Provider("qwen", "Qwen", "Q"),
+        Provider("doubao", "Doubao", "D"),
+        Provider("openai", "ChatGPT", "C"),
+        Provider("anthropic", "Anthropic", "A"),
+        Provider("google", "Google", "G"),
+        Provider("ollama", "Ollama", "O"),
+        Provider("deepseek", "DeepSeek", "D"),
+        Provider("yi", "Yi", "Y"),
+        Provider("moonshot", "Moonshot", "M"),
+        Provider("gemini", "Gemini", "G"),
+        Provider("grok", "Grok", "G"),
+        Provider("mistral", "Mistral", "M"),
+        Provider("groq", "Groq", "G"),
+        Provider("azure", "Azure", "A"),
+        Provider("claude", "Claude", "C"),
+        Provider("baichuan", "Baichuan", "B"),
+        Provider("zhipu", "Zhipu", "Z"),
+        Provider("minimax", "MiniMax", "M"),
+        Provider("stepfun", "StepFun", "S"),
+        Provider("hunyuan", "Hunyuan", "H"),
+        Provider("silicon", "Silicon", "S"),
+        Provider("together", "Together", "T"),
+        Provider("perplexity", "Perplexity", "P"),
+        Provider("openrouter", "OpenRouter", "O"),
+        Provider("fireworks", "Fireworks", "F"),
+        Provider("cerebras", "Cerebras", "C"),
+        Provider("meta", "Meta", "M")
     )
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Background)
-    ) {
-        // Top Navigation Bar
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp)
-        ) {
-            // Back Button
-            IconButton(
-                onClick = { navController.popBackStack() },
+    val filteredProviders = providers.filter {
+        it.name.contains(searchQuery, ignoreCase = true)
+    }
+
+    Scaffold(
+        topBar = {
+            Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .align(Alignment.CenterStart)
-                    .background(Surface, CircleShape)
+                    .fillMaxWidth()
+                    .background(Background.copy(alpha = 0.95f))
+                    .padding(horizontal = 16.dp, vertical = 16.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = TextPrimary
+                // 返回按钮
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(Surface, CircleShape)
+                        .clickable { navController.navigateUp() }
+                        .align(Alignment.CenterStart),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Back,
+                        contentDescription = "Back",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                // 标题
+                Text(
+                    text = "Model Services",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary,
+                    modifier = Modifier.align(Alignment.Center)
                 )
+
+                // 添加按钮
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(Surface, CircleShape)
+                        .clickable { navController.navigate("add_provider") }
+                        .align(Alignment.CenterEnd),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Plus,
+                        contentDescription = "Add Provider",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             }
-
-            // Title
-            Text(
-                text = "Model Services",
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary,
-                modifier = Modifier.align(Alignment.Center)
-            )
-
-            // Add Button
-            IconButton(
-                onClick = { navController.navigate("add_provider") },
-                modifier = Modifier
-                    .size(40.dp)
-                    .align(Alignment.CenterEnd)
-                    .background(Surface, CircleShape)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Add Provider",
-                    tint = TextPrimary
-                )
-            }
-        }
-
-        // Search Box
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .height(48.dp)
-                .background(GrayLight, RoundedCornerShape(12.dp))
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Search,
-                contentDescription = "Search",
-                tint = TextSecondary,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = "Enter provider name",
-                fontSize = 17.sp,
-                color = TextPrimary,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        // Provider List
+        },
+        containerColor = Background
+    ) { padding ->
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .fillMaxSize()
+                .padding(padding)
         ) {
-            providers.forEach { provider ->
-                ProviderItem(
-                    provider = provider,
-                    onClick = {
-                        navController.navigate("add_provider?preset=${provider.id}")
-                    }
+            // 搜索框
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .height(48.dp)
+                    .background(GrayLight, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = AppIcons.Search,
+                    contentDescription = "Search",
+                    tint = TextSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                TextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Enter provider name", fontSize = 17.sp, color = TextPrimary) },
+                    modifier = Modifier.weight(1f),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent
+                    )
                 )
             }
-            Spacer(modifier = Modifier.height(16.dp))
+
+            // Provider List
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                filteredProviders.forEach { provider ->
+                    ProviderItem(
+                        provider = provider,
+                        onClick = {
+                            navController.navigate("add_provider?preset=${provider.id}")
+                        }
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
         }
     }
 }
@@ -173,14 +190,18 @@ fun ProviderItem(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Provider Icon (placeholder using emoji)
+        // Provider Icon
         Box(
-            modifier = Modifier.size(36.dp),
+            modifier = Modifier
+                .size(36.dp)
+                .background(Surface, RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = provider.icon,
-                fontSize = 28.sp
+                text = provider.iconEmoji,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
             )
         }
 

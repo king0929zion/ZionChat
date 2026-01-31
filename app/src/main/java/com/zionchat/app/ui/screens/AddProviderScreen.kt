@@ -8,8 +8,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,7 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.zionchat.app.ui.theme.*
+import com.zionchat.app.ui.icons.AppIcons
 
 @Composable
 fun AddProviderScreen(
@@ -64,18 +62,20 @@ fun AddProviderScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 16.dp)
             ) {
-                // Back Button
-                IconButton(
-                    onClick = { navController.popBackStack() },
+                // 返回按钮
+                Box(
                     modifier = Modifier
                         .size(40.dp)
-                        .align(Alignment.CenterStart)
                         .background(Surface, CircleShape)
+                        .clickable { navController.navigateUp() }
+                        .align(Alignment.CenterStart),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ArrowBack,
+                        imageVector = AppIcons.Back,
                         contentDescription = "Back",
-                        tint = TextPrimary
+                        tint = TextPrimary,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
@@ -88,18 +88,20 @@ fun AddProviderScreen(
                     modifier = Modifier.align(Alignment.Center)
                 )
 
-                // Save Button
-                IconButton(
-                    onClick = { navController.popBackStack() },
+                // 保存按钮
+                Box(
                     modifier = Modifier
                         .size(40.dp)
-                        .align(Alignment.CenterEnd)
                         .background(Surface, CircleShape)
+                        .clickable { navController.navigateUp() }
+                        .align(Alignment.CenterEnd),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Check,
+                        imageVector = AppIcons.Check,
                         contentDescription = "Save",
-                        tint = TextPrimary
+                        tint = TextPrimary,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
@@ -128,7 +130,7 @@ fun AddProviderScreen(
                             Text(text = selectedAvatar, fontSize = 32.sp)
                         } else {
                             Icon(
-                                imageVector = Icons.Default.Image,
+                                imageVector = AppIcons.ChatGPTLogo,
                                 contentDescription = "Select Avatar",
                                 tint = TextSecondary,
                                 modifier = Modifier.size(28.dp)
@@ -232,7 +234,7 @@ fun AddProviderScreen(
                             )
                         }
                         Icon(
-                            imageVector = Icons.Default.ChevronRight,
+                            imageVector = AppIcons.ChevronRight,
                             contentDescription = "Navigate",
                             tint = TextSecondary,
                             modifier = Modifier.size(20.dp)
@@ -337,9 +339,10 @@ fun AddProviderScreen(
                             )
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Image,
+                                imageVector = AppIcons.ChatGPTLogo,
                                 contentDescription = "Import",
-                                tint = TextPrimary
+                                tint = TextPrimary,
+                                modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(

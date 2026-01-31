@@ -7,108 +7,107 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.zionchat.app.ui.theme.*
+import com.zionchat.app.ui.icons.AppIcons
 
 @Composable
 fun SettingsScreen(navController: NavController) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Background)
-    ) {
-        // Top Navigation Bar
-        SettingsTopBar(navController)
-
-        // Content
+    Scaffold(
+        topBar = { SettingsTopBar(navController) },
+        containerColor = Background
+    ) { padding ->
         Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
+                .padding(padding)
                 .verticalScroll(rememberScrollState())
         ) {
             // User Profile Section
             UserProfileSection()
 
-            // Settings Groups
-            SettingsGroup(title = "MY CHATGPT") {
+            // My ChatGPT 分组
+            SettingsGroup(title = "My ChatGPT") {
                 SettingsItem(
-                    icon = Icons.Default.Person,
-                    title = "Personalization",
+                    icon = { Icon(AppIcons.Personalization, null, Modifier.size(22.dp), TextPrimary) },
+                    label = "Personalization",
                     onClick = { }
                 )
                 SettingsItem(
-                    icon = Icons.Default.Apps,
-                    title = "Apps",
+                    icon = { Icon(AppIcons.Apps, null, Modifier.size(22.dp), TextPrimary) },
+                    label = "Apps",
                     onClick = { }
                 )
             }
 
-            SettingsGroup(title = "APPEARANCE") {
+            // Appearance 分组
+            SettingsGroup(title = "Appearance") {
                 SettingsItem(
-                    icon = Icons.Default.Palette,
-                    title = "Appearance",
-                    trailing = { Text("Light", fontSize = 15.sp, color = TextSecondary) },
+                    icon = { Icon(AppIcons.Appearance, null, Modifier.size(22.dp), TextPrimary) },
+                    label = "Appearance",
+                    value = "Light",
+                    showChevron = true,
                     onClick = { }
                 )
                 SettingsItem(
-                    icon = Icons.Default.ColorLens,
-                    title = "Accent color",
-                    trailing = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(12.dp)
-                                    .background(Color(0xFF9CA3AF), CircleShape)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Default", fontSize = 15.sp, color = TextSecondary)
-                        }
+                    icon = {
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .background(Color(0xFF8E8E93), CircleShape)
+                        )
                     },
+                    label = "Accent color",
+                    value = "Default",
+                    showChevron = true,
                     onClick = { }
                 )
             }
 
-            SettingsGroup(title = "GENERAL") {
+            // General 分组
+            SettingsGroup(title = "General") {
                 SettingsItem(
-                    icon = Icons.Default.Language,
-                    title = "Language",
-                    trailing = { Text("English", fontSize = 15.sp, color = TextSecondary) },
+                    icon = { Icon(AppIcons.Language, null, Modifier.size(22.dp), TextPrimary) },
+                    label = "Language",
+                    value = "English",
+                    showChevron = true,
                     onClick = { }
                 )
                 SettingsItem(
-                    icon = Icons.Default.Notifications,
-                    title = "Notifications",
+                    icon = { Icon(AppIcons.Notifications, null, Modifier.size(22.dp), TextPrimary) },
+                    label = "Notifications",
+                    showChevron = true,
                     onClick = { }
                 )
             }
 
-            SettingsGroup(title = "AI MODEL") {
+            // AI Model 分组
+            SettingsGroup(title = "AI Model") {
                 SettingsItem(
-                    icon = Icons.Default.SmartToy,
-                    title = "Default model",
-                    trailing = { Text("GPT-4o", fontSize = 15.sp, color = TextSecondary) },
+                    icon = { Icon(AppIcons.Model, null, Modifier.size(22.dp), TextPrimary) },
+                    label = "Default model",
+                    value = "GPT-4o",
+                    showChevron = true,
                     onClick = { }
                 )
                 SettingsItem(
-                    icon = Icons.Default.Cloud,
-                    title = "Model services",
+                    icon = { Icon(AppIcons.ModelServices, null, Modifier.size(22.dp), TextPrimary) },
+                    label = "Model services",
+                    showChevron = true,
                     onClick = { navController.navigate("model_services") }
                 )
                 SettingsItem(
-                    icon = Icons.Default.Code,
-                    title = "MCP Tools",
+                    icon = { Icon(AppIcons.MCPTools, null, Modifier.size(22.dp), TextPrimary) },
+                    label = "MCP Tools",
+                    showChevron = true,
                     onClick = { }
                 )
             }
@@ -123,24 +122,27 @@ fun SettingsTopBar(navController: NavController) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .background(Background.copy(alpha = 0.95f))
             .padding(horizontal = 16.dp, vertical = 16.dp)
     ) {
-        // Back Button
-        IconButton(
-            onClick = { navController.popBackStack() },
+        // 返回按钮
+        Box(
             modifier = Modifier
                 .size(40.dp)
-                .align(Alignment.CenterStart)
                 .background(Surface, CircleShape)
+                .clickable { navController.navigateUp() }
+                .align(Alignment.CenterStart),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Default.ArrowBack,
+                imageVector = AppIcons.Back,
                 contentDescription = "Back",
-                tint = TextPrimary
+                tint = TextPrimary,
+                modifier = Modifier.size(20.dp)
             )
         }
 
-        // Title
+        // 标题
         Text(
             text = "Settings",
             fontSize = 17.sp,
@@ -159,7 +161,7 @@ fun UserProfileSection() {
             .padding(horizontal = 16.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Avatar
+        // 用户头像
         Box(
             modifier = Modifier
                 .size(80.dp)
@@ -167,7 +169,7 @@ fun UserProfileSection() {
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Default.Person,
+                imageVector = AppIcons.User,
                 contentDescription = "Avatar",
                 tint = TextSecondary,
                 modifier = Modifier.size(40.dp)
@@ -176,7 +178,7 @@ fun UserProfileSection() {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Username
+        // 用户名
         Text(
             text = "Kendall Williamson",
             fontSize = 22.sp,
@@ -194,11 +196,11 @@ fun UserProfileSection() {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Edit Profile Button
+        // 编辑资料按钮
         Button(
             onClick = { },
-            modifier = Modifier.height(36.dp),
-            shape = RoundedCornerShape(18.dp),
+            modifier = Modifier.height(40.dp),
+            shape = RoundedCornerShape(20.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Surface
             ),
@@ -217,25 +219,25 @@ fun UserProfileSection() {
 @Composable
 fun SettingsGroup(
     title: String,
-    content: @Composable () -> Unit
+    content: @Composable ColumnScope.() -> Unit
 ) {
     Column(
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        // Group Title
+        // 分组标题
         Text(
-            text = title,
+            text = title.uppercase(),
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
             color = TextSecondary,
             modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
         )
 
-        // Group Content
-        Surface(
+        // 分组内容
+        Card(
             modifier = Modifier.fillMaxWidth(),
-            color = Surface,
-            shape = RoundedCornerShape(16.dp)
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Surface)
         ) {
             Column {
                 content()
@@ -246,49 +248,49 @@ fun SettingsGroup(
 
 @Composable
 fun SettingsItem(
-    icon: ImageVector,
-    title: String,
-    trailing: @Composable (() -> Unit)? = null,
+    icon: @Composable () -> Unit,
+    label: String,
+    value: String? = null,
+    showChevron: Boolean = false,
     onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = TextPrimary,
-            modifier = Modifier.size(22.dp)
-        )
+        Box(
+            modifier = Modifier.size(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            icon()
+        }
 
         Spacer(modifier = Modifier.width(12.dp))
 
         Text(
-            text = title,
+            text = label,
             fontSize = 16.sp,
             color = TextPrimary,
             modifier = Modifier.weight(1f)
         )
 
-        trailing?.invoke()
-
-        if (trailing == null) {
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = "Navigate",
-                tint = GrayLight,
-                modifier = Modifier.size(16.dp)
+        if (value != null) {
+            Text(
+                text = value,
+                fontSize = 15.sp,
+                color = TextSecondary
             )
-        } else {
             Spacer(modifier = Modifier.width(4.dp))
+        }
+
+        if (showChevron) {
             Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = "Navigate",
-                tint = GrayLight,
+                imageVector = AppIcons.ChevronRight,
+                contentDescription = null,
+                tint = TextSecondary,
                 modifier = Modifier.size(16.dp)
             )
         }
