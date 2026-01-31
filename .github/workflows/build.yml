@@ -22,19 +22,13 @@ jobs:
         cache: gradle
 
     - name: Grant execute permission for gradlew
-      run: |
-        cd ZionChat
-        chmod +x gradlew
+      run: chmod +x gradlew
 
     - name: Build with Gradle
-      run: |
-        cd ZionChat
-        ./gradlew build --stacktrace
+      run: ./gradlew build --stacktrace
 
     - name: Run tests
-      run: |
-        cd ZionChat
-        ./gradlew test
+      run: ./gradlew test
       continue-on-error: true
 
     - name: Upload APK
@@ -42,7 +36,7 @@ jobs:
       if: always()
       with:
         name: app-debug-apk
-        path: ZionChat/app/build/outputs/apk/debug/*.apk
+        path: app/build/outputs/apk/debug/*.apk
 
     - name: Upload build reports
       uses: actions/upload-artifact@v4
@@ -50,5 +44,5 @@ jobs:
       with:
         name: build-reports
         path: |
-          ZionChat/app/build/reports/
-          ZionChat/build/reports/
+          app/build/reports/
+          build/reports/
