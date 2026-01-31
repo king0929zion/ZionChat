@@ -25,7 +25,7 @@ import com.zionchat.app.ui.theme.*
 fun ModelConfigScreen(navController: NavController) {
     var modelName by remember { mutableStateOf("GPT-4o") }
     var selectedModality by remember { mutableStateOf("text-image") }
-    var headers by remember {
+    val headers = remember {
         mutableStateListOf<Header>()
     }
 
