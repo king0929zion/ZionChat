@@ -1229,7 +1229,7 @@ object AppIcons {
     ).apply {
         path(
             fill = SolidColor(Color.Transparent),
-            stroke = SolidColor(Color.CurrentColor),
+            stroke = SolidColor(Color.Black),
             strokeLineWidth = 2f,
             strokeLineCap = StrokeCap.Round,
             strokeLineJoin = StrokeJoin.Round
@@ -1253,7 +1253,7 @@ object AppIcons {
     ).apply {
         path(
             fill = SolidColor(Color.Transparent),
-            stroke = SolidColor(Color.CurrentColor),
+            stroke = SolidColor(Color.Black),
             strokeLineWidth = 2f,
             strokeLineCap = StrokeCap.Round,
             strokeLineJoin = StrokeJoin.Round
