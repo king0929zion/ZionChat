@@ -1,10 +1,13 @@
-name: Build ZionChat
+name: Build and Release ZionChat
 
 on:
   push:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -31,12 +34,45 @@ jobs:
       run: ./gradlew test
       continue-on-error: true
 
-    - name: Upload APK
+    - name: Get version from build.gradle
+      id: get_version
+      run: |
+        VERSION=$(grep 'versionName' app/build.gradle | sed 's/.*versionName "\(.*\)".*/\1/')
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Upload APK to Artifacts
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: app-debug-apk
+        name: ZionChat-v${{ steps.get_version.outputs.version }}
         path: app/build/outputs/apk/debug/*.apk
+
+    - name: Create Release
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ steps.get_version.outputs.version }}
+        name: ZionChat v${{ steps.get_version.outputs.version }}
+        body: |
+          ## ZionChat Android App v${{ steps.get_version.outputs.version }}
+
+          ### Features
+          - Complete ChatGPT-style UI
+          - Settings page with user profile
+          - Model Services management
+          - Add Provider with preset configurations
+          - Models configuration with custom headers
+
+          ### Installation
+          Download the APK file below and install on your Android device.
+
+          **Note**: You may need to enable "Install from unknown sources" in your device settings.
+        files: app/build/outputs/apk/debug/*.apk
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Upload build reports
       uses: actions/upload-artifact@v4
