@@ -30,13 +30,21 @@ jobs:
         gradle-version: 8.2
 
     - name: Configure signing (optional)
-      if: ${{ secrets.SIGNING_KEYSTORE_BASE64 != '' }}
+      env:
+        SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+        SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+        SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
       run: |
-        echo "${{ secrets.SIGNING_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/zionchat-release.jks"
-        echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/zionchat-release.jks" >> $GITHUB_ENV
-        echo "SIGNING_STORE_PASSWORD=${{ secrets.SIGNING_STORE_PASSWORD }}" >> $GITHUB_ENV
-        echo "SIGNING_KEY_ALIAS=${{ secrets.SIGNING_KEY_ALIAS }}" >> $GITHUB_ENV
-        echo "SIGNING_KEY_PASSWORD=${{ secrets.SIGNING_KEY_PASSWORD }}" >> $GITHUB_ENV
+        if [ -n "$SIGNING_KEYSTORE_BASE64" ]; then
+          echo "$SIGNING_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/zionchat-release.jks"
+          echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/zionchat-release.jks" >> $GITHUB_ENV
+          echo "SIGNING_STORE_PASSWORD=$SIGNING_STORE_PASSWORD" >> $GITHUB_ENV
+          echo "SIGNING_KEY_ALIAS=$SIGNING_KEY_ALIAS" >> $GITHUB_ENV
+          echo "SIGNING_KEY_PASSWORD=$SIGNING_KEY_PASSWORD" >> $GITHUB_ENV
+        else
+          echo "Signing secrets not set; building unsigned release."
+        fi
 
     - name: Build APKs (Debug + Release)
       run: gradle assembleDebug assembleRelease --stacktrace
