@@ -37,7 +37,7 @@ object AppIcons {
             horizontalLineToRelative(10f)
             arcToRelative(1f, 1f, 0f, true, false, 0f, -2f)
             horizontalLineTo(4f)
-            arcToherent(1f, 1f, 0f, true, false, 0f, -2f)
+            arcToRelative(1f, 1f, 0f, true, false, 0f, -2f)
             close()
         }
     }.build()
@@ -261,8 +261,8 @@ object AppIcons {
             strokeLineWidth = strokeWidth
         ) {
             moveTo(6.75f, 2.25f)
-            arcToherent(4.5f, 4.5f, 0f, true, false, 0f, 9f)
-            arcToherent(4.5f, 4.5f, 0f, true, false, 0f, -9f)
+            arcToRelative(4.5f, 4.5f, 0f, true, false, 0f, 9f)
+            arcToRelative(4.5f, 4.5f, 0f, true, false, 0f, -9f)
             close()
         }
         // Top right circle ring
@@ -272,8 +272,8 @@ object AppIcons {
             strokeLineWidth = strokeWidth
         ) {
             moveTo(17.25f, 2.25f)
-            arcToherent(4.5f, 4.5f, 0f, true, false, 0f, 9f)
-            arcToherent(4.5f, 4.5f, 0f, true, false, 0f, -9f)
+            arcToRelative(4.5f, 4.5f, 0f, true, false, 0f, 9f)
+            arcToRelative(4.5f, 4.5f, 0f, true, false, 0f, -9f)
             close()
         }
         // Bottom left circle ring
@@ -283,8 +283,8 @@ object AppIcons {
             strokeLineWidth = strokeWidth
         ) {
             moveTo(6.75f, 12.75f)
-            arcToherent(4.5f, 4.5f, 0f, true, false, 0f, 9f)
-            arcToherent(4.5f, 4.5f, 0f, true, false, 0f, -9f)
+            arcToRelative(4.5f, 4.5f, 0f, true, false, 0f, 9f)
+            arcToRelative(4.5f, 4.5f, 0f, true, false, 0f, -9f)
             close()
         }
         // Bottom right circle ring
@@ -294,8 +294,8 @@ object AppIcons {
             strokeLineWidth = strokeWidth
         ) {
             moveTo(17.25f, 12.75f)
-            arcToherent(4.5f, 4.5f, 0f, true, false, 0f, 9f)
-            arcToherent(4.5f, 4.5f, 0f, true, false, 0f, -9f)
+            arcToRelative(4.5f, 4.5f, 0f, true, false, 0f, 9f)
+            arcToRelative(4.5f, 4.5f, 0f, true, false, 0f, -9f)
             close()
         }
     }.build()
@@ -673,8 +673,8 @@ object AppIcons {
             strokeLineWidth = 1.5f
         ) {
             moveTo(12f, 2f)
-            arcToherent(10f, 10f, 0f, true, false, 0f, 20f)
-            arcToherent(10f, 10f, 0f, true, false, 0f, -20f)
+            arcToRelative(10f, 10f, 0f, true, false, 0f, 20f)
+            arcToRelative(10f, 10f, 0f, true, false, 0f, -20f)
             close()
         }
         // 垂直椭圆
@@ -684,8 +684,8 @@ object AppIcons {
             strokeLineWidth = 1.5f
         ) {
             moveTo(12f, 2f)
-            arcToherent(4f, 10f, 0f, true, false, 0f, 20f)
-            arcToherent(4f, 10f, 0f, true, false, 0f, -20f)
+            arcToRelative(4f, 10f, 0f, true, false, 0f, 20f)
+            arcToRelative(4f, 10f, 0f, true, false, 0f, -20f)
             close()
         }
         // 水平线
@@ -753,28 +753,28 @@ object AppIcons {
             // 使用星形/AI形状，基于 960x960 缩放
             // 中心圆点
             moveTo(12.275f, 15.525f)
-            arcToherent(1.75f, 1.75f, 0f, true, true, 0f, -3.5f)
-            arcToherent(1.75f, 1.75f, 0f, true, true, 0f, 3.5f)
+            arcToRelative(1.75f, 1.75f, 0f, true, true, 0f, -3.5f)
+            arcToRelative(1.75f, 1.75f, 0f, true, true, 0f, 3.5f)
             close()
             // 左上弧线
             moveTo(6f, 8.5f)
-            arcToherent(1.5f, 1.5f, 0f, true, true, 3f, 0f)
-            arcToherent(1.5f, 1.5f, 0f, true, true, -3f, 0f)
+            arcToRelative(1.5f, 1.5f, 0f, true, true, 3f, 0f)
+            arcToRelative(1.5f, 1.5f, 0f, true, true, -3f, 0f)
             close()
             // 右上弧线
             moveTo(15f, 8.5f)
-            arcToherent(1.5f, 1.5f, 0f, true, true, 3f, 0f)
-            arcToherent(1.5f, 1.5f, 0f, true, true, -3f, 0f)
+            arcToRelative(1.5f, 1.5f, 0f, true, true, 3f, 0f)
+            arcToRelative(1.5f, 1.5f, 0f, true, true, -3f, 0f)
             close()
             // 左下弧线
             moveTo(6f, 15.5f)
-            arcToherent(1.5f, 1.5f, 0f, true, true, 3f, 0f)
-            arcToherent(1.5f, 1.5f, 0f, true, true, -3f, 0f)
+            arcToRelative(1.5f, 1.5f, 0f, true, true, 3f, 0f)
+            arcToRelative(1.5f, 1.5f, 0f, true, true, -3f, 0f)
             close()
             // 右下弧线
             moveTo(15f, 15.5f)
-            arcToherent(1.5f, 1.5f, 0f, true, true, 3f, 0f)
-            arcToherent(1.5f, 1.5f, 0f, true, true, -3f, 0f)
+            arcToRelative(1.5f, 1.5f, 0f, true, true, 3f, 0f)
+            arcToRelative(1.5f, 1.5f, 0f, true, true, -3f, 0f)
             close()
             // 中心连接线
             moveTo(12f, 4f)
@@ -856,31 +856,31 @@ object AppIcons {
             stroke = null
         ) {
             moveTo(14.447f, 7.106f)
-            arcToherent(1f, 1f, 0f, false, true, 0.447f, 1.341f)
+            arcToRelative(1f, 1f, 0f, false, true, 0.447f, 1.341f)
             lineToRelative(-4f, 8f)
-            arcToherent(1f, 1f, 0f, true, true, -1.788f, -0.894f)
+            arcToRelative(1f, 1f, 0f, true, true, -1.788f, -0.894f)
             lineToRelative(4f, -8f)
-            arcToherent(1f, 1f, 0f, false, true, 1.341f, -0.447f)
+            arcToRelative(1f, 1f, 0f, false, true, 1.341f, -0.447f)
             close()
             moveTo(6.6f, 7.2f)
-            arcToherent(1f, 1f, 0f, false, true, 0.2f, 1.4f)
+            arcToRelative(1f, 1f, 0f, false, true, 0.2f, 1.4f)
             lineTo(4.25f, 12f)
             lineToRelative(2.55f, 3.4f)
-            arcToherent(1f, 1f, 0f, false, true, -1.6f, 1.2f)
+            arcToRelative(1f, 1f, 0f, false, true, -1.6f, 1.2f)
             lineToRelative(-3f, -4f)
-            arcToherent(1f, 1f, 0f, false, true, 0f, -1.2f)
+            arcToRelative(1f, 1f, 0f, false, true, 0f, -1.2f)
             lineToRelative(3f, -4f)
-            arcToherent(1f, 1f, 0f, false, true, 1.4f, -0.2f)
+            arcToRelative(1f, 1f, 0f, false, true, 1.4f, -0.2f)
             close()
             moveTo(17.4f, 7.2f)
-            arcToherent(1f, 1f, 0f, false, true, 1.4f, 0.2f)
+            arcToRelative(1f, 1f, 0f, false, true, 1.4f, 0.2f)
             lineToRelative(3f, 4f)
-            arcToherent(1f, 1f, 0f, false, true, 0f, 1.2f)
+            arcToRelative(1f, 1f, 0f, false, true, 0f, 1.2f)
             lineToRelative(-3f, 4f)
-            arcToherent(1f, 1f, 0f, false, true, -1.6f, -1.2f)
+            arcToRelative(1f, 1f, 0f, false, true, -1.6f, -1.2f)
             lineToRelative(2.55f, -3.4f)
             lineToRelative(-2.55f, -3.4f)
-            arcToherent(1f, 1f, 0f, false, true, 0.2f, -1.4f)
+            arcToRelative(1f, 1f, 0f, false, true, 0.2f, -1.4f)
             close()
         }
     }.build()
@@ -898,40 +898,40 @@ object AppIcons {
             stroke = null
         ) {
             moveTo(12f, 4f)
-            arcToherent(3f, 3f, 0f, false, False, -2.6f, 1.5f)
-            arcToherent(1f, 1f, 0f, false, true, -0.865f, 0.5f)
+            arcToRelative(3f, 3f, 0f, false, False, -2.6f, 1.5f)
+            arcToRelative(1f, 1f, 0f, false, true, -0.865f, 0.5f)
             horizontalLineTo(5f)
-            arcToherent(1f, 1f, 0f, false, False, -1f, 1f)
+            arcToRelative(1f, 1f, 0f, false, False, -1f, 1f)
             verticalLineToRelative(11f)
-            arcToherent(1f, 1f, 0f, false, False, 1f, 1f)
+            arcToRelative(1f, 1f, 0f, false, False, 1f, 1f)
             horizontalLineToRelative(14f)
-            arcToherent(1f, 1f, 0f, false, False, 1f, -1f)
+            arcToRelative(1f, 1f, 0f, false, False, 1f, -1f)
             verticalLineTo(7f)
-            arcToherent(1f, 1f, 0f, false, False, -1f, -1f)
+            arcToRelative(1f, 1f, 0f, false, False, -1f, -1f)
             horizontalLineToRelative(-3.535f)
-            arcToherent(1f, 1f, 0f, false, true, -0.866f, -0.5f)
-            arcToherent(2.998f, 2.998f, 0f, false, False, -2.599f, -1.5f)
+            arcToRelative(1f, 1f, 0f, false, true, -0.866f, -0.5f)
+            arcToRelative(2.998f, 2.998f, 0f, false, False, -2.599f, -1.5f)
             close()
             moveTo(8f, 4f)
-            arcToherent(4.993f, 4.993f, 0f, false, true, 4f, -2f)
-            arcToherent(4.99f, 4.99f, 0f, false, true, 4f, 2f)
+            arcToRelative(4.993f, 4.993f, 0f, false, true, 4f, -2f)
+            arcToRelative(4.99f, 4.99f, 0f, false, true, 4f, 2f)
             horizontalLineToRelative(3f)
-            arcToherent(3f, 3f, 0f, false, true, 3f, 3f)
+            arcToRelative(3f, 3f, 0f, false, true, 3f, 3f)
             verticalLineToRelative(11f)
-            arcToherent(3f, 3f, 0f, false, True, -3f, 3f)
+            arcToRelative(3f, 3f, 0f, false, True, -3f, 3f)
             horizontalLineTo(5f)
-            arcToherent(3f, 3f, 0f, false, True, -3f, -3f)
+            arcToRelative(3f, 3f, 0f, false, True, -3f, -3f)
             verticalLineTo(7f)
-            arcToherent(3f, 3f, 0f, false, True, 3f, -3f)
+            arcToRelative(3f, 3f, 0f, false, True, 3f, -3f)
             horizontalLineToRelative(3f)
             close()
             moveTo(12f, 10f)
-            arcToherent(2f, 2f, 0f, true, False, 0f, 4f)
-            arcToherent(2f, 2f, 0f, true, False, 0f, -4f)
+            arcToRelative(2f, 2f, 0f, true, False, 0f, 4f)
+            arcToRelative(2f, 2f, 0f, true, False, 0f, -4f)
             close()
             moveTo(8f, 12f)
-            arcToherent(4f, 4f, 0f, true, true, 8f, 0f)
-            arcToherent(4f, 4f, 0f, true, true, -8f, 0f)
+            arcToRelative(4f, 4f, 0f, true, true, 8f, 0f)
+            arcToRelative(4f, 4f, 0f, true, true, -8f, 0f)
             close()
         }
     }.build()
@@ -949,21 +949,21 @@ object AppIcons {
             stroke = null
         ) {
             moveTo(9f, 7f)
-            arcToherent(5f, 5f, 0f, false, true, 10f, 0f)
+            arcToRelative(5f, 5f, 0f, false, true, 10f, 0f)
             verticalLineToRelative(8f)
-            arcToherent(7f, 7f, 0f, true, true, -14f, 0f)
+            arcToRelative(7f, 7f, 0f, true, true, -14f, 0f)
             verticalLineTo(9f)
-            arcToherent(1f, 1f, 0f, false, true, 2f, 0f)
+            arcToRelative(1f, 1f, 0f, false, true, 2f, 0f)
             verticalLineToRelative(6f)
-            arcToherent(5f, 5f, 0f, false, False, 10f, 0f)
+            arcToRelative(5f, 5f, 0f, false, False, 10f, 0f)
             verticalLineTo(7f)
-            arcToherent(3f, 3f, 0f, true, False, -6f, 0f)
+            arcToRelative(3f, 3f, 0f, true, False, -6f, 0f)
             verticalLineTo(8f)
-            arcToherent(1f, 1f, 0f, true, False, 2f, 0f)
+            arcToRelative(1f, 1f, 0f, true, False, 2f, 0f)
             verticalLineTo(9f)
-            arcToherent(1f, 1f, 0f, true, true, 2f, 0f)
+            arcToRelative(1f, 1f, 0f, true, true, 2f, 0f)
             verticalLineTo(6f)
-            arcToherent(3f, 3f, 0f, true, true, -6f, 0f)
+            arcToRelative(3f, 3f, 0f, true, true, -6f, 0f)
             verticalLineTo(7f)
             close()
         }
@@ -1339,16 +1339,16 @@ object AppIcons {
             strokeLineJoin = StrokeJoin.Round
         ) {
             moveTo(5.5f, 12f)
-            arcToherent(2.5f, 2.5f, 0f, true, true, 5f, 0f)
-            arcToherent(2.5f, 2.5f, 0f, true, true, -5f, 0f)
+            arcToRelative(2.5f, 2.5f, 0f, true, true, 5f, 0f)
+            arcToRelative(2.5f, 2.5f, 0f, true, true, -5f, 0f)
             close()
             moveTo(16.5f, 5.5f)
-            arcToherent(2.5f, 2.5f, 0f, true, true, 5f, 0f)
-            arcToherent(2.5f, 2.5f, 0f, true, true, -5f, 0f)
+            arcToRelative(2.5f, 2.5f, 0f, true, true, 5f, 0f)
+            arcToRelative(2.5f, 2.5f, 0f, true, true, -5f, 0f)
             close()
             moveTo(16.5f, 18.5f)
-            arcToherent(2.5f, 2.5f, 0f, true, true, 5f, 0f)
-            arcToherent(2.5f, 2.5f, 0f, true, true, -5f, 0f)
+            arcToRelative(2.5f, 2.5f, 0f, true, true, 5f, 0f)
+            arcToRelative(2.5f, 2.5f, 0f, true, true, -5f, 0f)
             close()
             moveTo(14.5f, 6.583f)
             lineTo(7.5f, 10.796f)
@@ -1421,15 +1421,15 @@ object AppIcons {
         ) {
             // Top dot
             moveTo(12f, 5f)
-            arcToherent(1f, 1f, 0f, true, true, 0f, 0.01f)
+            arcToRelative(1f, 1f, 0f, true, true, 0f, 0.01f)
             close()
             // Middle dot
             moveTo(12f, 12f)
-            arcToherent(1f, 1f, 0f, true, true, 0f, 0.01f)
+            arcToRelative(1f, 1f, 0f, true, true, 0f, 0.01f)
             close()
             // Bottom dot
             moveTo(12f, 19f)
-            arcToherent(1f, 1f, 0f, true, true, 0f, 0.01f)
+            arcToRelative(1f, 1f, 0f, true, true, 0f, 0.01f)
             close()
         }
     }.build()
@@ -1479,7 +1479,7 @@ object AppIcons {
             horizontalLineTo(3f)
             close()
             moveTo(8.5f, 8.5f)
-            arcToherent(1.5f, 1.5f, 0f, true, true, 0f, 0.01f)
+            arcToRelative(1.5f, 1.5f, 0f, true, true, 0f, 0.01f)
             close()
             moveTo(21f, 15f)
             lineTo(16f, 10f)
