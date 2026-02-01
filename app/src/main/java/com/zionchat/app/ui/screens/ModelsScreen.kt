@@ -20,33 +20,34 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.zionchat.app.LocalAppRepository
+import com.zionchat.app.data.ModelConfig
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
+import kotlinx.coroutines.launch
 
 @Composable
 fun ModelsScreen(navController: NavController) {
+    val repository = LocalAppRepository.current
+    val scope = rememberCoroutineScope()
     var searchQuery by remember { mutableStateOf("") }
-    var selectAll by remember { mutableStateOf(false) }
     var showAddModal by remember { mutableStateOf(false) }
 
-    val models = remember {
-        mutableStateListOf(
-            Model("deepseek-chat", "DeepSeek", true),
-            Model("gpt-4o", "GPT-4o", false),
-            Model("gpt-4o-mini", "GPT-4o Mini", false),
-            Model("claude-3-sonnet", "Claude 3 Sonnet", false),
-            Model("claude-3-opus", "Claude 3 Opus", false),
-            Model("gemini-pro", "Gemini Pro", false)
-        )
+    val models by repository.modelsFlow.collectAsState(initial = emptyList())
+    val filteredModels = remember(models, searchQuery) {
+        if (searchQuery.isBlank()) models
+        else models.filter {
+            it.displayName.contains(searchQuery, ignoreCase = true) ||
+                it.id.contains(searchQuery, ignoreCase = true)
+        }
     }
-
-    var selectedCount by remember { mutableIntStateOf(models.count { it.enabled }) }
+    val selectedCount = models.count { it.enabled }
+    val isSelectAll = models.isNotEmpty() && selectedCount == models.size
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.navigationBars)
                 .background(Background)
         ) {
             // Top Navigation Bar
@@ -160,16 +161,20 @@ fun ModelsScreen(navController: NavController) {
                             .width(52.dp)
                             .height(32.dp)
                             .background(
-                                if (selectAll) Color(0xFF34C759) else GrayLight,
+                                if (isSelectAll) Color(0xFF34C759) else GrayLight,
                                 RoundedCornerShape(16.dp)
                             )
                             .padding(2.dp)
-                            .clickable {
-                                selectAll = !selectAll
-                                models.forEach { it.enabled = selectAll }
-                                selectedCount = if (selectAll) models.size else 0
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                val target = !isSelectAll
+                                scope.launch {
+                                    models.forEach { repository.upsertModel(it.copy(enabled = target)) }
+                                }
                             },
-                        contentAlignment = if (selectAll) Alignment.CenterEnd else Alignment.CenterStart
+                        contentAlignment = if (isSelectAll) Alignment.CenterEnd else Alignment.CenterStart
                     ) {
                         Box(
                             modifier = Modifier
@@ -188,13 +193,11 @@ fun ModelsScreen(navController: NavController) {
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                models.forEach { model ->
+                filteredModels.forEach { model ->
                     ModelItem(
                         model = model,
                         onToggle = {
-                            model.enabled = !model.enabled
-                            selectedCount = models.count { it.enabled }
-                            selectAll = selectedCount == models.size
+                            scope.launch { repository.upsertModel(model.copy(enabled = !model.enabled)) }
                         },
                         onClick = {
                             navController.navigate("model_config?id=${model.id}")
@@ -210,8 +213,16 @@ fun ModelsScreen(navController: NavController) {
             visible = showAddModal,
             onDismiss = { showAddModal = false },
             onAdd = { id, name ->
-                models.add(Model(id, name, false))
-                showAddModal = false
+                scope.launch {
+                    repository.upsertModel(
+                        ModelConfig(
+                            id = id.trim(),
+                            displayName = name.trim(),
+                            enabled = false
+                        )
+                    )
+                    showAddModal = false
+                }
             }
         )
     }
@@ -219,7 +230,7 @@ fun ModelsScreen(navController: NavController) {
 
 @Composable
 fun ModelItem(
-    model: Model,
+    model: ModelConfig,
     onToggle: () -> Unit,
     onClick: () -> Unit
 ) {
@@ -228,13 +239,14 @@ fun ModelItem(
             .fillMaxWidth()
             .height(56.dp)
             .background(GrayLight, RoundedCornerShape(20.dp))
-            .clickable { onClick() }
+            .clip(RoundedCornerShape(20.dp))
+            .pressableScale(pressedScale = 0.98f, onClick = onClick)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
-            text = model.name,
+            text = model.displayName,
             fontSize = 17.sp,
             color = TextPrimary
         )
@@ -250,7 +262,10 @@ fun ModelItem(
                 )
                 .border(2.dp, if (model.enabled) TextPrimary else TextSecondary, RoundedCornerShape(16.dp))
                 .padding(2.dp)
-                .clickable { onToggle() },
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { onToggle() },
             contentAlignment = if (model.enabled) Alignment.CenterEnd else Alignment.CenterStart
         ) {
             Box(
@@ -475,9 +490,3 @@ fun AddModelModal(
         }
     }
 }
-
-data class Model(
-    val id: String,
-    val name: String,
-    var enabled: Boolean
-)

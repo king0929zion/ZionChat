@@ -24,6 +24,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.zionchat.app.R
+import com.zionchat.app.ui.components.rememberResourceDrawablePainter
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 
@@ -37,7 +39,6 @@ fun SettingsScreen(navController: NavController) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .windowInsetsPadding(WindowInsets.navigationBars)
                 .verticalScroll(rememberScrollState())
         ) {
             // User Profile Section
@@ -52,7 +53,14 @@ fun SettingsScreen(navController: NavController) {
                     onClick = { }
                 )
                 SettingsItem(
-                    icon = { Icon(AppIcons.Apps, null, Modifier.size(22.dp), tint = Color.Unspecified) },
+                    icon = {
+                        Icon(
+                            painter = rememberResourceDrawablePainter(R.drawable.ic_apps),
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp),
+                            tint = Color.Unspecified
+                        )
+                    },
                     label = "Apps",
                     onClick = { }
                 )
@@ -98,7 +106,14 @@ fun SettingsScreen(navController: NavController) {
             // AI Model 分组
             SettingsGroup(title = "AI Model", itemCount = 3) {
                 SettingsItem(
-                    icon = { Icon(AppIcons.Model, null, Modifier.size(22.dp), tint = Color.Unspecified) },
+                    icon = {
+                        Icon(
+                            painter = rememberResourceDrawablePainter(R.drawable.ic_model),
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp),
+                            tint = Color.Unspecified
+                        )
+                    },
                     label = "Default model",
                     value = "GPT-4o",
                     showChevron = true,
@@ -106,7 +121,14 @@ fun SettingsScreen(navController: NavController) {
                     onClick = { }
                 )
                 SettingsItem(
-                    icon = { Icon(AppIcons.ModelServices, null, Modifier.size(22.dp), tint = Color.Unspecified) },
+                    icon = {
+                        Icon(
+                            painter = rememberResourceDrawablePainter(R.drawable.ic_model_services),
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp),
+                            tint = Color.Unspecified
+                        )
+                    },
                     label = "Model services",
                     showChevron = true,
                     showDivider = true,

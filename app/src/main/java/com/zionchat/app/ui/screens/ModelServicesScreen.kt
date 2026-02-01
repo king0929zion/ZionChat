@@ -2,7 +2,6 @@ package com.zionchat.app.ui.screens
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -20,7 +19,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.R
+import com.zionchat.app.data.ProviderConfig
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 
@@ -33,7 +34,10 @@ data class Provider(
 
 @Composable
 fun ModelServicesScreen(navController: NavController) {
+    val repository = LocalAppRepository.current
     var searchQuery by remember { mutableStateOf("") }
+
+    val configuredProviders by repository.providersFlow.collectAsState(initial = emptyList())
 
     val providers = listOf(
         Provider("qwen", "Qwen", R.drawable.llm_qwen),
@@ -65,8 +69,14 @@ fun ModelServicesScreen(navController: NavController) {
         Provider("meta", "Meta", R.drawable.llm_meta)
     )
 
-    val filteredProviders = providers.filter {
-        it.name.contains(searchQuery, ignoreCase = true)
+    val filteredConfiguredProviders = remember(configuredProviders, searchQuery) {
+        if (searchQuery.isBlank()) configuredProviders
+        else configuredProviders.filter { it.name.contains(searchQuery, ignoreCase = true) }
+    }
+
+    val filteredPresetProviders = remember(providers, searchQuery) {
+        if (searchQuery.isBlank()) providers
+        else providers.filter { it.name.contains(searchQuery, ignoreCase = true) }
     }
 
     Scaffold(
@@ -111,7 +121,7 @@ fun ModelServicesScreen(navController: NavController) {
                         .size(40.dp)
                         .clip(CircleShape)
                         .background(Surface, CircleShape)
-                        .pressableScale(pressedScale = 0.95f) { navController.navigate("add_provider") }
+                        .pressableScale(pressedScale = 0.95f) { navController.navigate("add_provider?preset=&providerId=") }
                         .align(Alignment.CenterEnd),
                     contentAlignment = Alignment.Center
                 ) {
@@ -130,7 +140,6 @@ fun ModelServicesScreen(navController: NavController) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .windowInsetsPadding(WindowInsets.navigationBars)
         ) {
             // 搜索框
             Row(
@@ -171,17 +180,46 @@ fun ModelServicesScreen(navController: NavController) {
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                filteredProviders.forEach { provider ->
+                filteredConfiguredProviders.forEach { provider ->
+                    ConfiguredProviderItem(
+                        provider = provider,
+                        iconRes = configuredProviderIconRes(provider),
+                        onClick = {
+                            navController.navigate("add_provider?preset=&providerId=${provider.id}")
+                        }
+                    )
+                }
+
+                if (filteredConfiguredProviders.isNotEmpty() && filteredPresetProviders.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Divider(color = GrayLight, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
+                filteredPresetProviders.forEach { provider ->
                     ProviderItem(
                         provider = provider,
                         onClick = {
-                            navController.navigate("add_provider?preset=${provider.id}")
+                            navController.navigate("add_provider?preset=${provider.id}&providerId=")
                         }
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
+    }
+}
+
+private fun configuredProviderIconRes(provider: ProviderConfig): Int? {
+    val key = (provider.presetId ?: provider.name).lowercase()
+    return when {
+        key.contains("openai") || key.contains("chatgpt") -> R.drawable.llm_openai
+        key.contains("anthropic") || key.contains("claude") -> R.drawable.llm_anthropic
+        key.contains("google") || key.contains("gemini") -> R.drawable.llm_google
+        key.contains("qwen") -> R.drawable.llm_qwen
+        key.contains("deepseek") -> R.drawable.llm_deepseek
+        key.contains("doubao") -> R.drawable.llm_doubao
+        else -> null
     }
 }
 
@@ -218,5 +256,66 @@ fun ProviderItem(
             fontWeight = FontWeight.Normal,
             color = TextPrimary
         )
+    }
+}
+
+@Composable
+fun ConfiguredProviderItem(
+    provider: ProviderConfig,
+    iconRes: Int?,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .background(GrayLight, RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(14.dp))
+            .pressableScale(pressedScale = 0.98f, onClick = onClick)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        if (iconRes != null) {
+            Image(
+                painter = painterResource(id = iconRes),
+                contentDescription = provider.name,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(8.dp)),
+                contentScale = ContentScale.Fit
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Surface),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = AppIcons.ChatGPTLogo,
+                    contentDescription = null,
+                    tint = TextSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = provider.name,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Normal,
+                color = TextPrimary,
+                maxLines = 1
+            )
+            Text(
+                text = provider.apiUrl,
+                fontSize = 13.sp,
+                color = TextSecondary,
+                maxLines = 1
+            )
+        }
     }
 }

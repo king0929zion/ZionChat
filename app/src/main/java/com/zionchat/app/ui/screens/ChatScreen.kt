@@ -17,8 +17,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,11 +37,16 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import androidx.navigation.NavController
+import com.zionchat.app.R
+import com.zionchat.app.LocalAppRepository
+import com.zionchat.app.LocalChatApiClient
+import com.zionchat.app.data.Conversation
+import com.zionchat.app.data.Message
+import com.zionchat.app.ui.components.rememberResourceDrawablePainter
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.*
 
 // 颜色常量 - 完全匹配HTML原型
 val Background = Color(0xFFF5F5F7)
@@ -56,26 +59,11 @@ val ActionIcon = Color(0xFF374151)
 val ToggleActive = Color(0xFF34C759)
 val UserMessageBubble = Color(0xFFE5E5EA)
 
-// 消息数据类
-data class ChatMessage(
-    val id: String = UUID.randomUUID().toString(),
-    val content: String,
-    val isUser: Boolean,
-    val timestamp: Long = System.currentTimeMillis(),
-    val isError: Boolean = false
-)
-
-// 历史记录数据类
-data class ChatHistory(
-    val id: String = UUID.randomUUID().toString(),
-    val title: String,
-    val lastMessage: String,
-    val timestamp: Long = System.currentTimeMillis()
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(navController: NavController) {
+    val repository = LocalAppRepository.current
+    val chatApiClient = LocalChatApiClient.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var showToolMenu by remember { mutableStateOf(false) }
@@ -83,36 +71,26 @@ fun ChatScreen(navController: NavController) {
     var messageText by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
 
-    // 消息列表状态
-    var messages by remember {
-        mutableStateOf(
-            listOf(
-                ChatMessage(
-                    content = "哈喽",
-                    isUser = true
-                ),
-                ChatMessage(
-                    content = "……在，在的，别敲了，再敲我就假装离线了。",
-                    isUser = false
-                )
-            )
-        )
+    val conversations by repository.conversationsFlow.collectAsState(initial = emptyList())
+    val providers by repository.providersFlow.collectAsState(initial = emptyList())
+    val models by repository.modelsFlow.collectAsState(initial = emptyList())
+    val currentConversationId by repository.currentConversationIdFlow.collectAsState(initial = null)
+
+    val currentConversation = remember(conversations, currentConversationId) {
+        conversations.firstOrNull { it.id == currentConversationId } ?: conversations.firstOrNull()
     }
 
-    // 历史记录状态
-    var chatHistory by remember {
-        mutableStateOf(
-            listOf(
-                ChatHistory(title = "问号信息量分析", lastMessage = "这是一个测试消息"),
-                ChatHistory(title = "AI 小说创作步骤", lastMessage = "你好"),
-                ChatHistory(title = "npm缓存删除指南", lastMessage = "如何删除缓存？"),
-                ChatHistory(title = "无法输出系统提示", lastMessage = "系统错误"),
-                ChatHistory(title = "便宜.fun域名购买建议", lastMessage = "推荐一些域名"),
-                ChatHistory(title = "Clawdbot定义与背景", lastMessage = "什么是Clawdbot"),
-                ChatHistory(title = "克苏鲁恐怖解析", lastMessage = "恐怖小说分析")
-            )
-        )
+    LaunchedEffect(conversations, currentConversationId) {
+        if (currentConversationId.isNullOrBlank()) {
+            if (conversations.isNotEmpty()) {
+                repository.setCurrentConversationId(conversations.first().id)
+            } else {
+                repository.createConversation()
+            }
+        }
     }
+
+    val messages = currentConversation?.messages.orEmpty()
 
     val listState = rememberLazyListState()
     var bottomBarHeightPx by remember { mutableIntStateOf(0) }
@@ -120,62 +98,88 @@ fun ChatScreen(navController: NavController) {
     val bottomContentPadding = maxOf(80.dp, bottomBarHeightDp + 12.dp)
 
     // 滚动到底部当新消息添加时
-    LaunchedEffect(messages.size) {
+    LaunchedEffect(messages.size, currentConversation?.id) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
         }
     }
 
-    // 发送消息功能
-    fun sendMessage() {
-        if (messageText.isBlank()) return
-
-        val userMessage = ChatMessage(
-            content = messageText.trim(),
-            isUser = true
-        )
-        messages = messages + userMessage
-        messageText = ""
-        isLoading = true
-
-        // 模拟AI回复
+    fun startNewChat() {
         scope.launch {
-            kotlinx.coroutines.delay(1000)
-            val aiResponse = when {
-                userMessage.content.contains("哈喽") || userMessage.content.contains("你好") ->
-                    "你好！有什么我可以帮助你的吗？"
-                userMessage.content.contains("?") || userMessage.content.contains("？") ->
-                    "这是一个很好的问题！让我来为你解答..."
-                else -> "收到！我会尽力帮助你解决${userMessage.content}相关的问题。"
-            }
-            messages = messages + ChatMessage(
-                content = aiResponse,
-                isUser = false
-            )
-            isLoading = false
+            repository.createConversation()
+            selectedTool = null
+            messageText = ""
+            drawerState.close()
         }
     }
 
-    // 新建对话
-    fun startNewChat() {
-        messages = emptyList()
-        scope.launch { drawerState.close() }
-    }
+    fun sendMessage() {
+        val trimmed = messageText.trim()
+        if (trimmed.isEmpty() || isLoading) return
 
-    // 删除历史记录
-    fun deleteHistory(historyId: String) {
-        chatHistory = chatHistory.filter { it.id != historyId }
+        scope.launch {
+            val conversationId = currentConversation?.id ?: repository.createConversation().id
+            val existingConversations = repository.conversationsFlow.first()
+            val conversation = existingConversations.firstOrNull { it.id == conversationId }
+
+            val userMessage = Message(role = "user", content = trimmed)
+            repository.appendMessage(conversationId, userMessage)
+            messageText = ""
+
+            if (conversation?.title == "New chat") {
+                val title = trimmed.lineSequence().firstOrNull().orEmpty().trim().take(24)
+                if (title.isNotBlank()) {
+                    repository.updateConversation(conversation.copy(title = title))
+                }
+            }
+
+            val provider = repository.providersFlow.first().firstOrNull()
+            val selectedModel = repository.modelsFlow.first().firstOrNull { it.enabled }
+            val modelId = selectedModel?.id ?: "gpt-4o"
+            if (provider == null) {
+                repository.appendMessage(
+                    conversationId,
+                    Message(
+                        role = "assistant",
+                        content = "请先在 Settings → Model services 添加供应商，并填写 API URL 与 API Key。"
+                    )
+                )
+                return@launch
+            }
+
+            val requestMessages = (conversation?.messages.orEmpty()) + userMessage
+            isLoading = true
+            val result = chatApiClient.chatCompletions(
+                provider = provider,
+                modelId = modelId,
+                messages = requestMessages,
+                extraHeaders = selectedModel?.headers.orEmpty()
+            )
+            val reply = result.getOrElse { throwable ->
+                "请求失败：${throwable.message ?: throwable.toString()}"
+            }.ifBlank { "（空响应）" }
+            repository.appendMessage(conversationId, Message(role = "assistant", content = reply))
+            isLoading = false
+        }
     }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
             SidebarContent(
-                chatHistory = chatHistory,
+                conversations = conversations,
+                currentConversationId = currentConversation?.id,
                 onClose = { scope.launch { drawerState.close() } },
                 onNewChat = ::startNewChat,
-                onHistoryClick = { /* 加载历史对话 */ },
-                onDeleteHistory = ::deleteHistory,
+                onConversationClick = { convo ->
+                    scope.launch {
+                        repository.setCurrentConversationId(convo.id)
+                        drawerState.close()
+                    }
+                },
+                onDeleteConversation = { id ->
+                    scope.launch { repository.deleteConversation(id) }
+                },
                 navController = navController
             )
         },
@@ -216,10 +220,10 @@ fun ChatScreen(navController: NavController) {
                             items(messages, key = { it.id }) { message ->
                                 MessageItem(
                                     message = message,
-                                    onCopy = { /* 复制 */ },
-                                    onEdit = { /* 编辑 */ },
-                                    onDelete = {
-                                        messages = messages.filter { it.id != message.id }
+                                    conversationId = currentConversation?.id,
+                                    onEdit = { /* TODO: 编辑消息 */ },
+                                    onDelete = { convoId, messageId ->
+                                        scope.launch { repository.deleteMessage(convoId, messageId) }
                                     }
                                 )
                             }
@@ -267,15 +271,16 @@ fun ChatScreen(navController: NavController) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageItem(
-    message: ChatMessage,
-    onCopy: () -> Unit,
+    message: Message,
+    conversationId: String?,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: (conversationId: String, messageId: String) -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
 
-    if (message.isUser) {
+    val isUser = message.role == "user"
+    if (isUser) {
         // 用户消息 - 右对齐
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -286,6 +291,8 @@ fun MessageItem(
                     .padding(start = 60.dp)
                     .background(UserMessageBubble, RoundedCornerShape(18.dp))
                     .combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
                         onClick = { },
                         onLongClick = { showMenu = true }
                     )
@@ -304,6 +311,8 @@ fun MessageItem(
             modifier = Modifier
                 .fillMaxWidth(0.85f)
                 .combinedClickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
                     onClick = { },
                     onLongClick = { showMenu = true }
                 )
@@ -341,7 +350,7 @@ fun MessageItem(
     // 长按菜单
     if (showMenu) {
         MessageOptionsDialog(
-            isUser = message.isUser,
+            isUser = isUser,
             onCopy = {
                 clipboardManager.setText(AnnotatedString(message.content))
                 showMenu = false
@@ -351,7 +360,10 @@ fun MessageItem(
                 showMenu = false
             },
             onDelete = {
-                onDelete()
+                val convoId = conversationId
+                if (!convoId.isNullOrBlank()) {
+                    onDelete(convoId, message.id)
+                }
                 showMenu = false
             },
             onDismiss = { showMenu = false }
@@ -455,25 +467,25 @@ fun EmptyChatState() {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SidebarContent(
-    chatHistory: List<ChatHistory>,
+    conversations: List<Conversation>,
+    currentConversationId: String?,
     onClose: () -> Unit,
     onNewChat: () -> Unit,
-    onHistoryClick: (ChatHistory) -> Unit,
-    onDeleteHistory: (String) -> Unit,
+    onConversationClick: (Conversation) -> Unit,
+    onDeleteConversation: (String) -> Unit,
     navController: NavController
 ) {
     Column(
         modifier = Modifier
             .fillMaxHeight()
             .width(280.dp)
-            .windowInsetsPadding(WindowInsets.systemBars)
             .background(Surface)
-            .padding(vertical = 8.dp)
     ) {
         // 顶部搜索区域
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.statusBars)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -533,7 +545,14 @@ fun SidebarContent(
                 onClick = { }
             )
             SidebarMenuItem(
-                icon = { Icon(AppIcons.Apps, null, Modifier.size(20.dp), tint = Color.Unspecified) },
+                icon = {
+                    Icon(
+                        painter = rememberResourceDrawablePainter(R.drawable.ic_apps),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = Color.Unspecified
+                    )
+                },
                 label = "Apps",
                 onClick = { }
             )
@@ -546,8 +565,8 @@ fun SidebarContent(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
-            chatHistory.forEachIndexed { index, history ->
-                val isSelected = index == 0
+            conversations.forEach { conversation ->
+                val isSelected = conversation.id == currentConversationId
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -556,13 +575,13 @@ fun SidebarContent(
                         .combinedClickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            onClick = { onHistoryClick(history) },
-                            onLongClick = { onDeleteHistory(history.id) }
+                            onClick = { onConversationClick(conversation) },
+                            onLongClick = { onDeleteConversation(conversation.id) }
                         )
                         .padding(horizontal = 12.dp, vertical = 12.dp)
                 ) {
                     Text(
-                        text = history.title,
+                        text = conversation.title.ifBlank { "New chat" },
                         fontSize = 15.sp,
                         color = TextPrimary,
                         maxLines = 1
@@ -575,6 +594,7 @@ fun SidebarContent(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(12.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .pressableScale { navController.navigate("settings") }
@@ -826,12 +846,19 @@ fun ToolMenuPanel(
                             onClick = { onToolSelect("photos") },
                             modifier = Modifier.weight(1f)
                         )
-                        QuickActionButton(
-                            icon = { Icon(AppIcons.Files, null, Modifier.size(28.dp), TextPrimary) },
-                            label = "Files",
-                            onClick = { onToolSelect("files") },
-                            modifier = Modifier.weight(1f)
-                        )
+                    QuickActionButton(
+                        icon = {
+                            Icon(
+                                painter = rememberResourceDrawablePainter(R.drawable.ic_files),
+                                contentDescription = null,
+                                modifier = Modifier.size(28.dp),
+                                tint = Color.Unspecified
+                            )
+                        },
+                        label = "Files",
+                        onClick = { onToolSelect("files") },
+                        modifier = Modifier.weight(1f)
+                    )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -943,7 +970,7 @@ fun BottomInputArea(
     onSend: () -> Unit
 ) {
     val canSend = messageText.trim().isNotEmpty()
-    val inputMinHeight = if (selectedTool != null) 56.dp else 44.dp
+    val inputMinHeight = if (selectedTool != null) 68.dp else 44.dp
     val toolLabel = when (selectedTool) {
         "camera" -> "Camera"
         "photos" -> "Photos"
@@ -953,10 +980,14 @@ fun BottomInputArea(
         "mcp" -> "Tools"
         else -> selectedTool?.replaceFirstChar { it.uppercase() }.orEmpty()
     }
-    val toolIcon = when (selectedTool) {
+    val toolIconRes: Int? = when (selectedTool) {
+        "files" -> R.drawable.ic_files
+        else -> null
+    }
+    val toolIconVector = when (selectedTool) {
         "camera" -> AppIcons.Camera
         "photos" -> AppIcons.ChatGPTLogo
-        "files" -> AppIcons.Files
+        "files" -> null
         "web" -> AppIcons.Globe
         "image" -> AppIcons.CreateImage
         "mcp" -> AppIcons.MCPTools
@@ -967,9 +998,8 @@ fun BottomInputArea(
         modifier = Modifier
             .fillMaxWidth()
             .imePadding()
-            .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 16.dp)
-            .padding(top = 8.dp, bottom = 8.dp)
+            .padding(top = 8.dp, bottom = 4.dp)
             .background(Background)
     ) {
         Row(
@@ -1016,12 +1046,21 @@ fun BottomInputArea(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(
-                                imageVector = toolIcon,
-                                contentDescription = null,
-                                tint = Color(0xFF007AFF),
-                                modifier = Modifier.size(20.dp)
-                            )
+                            if (toolIconRes != null) {
+                                Icon(
+                                    painter = rememberResourceDrawablePainter(toolIconRes),
+                                    contentDescription = null,
+                                    tint = Color(0xFF007AFF),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = toolIconVector ?: AppIcons.Globe,
+                                    contentDescription = null,
+                                    tint = Color(0xFF007AFF),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                             Text(
                                 text = toolLabel,
                                 fontSize = 15.sp,
@@ -1047,7 +1086,7 @@ fun BottomInputArea(
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
 
                     // 输入框 - 多行自动增高，最大高度120dp
@@ -1094,7 +1133,7 @@ fun BottomInputArea(
                         .clip(CircleShape)
                         .background(TextPrimary, CircleShape)
                         .alpha(if (canSend) 1f else 0.4f)
-                        .zIndex(1f)
+                        .zIndex(2f)
                         .pressableScale(
                             enabled = canSend,
                             pressedScale = 0.95f,

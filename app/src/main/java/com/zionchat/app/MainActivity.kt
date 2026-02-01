@@ -5,6 +5,8 @@ import android.os.Bundle
 import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -14,6 +16,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.zionchat.app.ui.screens.*
 import com.zionchat.app.ui.theme.ZionChatTheme
 
@@ -38,20 +41,39 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
+                    val appContainer = remember { AppContainer(applicationContext) }
                     val navController = rememberNavController()
-                    NavHost(
-                        navController = navController,
-                        startDestination = "chat"
+                    CompositionLocalProvider(
+                        LocalAppRepository provides appContainer.repository,
+                        LocalChatApiClient provides appContainer.chatApiClient
                     ) {
-                        composable("chat") { ChatScreen(navController) }
-                        composable("settings") { SettingsScreen(navController) }
-                        composable("model_services") { ModelServicesScreen(navController) }
-                        composable("add_provider") { backStackEntry ->
-                            val preset = backStackEntry.arguments?.getString("preset")
-                            AddProviderScreen(navController, preset)
+                        NavHost(
+                            navController = navController,
+                            startDestination = "chat"
+                        ) {
+                            composable("chat") { ChatScreen(navController) }
+                            composable("settings") { SettingsScreen(navController) }
+                            composable("model_services") { ModelServicesScreen(navController) }
+                            composable(
+                                route = "add_provider?preset={preset}&providerId={providerId}",
+                                arguments = listOf(
+                                    navArgument("preset") { defaultValue = "" },
+                                    navArgument("providerId") { defaultValue = "" }
+                                )
+                            ) { backStackEntry ->
+                                val preset = backStackEntry.arguments?.getString("preset")
+                                val providerId = backStackEntry.arguments?.getString("providerId")
+                                AddProviderScreen(navController, preset, providerId)
+                            }
+                            composable("models") { ModelsScreen(navController) }
+                            composable(
+                                route = "model_config?id={id}",
+                                arguments = listOf(navArgument("id") { defaultValue = "" })
+                            ) { backStackEntry ->
+                                val modelId = backStackEntry.arguments?.getString("id")
+                                ModelConfigScreen(navController, modelId)
+                            }
                         }
-                        composable("models") { ModelsScreen(navController) }
-                        composable("model_config") { ModelConfigScreen(navController) }
                     }
                 }
             }

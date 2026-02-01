@@ -17,23 +17,36 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.zionchat.app.LocalAppRepository
+import com.zionchat.app.data.HttpHeader
+import com.zionchat.app.data.ModelConfig
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
+import kotlinx.coroutines.launch
 
 @Composable
-fun ModelConfigScreen(navController: NavController) {
-    var modelName by remember { mutableStateOf("GPT-4o") }
+fun ModelConfigScreen(
+    navController: NavController,
+    modelId: String? = null
+) {
+    val repository = LocalAppRepository.current
+    val scope = rememberCoroutineScope()
+    val models by repository.modelsFlow.collectAsState(initial = emptyList())
+    val existingModel = remember(models, modelId) { models.firstOrNull { it.id == modelId } }
+
+    var modelName by remember(existingModel) { mutableStateOf(existingModel?.displayName ?: "GPT-4o") }
     var selectedModality by remember { mutableStateOf("text-image") }
-    val headers = remember {
-        mutableStateListOf<Header>()
+    val headers = remember(existingModel) {
+        mutableStateListOf<Header>().apply {
+            existingModel?.headers?.forEach { add(Header(it.key, it.value)) }
+        }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.navigationBars)
-            .background(Background)
-    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Background)
+        ) {
         // Top Navigation Bar
         Box(
             modifier = Modifier
@@ -69,17 +82,33 @@ fun ModelConfigScreen(navController: NavController) {
             )
 
             // Save Button
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .align(Alignment.CenterEnd)
-                    .clip(CircleShape)
-                    .background(Surface, CircleShape)
-                    .pressableScale(pressedScale = 0.95f) { navController.popBackStack() },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = AppIcons.Check,
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .align(Alignment.CenterEnd)
+                        .clip(CircleShape)
+                        .background(Surface, CircleShape)
+                        .pressableScale(pressedScale = 0.95f) {
+                            val id = existingModel?.id ?: modelId ?: return@pressableScale
+                            scope.launch {
+                                repository.upsertModel(
+                                    ModelConfig(
+                                        id = id,
+                                        displayName = modelName.trim().ifBlank { existingModel?.displayName ?: id },
+                                        enabled = existingModel?.enabled ?: true,
+                                        providerId = existingModel?.providerId,
+                                        headers = headers
+                                            .filter { it.key.isNotBlank() }
+                                            .map { HttpHeader(it.key.trim(), it.value.trim()) }
+                                    )
+                                )
+                                navController.popBackStack()
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Check,
                     contentDescription = "Save",
                     tint = TextPrimary,
                     modifier = Modifier.size(22.dp)

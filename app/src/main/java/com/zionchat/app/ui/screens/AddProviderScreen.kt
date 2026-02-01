@@ -17,20 +17,33 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.zionchat.app.LocalAppRepository
+import com.zionchat.app.data.ProviderConfig
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
+import kotlinx.coroutines.launch
 
 @Composable
 fun AddProviderScreen(
     navController: NavController,
-    preset: String? = null
+    preset: String? = null,
+    providerId: String? = null
 ) {
+    val repository = LocalAppRepository.current
+    val scope = rememberCoroutineScope()
+
     var providerName by remember { mutableStateOf("") }
     var apiKey by remember { mutableStateOf("") }
     var apiUrl by remember { mutableStateOf("") }
     var selectedType by remember { mutableStateOf("openai") }
     var showAvatarModal by remember { mutableStateOf(false) }
     var selectedAvatar by remember { mutableStateOf("") }
+
+    val providers by repository.providersFlow.collectAsState(initial = emptyList())
+    val activeProviderId = remember(providerId) { providerId?.takeIf { it.isNotBlank() } }
+    val existingProvider = remember(providers, activeProviderId) {
+        activeProviderId?.let { id -> providers.firstOrNull { it.id == id } }
+    }
 
     // Preset data
     val presetData = remember(preset) {
@@ -42,7 +55,17 @@ fun AddProviderScreen(
         }
     }
 
-    LaunchedEffect(presetData) {
+    LaunchedEffect(existingProvider?.id) {
+        existingProvider?.let {
+            providerName = it.name
+            apiKey = it.apiKey
+            apiUrl = it.apiUrl
+            selectedType = it.type
+        }
+    }
+
+    LaunchedEffect(presetData?.name, existingProvider?.id) {
+        if (existingProvider != null) return@LaunchedEffect
         presetData?.let {
             providerName = it.name
             apiUrl = it.apiUrl
@@ -54,7 +77,6 @@ fun AddProviderScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.navigationBars)
                 .background(Background)
         ) {
             // Top Navigation Bar
@@ -97,7 +119,26 @@ fun AddProviderScreen(
                         .size(40.dp)
                         .clip(CircleShape)
                         .background(Surface, CircleShape)
-                        .pressableScale(pressedScale = 0.95f) { navController.navigateUp() }
+                        .pressableScale(pressedScale = 0.95f) {
+                            if (providerName.isBlank() || apiUrl.isBlank()) return@pressableScale
+                            scope.launch {
+                                repository.upsertProvider(
+                                    existingProvider?.copy(
+                                        name = providerName.trim(),
+                                        type = selectedType.trim(),
+                                        apiUrl = apiUrl.trim(),
+                                        apiKey = apiKey.trim()
+                                    ) ?: ProviderConfig(
+                                        presetId = preset?.takeIf { it.isNotBlank() },
+                                        name = providerName.trim(),
+                                        type = selectedType.trim(),
+                                        apiUrl = apiUrl.trim(),
+                                        apiKey = apiKey.trim()
+                                    )
+                                )
+                                navController.navigateUp()
+                            }
+                        }
                         .align(Alignment.CenterEnd),
                     contentAlignment = Alignment.Center
                 ) {
