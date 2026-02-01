@@ -1,7 +1,10 @@
 package com.zionchat.app.ui.screens
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -9,10 +12,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,10 +41,11 @@ fun SettingsScreen(navController: NavController) {
             UserProfileSection()
 
             // My ChatGPT 分组
-            SettingsGroup(title = "My ChatGPT") {
+            SettingsGroup(title = "My ChatGPT", itemCount = 2) {
                 SettingsItem(
                     icon = { Icon(AppIcons.Personalization, null, Modifier.size(22.dp), TextPrimary) },
                     label = "Personalization",
+                    showDivider = true,
                     onClick = { }
                 )
                 SettingsItem(
@@ -49,12 +56,13 @@ fun SettingsScreen(navController: NavController) {
             }
 
             // Appearance 分组
-            SettingsGroup(title = "Appearance") {
+            SettingsGroup(title = "Appearance", itemCount = 2) {
                 SettingsItem(
                     icon = { Icon(AppIcons.Appearance, null, Modifier.size(22.dp), TextPrimary) },
                     label = "Appearance",
                     value = "Light",
                     showChevron = true,
+                    showDivider = true,
                     onClick = { }
                 )
                 SettingsItem(
@@ -67,12 +75,13 @@ fun SettingsScreen(navController: NavController) {
             }
 
             // General 分组
-            SettingsGroup(title = "General") {
+            SettingsGroup(title = "General", itemCount = 2) {
                 SettingsItem(
                     icon = { Icon(AppIcons.Language, null, Modifier.size(22.dp), TextPrimary) },
                     label = "Language",
                     value = "English",
                     showChevron = true,
+                    showDivider = true,
                     onClick = { }
                 )
                 SettingsItem(
@@ -84,18 +93,20 @@ fun SettingsScreen(navController: NavController) {
             }
 
             // AI Model 分组
-            SettingsGroup(title = "AI Model") {
+            SettingsGroup(title = "AI Model", itemCount = 3) {
                 SettingsItem(
                     icon = { Icon(AppIcons.Model, null, Modifier.size(22.dp), TextPrimary) },
                     label = "Default model",
                     value = "GPT-4o",
                     showChevron = true,
+                    showDivider = true,
                     onClick = { }
                 )
                 SettingsItem(
                     icon = { Icon(AppIcons.ModelServices, null, Modifier.size(22.dp), TextPrimary) },
                     label = "Model services",
                     showChevron = true,
+                    showDivider = true,
                     onClick = { navController.navigate("model_services") }
                 )
                 SettingsItem(
@@ -213,6 +224,7 @@ fun UserProfileSection() {
 @Composable
 fun SettingsGroup(
     title: String,
+    itemCount: Int = 0,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(
@@ -227,9 +239,11 @@ fun SettingsGroup(
             modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
         )
 
-        // 分组内容
+        // 分组内容 - 白色卡片带圆角
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(0.dp, RoundedCornerShape(16.dp)),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = Surface)
         ) {
@@ -246,46 +260,82 @@ fun SettingsItem(
     label: String,
     value: String? = null,
     showChevron: Boolean = false,
+    showDivider: Boolean = false,
     onClick: () -> Unit
 ) {
-    Row(
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    // 点击时的缩放动画
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        label = "scale"
+    )
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier.size(24.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            icon()
-        }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Text(
-            text = label,
-            fontSize = 16.sp,
-            color = TextPrimary,
-            modifier = Modifier.weight(1f)
-        )
-
-        if (value != null) {
-            Text(
-                text = value,
-                fontSize = 15.sp,
-                color = TextSecondary
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
             )
-            Spacer(modifier = Modifier.width(4.dp))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(if (isPressed) Color(0xFFE5E5EA) else Surface)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.size(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                icon()
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Text(
+                text = label,
+                fontSize = 16.sp,
+                color = TextPrimary,
+                modifier = Modifier.weight(1f)
+            )
+
+            if (value != null) {
+                Text(
+                    text = value,
+                    fontSize = 15.sp,
+                    color = TextSecondary
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+            }
+
+            if (showChevron) {
+                Icon(
+                    imageVector = AppIcons.ChevronRight,
+                    contentDescription = null,
+                    tint = TextSecondary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
 
-        if (showChevron) {
-            Icon(
-                imageVector = AppIcons.ChevronRight,
-                contentDescription = null,
-                tint = TextSecondary,
-                modifier = Modifier.size(16.dp)
+        // 白色分割线（带轻微阴影效果）
+        if (showDivider) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .height(1.dp)
+                    .background(Color.White)
+                    .shadow(0.5.dp, spotColor = Color(0xFFE5E5EA), ambientColor = Color(0xFFE5E5EA))
             )
         }
     }

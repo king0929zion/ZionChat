@@ -924,50 +924,50 @@ fun BottomInputArea(
                 )
             }
 
-            // 输入框容器 - 高度与工具按钮一致 (44dp)
+            // 输入框容器 - 高度48dp解决文字遮挡问题
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(44.dp)
+                    .heightIn(min = 48.dp)
                     .background(Surface, RoundedCornerShape(24.dp))
-                    .padding(horizontal = 12.dp),
+                    .padding(start = 12.dp, end = 8.dp)
+                    .padding(vertical = 6.dp),
                 contentAlignment = Alignment.CenterStart
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 选中的工具标签 - 根据HTML样式：rounded-full (圆角胶囊形状), 高度匹配
+                    // 选中的工具标签 - 完全对标HTML项目
                     if (selectedTool != null) {
                         Box(
                             modifier = Modifier
-                                .background(Color(0xFFE8F4FD), RoundedCornerShape(50.dp))
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                                .heightIn(min = 24.dp),
+                                .background(Color(0xFFE3F2FD), RoundedCornerShape(16.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Icon(
                                     imageVector = AppIcons.Globe,
                                     contentDescription = null,
-                                    tint = Color(0xFF007AFF),
-                                    modifier = Modifier.size(14.dp)
+                                    tint = Color(0xFF1976D2),
+                                    modifier = Modifier.size(16.dp)
                                 )
                                 Text(
                                     text = selectedTool.replaceFirstChar { it.uppercase() },
-                                    fontSize = 14.sp,
-                                    color = Color(0xFF007AFF),
+                                    fontSize = 15.sp,
+                                    color = Color(0xFF1976D2),
                                     fontWeight = FontWeight.Medium
                                 )
                                 Icon(
                                     imageVector = AppIcons.Close,
                                     contentDescription = "Clear",
-                                    tint = Color(0xFF007AFF),
+                                    tint = Color(0xFF1976D2),
                                     modifier = Modifier
-                                        .size(14.dp)
+                                        .size(16.dp)
                                         .clickable { onClearTool() }
                                 )
                             }
@@ -975,12 +975,20 @@ fun BottomInputArea(
                         Spacer(modifier = Modifier.width(8.dp))
                     }
 
-                    // 输入框
+                    // 输入框 - 修复文字遮挡问题
                     TextField(
                         value = messageText,
                         onValueChange = onMessageChange,
-                        placeholder = { Text("Message...", fontSize = 16.sp) },
-                        modifier = Modifier.weight(1f),
+                        placeholder = {
+                            Text(
+                                text = "Message...",
+                                fontSize = 17.sp,
+                                color = TextSecondary
+                            )
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 36.dp),
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
@@ -988,13 +996,18 @@ fun BottomInputArea(
                             unfocusedIndicatorColor = Color.Transparent
                         ),
                         singleLine = true,
-                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 16.sp)
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            fontSize = 17.sp,
+                            lineHeight = 22.sp,
+                            color = TextPrimary
+                        )
                     )
 
-                    // 发送按钮
+                    // 发送按钮 - 稍大(36dp)且往右
                     Box(
                         modifier = Modifier
-                            .size(32.dp)
+                            .padding(start = 4.dp)
+                            .size(36.dp)
                             .background(
                                 if (messageText.isNotBlank()) TextPrimary else GrayLight,
                                 CircleShape
@@ -1009,7 +1022,7 @@ fun BottomInputArea(
                             imageVector = AppIcons.Send,
                             contentDescription = "Send",
                             tint = if (messageText.isNotBlank()) Color.White else TextSecondary,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
