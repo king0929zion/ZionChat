@@ -68,29 +68,37 @@ fun ChatScreen(navController: NavController) {
                 )
 
                 // 聊天内容区域
-                ChatContent(modifier = Modifier.weight(1f))
-            }
-
-            // 底部工具面板
-            if (showToolMenu) {
-                ToolMenuPanel(
-                    onDismiss = { showToolMenu = false },
-                    onToolSelect = { tool ->
-                        selectedTool = tool
-                        showToolMenu = false
-                    }
+                ChatContent(
+                    modifier = Modifier.weight(1f),
+                    // 为底部输入框留出空间
+                    contentPadding = PaddingValues(bottom = 80.dp)
                 )
             }
 
-            // 底部输入框区域
-            BottomInputArea(
-                selectedTool = selectedTool,
-                onToolToggle = { showToolMenu = !showToolMenu },
-                onClearTool = { selectedTool = null },
-                messageText = messageText,
-                onMessageChange = { messageText = it },
-                onSend = { /* 发送消息 */ }
-            )
+            // 底部输入框区域 - 固定在底部
+            Column(
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                // 底部工具面板（在输入框上方）
+                if (showToolMenu) {
+                    ToolMenuPanel(
+                        onDismiss = { showToolMenu = false },
+                        onToolSelect = { tool ->
+                            selectedTool = tool
+                            showToolMenu = false
+                        }
+                    )
+                }
+
+                BottomInputArea(
+                    selectedTool = selectedTool,
+                    onToolToggle = { showToolMenu = !showToolMenu },
+                    onClearTool = { selectedTool = null },
+                    messageText = messageText,
+                    onMessageChange = { messageText = it },
+                    onSend = { /* 发送消息 */ }
+                )
+            }
         }
     }
 }
@@ -371,12 +379,15 @@ fun TopNavBar(
 }
 
 @Composable
-fun ChatContent(modifier: Modifier = Modifier) {
+fun ChatContent(
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+) {
     Column(
         modifier = modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // 用户消息
