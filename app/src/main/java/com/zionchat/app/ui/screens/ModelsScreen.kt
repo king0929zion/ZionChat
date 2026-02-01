@@ -265,6 +265,7 @@ fun ModelItem(
     }
 }
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun AddModelModal(
     visible: Boolean,

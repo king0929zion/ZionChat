@@ -269,6 +269,7 @@ data class PresetData(
     val apiUrl: String
 )
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun AvatarSelectionModal(
     visible: Boolean,

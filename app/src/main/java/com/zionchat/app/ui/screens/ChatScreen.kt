@@ -753,6 +753,7 @@ fun ActionButton(
     }
 }
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun ToolMenuPanel(
     visible: Boolean,
