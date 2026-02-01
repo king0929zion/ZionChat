@@ -9,10 +9,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.graphics.Color
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,7 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.zionchat.app.ui.theme.*
+import com.zionchat.app.ui.icons.AppIcons
 
 @Composable
 fun ModelsScreen(navController: NavController) {
@@ -63,9 +59,10 @@ fun ModelsScreen(navController: NavController) {
                         .background(Surface, CircleShape)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ArrowBack,
+                        imageVector = AppIcons.Back,
                         contentDescription = "Back",
-                        tint = TextPrimary
+                        tint = TextPrimary,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
@@ -87,9 +84,10 @@ fun ModelsScreen(navController: NavController) {
                         .background(Surface, CircleShape)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Add,
+                        imageVector = AppIcons.Plus,
                         contentDescription = "Add Model",
-                        tint = TextPrimary
+                        tint = TextPrimary,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
@@ -105,7 +103,7 @@ fun ModelsScreen(navController: NavController) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Default.Search,
+                    imageVector = AppIcons.Search,
                     contentDescription = "Search",
                     tint = TextSecondary,
                     modifier = Modifier.size(20.dp)

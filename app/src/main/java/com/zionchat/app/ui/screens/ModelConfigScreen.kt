@@ -7,8 +7,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableStateListOf
@@ -19,7 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.zionchat.app.ui.theme.*
+import com.zionchat.app.ui.icons.AppIcons
 
 @Composable
 fun ModelConfigScreen(navController: NavController) {
@@ -49,9 +47,10 @@ fun ModelConfigScreen(navController: NavController) {
                     .background(Surface, CircleShape)
             ) {
                 Icon(
-                    imageVector = Icons.Default.ArrowBack,
+                    imageVector = AppIcons.Back,
                     contentDescription = "Back",
-                    tint = TextPrimary
+                    tint = TextPrimary,
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
@@ -73,9 +72,10 @@ fun ModelConfigScreen(navController: NavController) {
                     .background(Surface, CircleShape)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Check,
+                    imageVector = AppIcons.Check,
                     contentDescription = "Save",
-                    tint = TextPrimary
+                    tint = TextPrimary,
+                    modifier = Modifier.size(22.dp)
                 )
             }
         }
@@ -147,14 +147,14 @@ fun ModelConfigScreen(navController: NavController) {
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     ModalityOption(
-                        icon = "📝",
+                        iconVector = AppIcons.TextOnly,
                         text = "Text Only",
                         selected = selectedModality == "text",
                         onClick = { selectedModality = "text" },
                         modifier = Modifier.weight(1f)
                     )
                     ModalityOption(
-                        icon = "🖼",
+                        iconVector = AppIcons.TextImage,
                         text = "Text & Image",
                         selected = selectedModality == "text-image",
                         onClick = { selectedModality = "text-image" },
@@ -190,7 +190,7 @@ fun ModelConfigScreen(navController: NavController) {
                                 .background(GrayLighter, CircleShape)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Add,
+                                imageVector = AppIcons.Plus,
                                 contentDescription = "Add Header",
                                 tint = TextPrimary,
                                 modifier = Modifier.size(18.dp)
@@ -235,7 +235,7 @@ fun ModelConfigScreen(navController: NavController) {
 
 @Composable
 fun ModalityOption(
-    icon: String,
+    iconVector: androidx.compose.ui.graphics.vector.ImageVector,
     text: String,
     selected: Boolean,
     onClick: () -> Unit,
@@ -252,10 +252,13 @@ fun ModalityOption(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = icon,
-            fontSize = 18.sp,
-            modifier = Modifier.padding(end = 6.dp)
+        Icon(
+            imageVector = iconVector,
+            contentDescription = null,
+            tint = if (selected) Surface else TextPrimary,
+            modifier = Modifier
+                .size(18.dp)
+                .padding(end = 4.dp)
         )
         Text(
             text = text,
@@ -359,7 +362,7 @@ fun HeaderItem(
             modifier = Modifier.size(32.dp)
         ) {
             Icon(
-                imageVector = Icons.Default.Close,
+                imageVector = AppIcons.Close,
                 contentDescription = "Remove",
                 tint = TextSecondary,
                 modifier = Modifier.size(18.dp)
