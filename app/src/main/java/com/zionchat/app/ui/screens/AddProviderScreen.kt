@@ -54,8 +54,8 @@ fun AddProviderScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Background)
                 .windowInsetsPadding(WindowInsets.navigationBars)
+                .background(Background)
         ) {
             // Top Navigation Bar
             Box(
@@ -252,129 +252,14 @@ fun AddProviderScreen(
             }
         }
 
-        // Avatar Selection Modal
-        if (showAvatarModal) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .pressableScale(pressedScale = 1f) { showAvatarModal = false }
-            ) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter),
-                    color = Surface,
-                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp)
-                    ) {
-                        // Drag handle
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .width(40.dp)
-                                    .height(4.dp)
-                                    .background(GrayLight, RoundedCornerShape(2.dp))
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        Text(
-                            text = "Select Avatar",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextPrimary
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Avatar Grid
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            val avatars = listOf(
-                                "🔴", "🟣", "🔵", "🟢", "🟡",
-                                "🦙", "🔷", "🌙", "💎", "🤖",
-                                "🌀", "⚡", "🔶", "🟠", "🟤"
-                            )
-
-                            for (row in 0 until 3) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceEvenly
-                                ) {
-                                    for (col in 0 until 5) {
-                                        val index = row * 5 + col
-                                        if (index < avatars.size) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(48.dp)
-                                                    .clip(RoundedCornerShape(14.dp))
-                                                    .background(GrayLighter, RoundedCornerShape(14.dp))
-                                                    .pressableScale(pressedScale = 0.95f) {
-                                                        selectedAvatar = avatars[index]
-                                                        showAvatarModal = false
-                                                    },
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(
-                                                    text = avatars[index],
-                                                    fontSize = 24.sp
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        // Import from Gallery
-                        Button(
-                            onClick = { },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                            shape = RoundedCornerShape(20.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = GrayLighter
-                            )
-                        ) {
-                            Icon(
-                                imageVector = AppIcons.ChatGPTLogo,
-                                contentDescription = "Import",
-                                tint = TextPrimary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Import from Gallery",
-                                fontSize = 16.sp,
-                                color = TextPrimary
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        TextButton(
-                            onClick = { showAvatarModal = false },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = "Cancel",
-                                fontSize = 16.sp,
-                                color = TextSecondary
-                            )
-                        }
-                    }
-                }
+        AvatarSelectionModal(
+            visible = showAvatarModal,
+            onDismiss = { showAvatarModal = false },
+            onSelectAvatar = { avatar ->
+                selectedAvatar = avatar
+                showAvatarModal = false
             }
-        }
+        )
     }
 }
 
@@ -383,6 +268,144 @@ data class PresetData(
     val type: String,
     val apiUrl: String
 )
+
+@Composable
+fun AvatarSelectionModal(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    onSelectAvatar: (String) -> Unit
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(),
+        exit = fadeOut()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.5f))
+                .pressableScale(pressedScale = 1f, onClick = onDismiss)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .animateEnterExit(
+                        enter = slideInVertically(initialOffsetY = { it }),
+                        exit = slideOutVertically(targetOffsetY = { it })
+                    )
+                    .pressableScale(pressedScale = 1f, onClick = { }),
+                color = Surface,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp)
+                ) {
+                    // Drag handle
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(40.dp)
+                                .height(4.dp)
+                                .background(GrayLight, RoundedCornerShape(2.dp))
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Text(
+                        text = "Select Avatar",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Avatar Grid
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        val avatars = listOf(
+                            "🔴", "🟣", "🔵", "🟢", "🟡",
+                            "🦙", "🔷", "🌙", "💎", "🤖",
+                            "🌀", "⚡", "🔶", "🟠", "🟤"
+                        )
+
+                        for (row in 0 until 3) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly
+                            ) {
+                                for (col in 0 until 5) {
+                                    val index = row * 5 + col
+                                    if (index < avatars.size) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(48.dp)
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .background(GrayLighter, RoundedCornerShape(14.dp))
+                                                .pressableScale(pressedScale = 0.95f) {
+                                                    onSelectAvatar(avatars[index])
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = avatars[index],
+                                                fontSize = 24.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Import from Gallery
+                    Button(
+                        onClick = { },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = GrayLighter
+                        )
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.ChatGPTLogo,
+                            contentDescription = "Import",
+                            tint = TextPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Import from Gallery",
+                            fontSize = 16.sp,
+                            color = TextPrimary
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Cancel",
+                            fontSize = 16.sp,
+                            color = TextSecondary
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun FormField(

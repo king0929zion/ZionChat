@@ -1,8 +1,10 @@
 package com.zionchat.app.ui.screens
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -44,8 +46,8 @@ fun ModelsScreen(navController: NavController) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Background)
                 .windowInsetsPadding(WindowInsets.navigationBars)
+                .background(Background)
         ) {
             // Top Navigation Bar
             Box(
@@ -204,15 +206,14 @@ fun ModelsScreen(navController: NavController) {
         }
 
         // Add Model Modal
-        if (showAddModal) {
-            AddModelModal(
-                onDismiss = { showAddModal = false },
-                onAdd = { id, name ->
-                    models.add(Model(id, name, false))
-                    showAddModal = false
-                }
-            )
-        }
+        AddModelModal(
+            visible = showAddModal,
+            onDismiss = { showAddModal = false },
+            onAdd = { id, name ->
+                models.add(Model(id, name, false))
+                showAddModal = false
+            }
+        )
     }
 }
 
@@ -266,28 +267,53 @@ fun ModelItem(
 
 @Composable
 fun AddModelModal(
+    visible: Boolean,
     onDismiss: () -> Unit,
     onAdd: (String, String) -> Unit
 ) {
     var modelId by remember { mutableStateOf("") }
     var modelName by remember { mutableStateOf("") }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f))
-            .clickable { onDismiss() }
+    LaunchedEffect(visible) {
+        if (visible) {
+            modelId = ""
+            modelName = ""
+        }
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(),
+        exit = fadeOut()
     ) {
-        Surface(
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter),
-            color = Surface,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                .fillMaxSize()
+                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { onDismiss() }
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp)
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .animateEnterExit(
+                        enter = slideInVertically(initialOffsetY = { it }),
+                        exit = slideOutVertically(targetOffsetY = { it })
+                    )
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { }
+                    ),
+                color = Surface,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
             ) {
+                Column(
+                    modifier = Modifier.padding(24.dp)
+                ) {
                 // Drag handle
                 Box(
                     modifier = Modifier.fillMaxWidth(),
@@ -442,6 +468,7 @@ fun AddModelModal(
                             color = Surface
                         )
                     }
+                }
                 }
             }
         }

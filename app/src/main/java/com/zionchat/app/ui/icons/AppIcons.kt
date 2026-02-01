@@ -52,7 +52,7 @@ object AppIcons {
         viewportHeight = 24f
     ).apply {
         path(
-            fill = SolidColor(Color(0xFF1C1C1E)),
+            fill = SolidColor(Color(0xFF000000)),
             stroke = null
         ) {
             moveTo(15.673f, 3.913f)
@@ -729,7 +729,7 @@ object AppIcons {
         viewportHeight = 960f
     ).apply {
         path(
-            fill = SolidColor(Color(0xFF000000)),
+            fill = SolidColor(Color(0xFF1F1F1F)),
             stroke = null,
             pathFillType = PathFillType.NonZero
         ) {

@@ -37,6 +37,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.zIndex
 import androidx.navigation.NavController
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
@@ -251,15 +252,14 @@ fun ChatScreen(navController: NavController) {
             }
 
             // 底部工具面板（覆盖在输入框上方）
-            if (showToolMenu) {
-                ToolMenuPanel(
-                    onDismiss = { showToolMenu = false },
-                    onToolSelect = { tool ->
-                        selectedTool = tool
-                        showToolMenu = false
-                    }
-                )
-            }
+            ToolMenuPanel(
+                visible = showToolMenu,
+                onDismiss = { showToolMenu = false },
+                onToolSelect = { tool ->
+                    selectedTool = tool
+                    showToolMenu = false
+                }
+            )
         }
     }
 }
@@ -466,8 +466,8 @@ fun SidebarContent(
         modifier = Modifier
             .fillMaxHeight()
             .width(280.dp)
-            .background(Surface)
             .windowInsetsPadding(WindowInsets.systemBars)
+            .background(Surface)
             .padding(vertical = 8.dp)
     ) {
         // 顶部搜索区域
@@ -533,7 +533,7 @@ fun SidebarContent(
                 onClick = { }
             )
             SidebarMenuItem(
-                icon = { Icon(AppIcons.Apps, null, Modifier.size(20.dp), TextPrimary) },
+                icon = { Icon(AppIcons.Apps, null, Modifier.size(20.dp), tint = Color.Unspecified) },
                 label = "Apps",
                 onClick = { }
             )
@@ -755,90 +755,110 @@ fun ActionButton(
 
 @Composable
 fun ToolMenuPanel(
+    visible: Boolean,
     onDismiss: () -> Unit,
     onToolSelect: (String) -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.25f))
-            .clickable(onClick = onDismiss)
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(),
+        exit = fadeOut()
     ) {
-        Card(
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter),
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-            colors = CardDefaults.cardColors(containerColor = Surface)
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.25f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                )
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .animateEnterExit(
+                        enter = slideInVertically(initialOffsetY = { it }),
+                        exit = slideOutVertically(targetOffsetY = { it })
+                    )
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { }
+                    ),
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                colors = CardDefaults.cardColors(containerColor = Surface)
             ) {
-                // 拖动条
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
+                Column(
+                    modifier = Modifier.padding(16.dp)
                 ) {
+                    // 拖动条
                     Box(
-                        modifier = Modifier
-                            .width(40.dp)
-                            .height(4.dp)
-                            .background(GrayLight, RoundedCornerShape(2.dp))
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(40.dp)
+                                .height(4.dp)
+                                .background(GrayLight, RoundedCornerShape(2.dp))
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 顶部三个快捷按钮
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        QuickActionButton(
+                            icon = { Icon(AppIcons.Camera, null, Modifier.size(28.dp), TextPrimary) },
+                            label = "Camera",
+                            onClick = { onToolSelect("camera") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        QuickActionButton(
+                            icon = { Icon(AppIcons.ChatGPTLogo, null, Modifier.size(28.dp), TextPrimary) },
+                            label = "Photos",
+                            onClick = { onToolSelect("photos") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        QuickActionButton(
+                            icon = { Icon(AppIcons.Files, null, Modifier.size(28.dp), TextPrimary) },
+                            label = "Files",
+                            onClick = { onToolSelect("files") },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Divider(color = GrayLight, modifier = Modifier.fillMaxWidth())
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // 列表项
+                    ToolListItem(
+                        icon = { Icon(AppIcons.Globe, null, Modifier.size(24.dp), TextPrimary) },
+                        title = "Web search",
+                        subtitle = "Find real-time news and info",
+                        onClick = { onToolSelect("web") }
+                    )
+                    ToolListItem(
+                        icon = { Icon(AppIcons.CreateImage, null, Modifier.size(24.dp), TextPrimary) },
+                        title = "Create image",
+                        subtitle = "Visualize anything",
+                        onClick = { onToolSelect("image") }
+                    )
+                    ToolListItem(
+                        icon = { Icon(AppIcons.MCPTools, null, Modifier.size(24.dp), TextPrimary) },
+                        title = "MCP Tools",
+                        subtitle = "Connect external tools",
+                        onClick = { onToolSelect("mcp") }
                     )
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 顶部三个快捷按钮
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    QuickActionButton(
-                        icon = { Icon(AppIcons.Camera, null, Modifier.size(28.dp), TextPrimary) },
-                        label = "Camera",
-                        onClick = { onToolSelect("camera") },
-                        modifier = Modifier.weight(1f)
-                    )
-                    QuickActionButton(
-                        icon = { Icon(AppIcons.ChatGPTLogo, null, Modifier.size(28.dp), TextPrimary) },
-                        label = "Photos",
-                        onClick = { onToolSelect("photos") },
-                        modifier = Modifier.weight(1f)
-                    )
-                    QuickActionButton(
-                        icon = { Icon(AppIcons.Files, null, Modifier.size(28.dp), TextPrimary) },
-                        label = "Files",
-                        onClick = { onToolSelect("files") },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Divider(color = GrayLight, modifier = Modifier.fillMaxWidth())
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // 列表项
-                ToolListItem(
-                    icon = { Icon(AppIcons.Globe, null, Modifier.size(24.dp), TextPrimary) },
-                    title = "Web search",
-                    subtitle = "Find real-time news and info",
-                    onClick = { onToolSelect("web") }
-                )
-                ToolListItem(
-                    icon = { Icon(AppIcons.CreateImage, null, Modifier.size(24.dp), TextPrimary) },
-                    title = "Create image",
-                    subtitle = "Visualize anything",
-                    onClick = { onToolSelect("image") }
-                )
-                ToolListItem(
-                    icon = { Icon(AppIcons.MCPTools, null, Modifier.size(24.dp), TextPrimary) },
-                    title = "MCP Tools",
-                    subtitle = "Connect external tools",
-                    onClick = { onToolSelect("mcp") }
-                )
             }
         }
     }
@@ -921,16 +941,35 @@ fun BottomInputArea(
     onMessageChange: (String) -> Unit,
     onSend: () -> Unit
 ) {
-    val canSend = messageText.isNotBlank()
+    val canSend = messageText.trim().isNotEmpty()
+    val inputMinHeight = if (selectedTool != null) 56.dp else 44.dp
+    val toolLabel = when (selectedTool) {
+        "camera" -> "Camera"
+        "photos" -> "Photos"
+        "files" -> "Files"
+        "web" -> "Search"
+        "image" -> "Image"
+        "mcp" -> "Tools"
+        else -> selectedTool?.replaceFirstChar { it.uppercase() }.orEmpty()
+    }
+    val toolIcon = when (selectedTool) {
+        "camera" -> AppIcons.Camera
+        "photos" -> AppIcons.ChatGPTLogo
+        "files" -> AppIcons.Files
+        "web" -> AppIcons.Globe
+        "image" -> AppIcons.CreateImage
+        "mcp" -> AppIcons.MCPTools
+        else -> AppIcons.Globe
+    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Background)
             .imePadding()
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 16.dp)
-            .padding(top = 8.dp, bottom = 32.dp)
+            .padding(top = 8.dp, bottom = 8.dp)
+            .background(Background)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -940,7 +979,6 @@ fun BottomInputArea(
             // 工具图标按钮 - 44dp，高度对齐输入框底部
             Box(
                 modifier = Modifier
-                    .padding(bottom = 2.dp)
                     .size(44.dp)
                     .clip(CircleShape)
                     .background(Surface, CircleShape)
@@ -959,13 +997,13 @@ fun BottomInputArea(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = 48.dp)
+                    .heightIn(min = inputMinHeight)
                     .background(Surface, RoundedCornerShape(24.dp))
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 20.dp, end = 56.dp, top = 8.dp, bottom = 8.dp)
+                        .padding(start = 20.dp, end = 60.dp, top = 6.dp, bottom = 6.dp)
                 ) {
                     // 选中的工具标签 - 位于输入框内部，出现时顶起输入框高度
                     if (selectedTool != null) {
@@ -978,13 +1016,13 @@ fun BottomInputArea(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Icon(
-                                imageVector = AppIcons.Globe,
+                                imageVector = toolIcon,
                                 contentDescription = null,
                                 tint = Color(0xFF007AFF),
                                 modifier = Modifier.size(20.dp)
                             )
                             Text(
-                                text = selectedTool.replaceFirstChar { it.uppercase() },
+                                text = toolLabel,
                                 fontSize = 15.sp,
                                 color = Color(0xFF007AFF),
                                 fontWeight = FontWeight.Medium,
@@ -1017,7 +1055,7 @@ fun BottomInputArea(
                         onValueChange = onMessageChange,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 20.dp, max = 120.dp),
+                            .heightIn(min = 32.dp, max = 120.dp),
                         textStyle = TextStyle(
                             fontSize = 17.sp,
                             lineHeight = 22.sp,
@@ -1055,6 +1093,7 @@ fun BottomInputArea(
                         .clip(CircleShape)
                         .background(TextPrimary, CircleShape)
                         .alpha(if (canSend) 1f else 0.4f)
+                        .zIndex(1f)
                         .pressableScale(
                             enabled = canSend,
                             pressedScale = 0.95f,

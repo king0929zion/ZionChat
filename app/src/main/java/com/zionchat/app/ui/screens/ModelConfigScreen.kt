@@ -31,8 +31,8 @@ fun ModelConfigScreen(navController: NavController) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
             .windowInsetsPadding(WindowInsets.navigationBars)
+            .background(Background)
     ) {
         // Top Navigation Bar
         Box(

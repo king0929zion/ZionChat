@@ -46,13 +46,13 @@ fun SettingsScreen(navController: NavController) {
             // My ChatGPT 分组
             SettingsGroup(title = "My ChatGPT", itemCount = 2) {
                 SettingsItem(
-                    icon = { Icon(AppIcons.Personalization, null, Modifier.size(22.dp), TextPrimary) },
+                    icon = { Icon(AppIcons.Personalization, null, Modifier.size(22.dp), tint = Color.Unspecified) },
                     label = "Personalization",
                     showDivider = true,
                     onClick = { }
                 )
                 SettingsItem(
-                    icon = { Icon(AppIcons.Apps, null, Modifier.size(22.dp), TextPrimary) },
+                    icon = { Icon(AppIcons.Apps, null, Modifier.size(22.dp), tint = Color.Unspecified) },
                     label = "Apps",
                     onClick = { }
                 )
@@ -61,7 +61,7 @@ fun SettingsScreen(navController: NavController) {
             // Appearance 分组
             SettingsGroup(title = "Appearance", itemCount = 2) {
                 SettingsItem(
-                    icon = { Icon(AppIcons.Appearance, null, Modifier.size(22.dp), TextPrimary) },
+                    icon = { Icon(AppIcons.Appearance, null, Modifier.size(22.dp), tint = Color.Unspecified) },
                     label = "Appearance",
                     value = "Light",
                     showChevron = true,
@@ -69,7 +69,7 @@ fun SettingsScreen(navController: NavController) {
                     onClick = { }
                 )
                 SettingsItem(
-                    icon = { Icon(AppIcons.Accent, null, Modifier.size(22.dp), TextPrimary) },
+                    icon = { Icon(AppIcons.Accent, null, Modifier.size(22.dp), tint = Color.Unspecified) },
                     label = "Accent color",
                     value = "Default",
                     showChevron = true,
@@ -80,7 +80,7 @@ fun SettingsScreen(navController: NavController) {
             // General 分组
             SettingsGroup(title = "General", itemCount = 2) {
                 SettingsItem(
-                    icon = { Icon(AppIcons.Language, null, Modifier.size(22.dp), TextPrimary) },
+                    icon = { Icon(AppIcons.Language, null, Modifier.size(22.dp), tint = Color.Unspecified) },
                     label = "Language",
                     value = "English",
                     showChevron = true,
@@ -88,7 +88,7 @@ fun SettingsScreen(navController: NavController) {
                     onClick = { }
                 )
                 SettingsItem(
-                    icon = { Icon(AppIcons.Notifications, null, Modifier.size(22.dp), TextPrimary) },
+                    icon = { Icon(AppIcons.Notifications, null, Modifier.size(22.dp), tint = Color.Unspecified) },
                     label = "Notifications",
                     showChevron = true,
                     onClick = { }
@@ -98,7 +98,7 @@ fun SettingsScreen(navController: NavController) {
             // AI Model 分组
             SettingsGroup(title = "AI Model", itemCount = 3) {
                 SettingsItem(
-                    icon = { Icon(AppIcons.Model, null, Modifier.size(22.dp), TextPrimary) },
+                    icon = { Icon(AppIcons.Model, null, Modifier.size(22.dp), tint = Color.Unspecified) },
                     label = "Default model",
                     value = "GPT-4o",
                     showChevron = true,
@@ -106,14 +106,14 @@ fun SettingsScreen(navController: NavController) {
                     onClick = { }
                 )
                 SettingsItem(
-                    icon = { Icon(AppIcons.ModelServices, null, Modifier.size(22.dp), TextPrimary) },
+                    icon = { Icon(AppIcons.ModelServices, null, Modifier.size(22.dp), tint = Color.Unspecified) },
                     label = "Model services",
                     showChevron = true,
                     showDivider = true,
                     onClick = { navController.navigate("model_services") }
                 )
                 SettingsItem(
-                    icon = { Icon(AppIcons.MCPTools, null, Modifier.size(22.dp), TextPrimary) },
+                    icon = { Icon(AppIcons.MCPTools, null, Modifier.size(22.dp), tint = Color.Unspecified) },
                     label = "MCP Tools",
                     showChevron = true,
                     onClick = { }
