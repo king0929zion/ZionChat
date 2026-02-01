@@ -257,40 +257,26 @@ fun MessageItem(
     var showMenu by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
 
-    // 时间格式化
-    val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-    val timeStr = timeFormat.format(Date(message.timestamp))
-
     if (message.isUser) {
         // 用户消息 - 右对齐
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End
         ) {
-            Column(
-                horizontalAlignment = Alignment.End,
-                modifier = Modifier.padding(start = 60.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .background(UserMessageBubble, RoundedCornerShape(18.dp))
-                        .combinedClickable(
-                            onClick = { },
-                            onLongClick = { showMenu = true }
-                        )
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                ) {
-                    Text(
-                        text = message.content,
-                        fontSize = 16.sp,
-                        color = TextPrimary
+            Box(
+                modifier = Modifier
+                    .padding(start = 60.dp)
+                    .background(UserMessageBubble, RoundedCornerShape(18.dp))
+                    .combinedClickable(
+                        onClick = { },
+                        onLongClick = { showMenu = true }
                     )
-                }
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
                 Text(
-                    text = timeStr,
-                    fontSize = 11.sp,
-                    color = TextSecondary,
-                    modifier = Modifier.padding(top = 4.dp, end = 8.dp)
+                    text = message.content,
+                    fontSize = 16.sp,
+                    color = TextPrimary
                 )
             }
         }
@@ -309,13 +295,6 @@ fun MessageItem(
                 fontSize = 16.sp,
                 color = TextPrimary,
                 lineHeight = 24.sp
-            )
-
-            Text(
-                text = timeStr,
-                fontSize = 11.sp,
-                color = TextSecondary,
-                modifier = Modifier.padding(top = 4.dp)
             )
 
             // 工具栏
@@ -927,9 +906,9 @@ fun BottomInputArea(
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Bottom
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // 工具图标按钮
+            // 工具图标按钮 - 44dp 高度
             Box(
                 modifier = Modifier
                     .size(44.dp)
@@ -945,38 +924,50 @@ fun BottomInputArea(
                 )
             }
 
-            // 输入框容器
+            // 输入框容器 - 高度与工具按钮一致 (44dp)
             Box(
                 modifier = Modifier
                     .weight(1f)
+                    .height(44.dp)
                     .background(Surface, RoundedCornerShape(24.dp))
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.CenterStart
             ) {
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 选中的工具标签
+                    // 选中的工具标签 - 根据HTML样式：rounded-full (圆角胶囊形状), 高度匹配
                     if (selectedTool != null) {
                         Box(
                             modifier = Modifier
-                                .background(Color(0xFFE8F4FD), RoundedCornerShape(16.dp))
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                .background(Color(0xFFE8F4FD), RoundedCornerShape(50.dp))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                                .heightIn(min = 24.dp),
+                            contentAlignment = Alignment.Center
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
+                                Icon(
+                                    imageVector = AppIcons.Globe,
+                                    contentDescription = null,
+                                    tint = Color(0xFF007AFF),
+                                    modifier = Modifier.size(14.dp)
+                                )
                                 Text(
                                     text = selectedTool.replaceFirstChar { it.uppercase() },
-                                    fontSize = 15.sp,
-                                    color = Color(0xFF007AFF)
+                                    fontSize = 14.sp,
+                                    color = Color(0xFF007AFF),
+                                    fontWeight = FontWeight.Medium
                                 )
                                 Icon(
                                     imageVector = AppIcons.Close,
                                     contentDescription = "Clear",
                                     tint = Color(0xFF007AFF),
                                     modifier = Modifier
-                                        .size(16.dp)
+                                        .size(14.dp)
                                         .clickable { onClearTool() }
                                 )
                             }
@@ -988,7 +979,7 @@ fun BottomInputArea(
                     TextField(
                         value = messageText,
                         onValueChange = onMessageChange,
-                        placeholder = { Text("Message...") },
+                        placeholder = { Text("Message...", fontSize = 16.sp) },
                         modifier = Modifier.weight(1f),
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
@@ -996,13 +987,14 @@ fun BottomInputArea(
                             focusedIndicatorColor = Color.Transparent,
                             unfocusedIndicatorColor = Color.Transparent
                         ),
-                        singleLine = true
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 16.sp)
                     )
 
                     // 发送按钮
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(32.dp)
                             .background(
                                 if (messageText.isNotBlank()) TextPrimary else GrayLight,
                                 CircleShape
@@ -1017,7 +1009,7 @@ fun BottomInputArea(
                             imageVector = AppIcons.Send,
                             contentDescription = "Send",
                             tint = if (messageText.isNotBlank()) Color.White else TextSecondary,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }

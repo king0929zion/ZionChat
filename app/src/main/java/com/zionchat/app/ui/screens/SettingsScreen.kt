@@ -58,13 +58,7 @@ fun SettingsScreen(navController: NavController) {
                     onClick = { }
                 )
                 SettingsItem(
-                    icon = {
-                        Box(
-                            modifier = Modifier
-                                .size(22.dp)
-                                .background(Color(0xFF8E8E93), CircleShape)
-                        )
-                    },
+                    icon = { Icon(AppIcons.Accent, null, Modifier.size(22.dp), TextPrimary) },
                     label = "Accent color",
                     value = "Default",
                     showChevron = true,

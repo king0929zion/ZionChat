@@ -31,13 +31,13 @@ object AppIcons {
             horizontalLineToRelative(16f)
             arcTo(1f, 1f, 0f, false, true, 20f, 6f)
             horizontalLineTo(4f)
-            arcTo(1f, 1f, 0f, false, true, 4f, 8f)
+            arcTo(1f, 1f, 0f, false, True, 4f, 8f)
             close()
             moveTo(4f, 13f)
             horizontalLineToRelative(10f)
-            arcTo(1f, 1f, 0f, false, true, 13f, 11f)
+            arcTo(1f, 1f, 0f, false, True, 13f, 11f)
             horizontalLineTo(4f)
-            arcTo(1f, 1f, 0f, false, true, 4f, 13f)
+            arcTo(1f, 1f, 0f, false, True, 4f, 13f)
             close()
         }
     }.build()
@@ -242,7 +242,7 @@ object AppIcons {
         }
     }.build()
 
-    // Apps 图标（四个圆点）
+    // Apps 图标（四个圆点）- 匹配 HTML
     val Apps = ImageVector.Builder(
         name = "apps",
         defaultWidth = 24.dp,
@@ -254,25 +254,25 @@ object AppIcons {
             fill = SolidColor(Color(0xFF1C1C1E)),
             stroke = null
         ) {
-            // Top left
+            // Top left circle
             moveTo(6.75f, 4.5f)
-            arcTo(2.25f, 2.25f, 0f, true, false, 6.75f, 9f)
-            arcTo(2.25f, 2.25f, 0f, true, false, 6.75f, 4.5f)
+            arcToRelative(2.25f, 2.25f, 0f, true, true, 6.75f, 9f)
+            arcToRelative(2.25f, 2.25f, 0f, true, true, 6.75f, 4.5f)
             close()
-            // Top right
+            // Top right circle
             moveTo(17.25f, 4.5f)
-            arcTo(2.25f, 2.25f, 0f, true, false, 17.25f, 9f)
-            arcTo(2.25f, 2.25f, 0f, true, false, 17.25f, 4.5f)
+            arcToRelative(2.25f, 2.25f, 0f, true, true, 17.25f, 9f)
+            arcToRelative(2.25f, 2.25f, 0f, true, true, 17.25f, 4.5f)
             close()
-            // Bottom left
+            // Bottom left circle
             moveTo(6.75f, 15f)
-            arcTo(2.25f, 2.25f, 0f, true, false, 6.75f, 19.5f)
-            arcTo(2.25f, 2.25f, 0f, true, false, 6.75f, 15f)
+            arcToRelative(2.25f, 2.25f, 0f, true, true, 6.75f, 19.5f)
+            arcToRelative(2.25f, 2.25f, 0f, true, true, 6.75f, 15f)
             close()
-            // Bottom right
+            // Bottom right circle
             moveTo(17.25f, 15f)
-            arcTo(2.25f, 2.25f, 0f, true, false, 17.25f, 19.5f)
-            arcTo(2.25f, 2.25f, 0f, true, false, 17.25f, 15f)
+            arcToRelative(2.25f, 2.25f, 0f, true, true, 17.25f, 19.5f)
+            arcToRelative(2.25f, 2.25f, 0f, true, true, 17.25f, 15f)
             close()
         }
     }.build()
@@ -293,7 +293,7 @@ object AppIcons {
             strokeLineJoin = StrokeJoin.Round
         ) {
             moveTo(11f, 11f)
-            arcToRelative(8f, 8f, 0f, true, true, 0f, 0.01f)
+            arcTo(8f, 8f, 0f, true, true, 11f, 11.01f)
             close()
             moveTo(21f, 21f)
             lineTo(16.65f, 16.65f)
@@ -407,9 +407,99 @@ object AppIcons {
             arcToRelative(4f, 4f, 0f, false, false, -4f, -4f)
             horizontalLineTo(8f)
             arcToRelative(4f, 4f, 0f, false, false, -4f, 4f)
-            verticalLineToRelative(2f)
+            verticalLineTo(21f)
             moveTo(12f, 7f)
             arcToRelative(4f, 4f, 0f, true, true, 0f, 0.01f)
+            close()
+        }
+    }.build()
+
+    // Accent Color 图标
+    val Accent = ImageVector.Builder(
+        name = "accent",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 20f,
+        viewportHeight = 20f
+    ).apply {
+        path(
+            fill = SolidColor(Color(0xFF1C1C1E)),
+            stroke = null
+        ) {
+            moveTo(13.886f, 2.713f)
+            curveTo(14.834f, 1.924f, 16.247f, 1.973f, 17.139f, 2.864f)
+            lineTo(17.306f, 3.049f)
+            curveTo(18.031f, 3.94f, 18.026f, 5.227f, 17.294f, 6.113f)
+            lineTo(17.126f, 6.296f)
+            lineTo(14.711f, 8.675f)
+            lineTo(14.865f, 8.829f)
+            lineTo(15.043f, 9.029f)
+            curveTo(15.812f, 9.985f, 15.696f, 11.337f, 14.945f, 12.234f)
+            lineTo(14.775f, 12.418f)
+            curveTo(13.688f, 13.49f, 12.839f, 14.662f, 12.18f, 16.005f)
+            lineTo(11.908f, 16.591f)
+            curveTo(11.376f, 17.814f, 9.9f, 18.587f, 8.588f, 17.927f)
+            lineTo(8.462f, 17.859f)
+            curveTo(7.405f, 17.246f, 6.647f, 16.801f, 5.981f, 16.288f)
+            curveTo(5.388f, 15.831f, 4.881f, 15.33f, 4.287f, 14.625f)
+            lineTo(4.027f, 14.311f)
+            curveTo(3.852f, 14.095f, 3.83f, 13.793f, 3.971f, 13.554f)
+            lineTo(4.353f, 12.905f)
+            lineTo(3.733f, 13.12f)
+            curveTo(3.483f, 13.208f, 3.209f, 13.137f, 3.031f, 12.949f)
+            lineTo(2.962f, 12.863f)
+            curveTo(2.822f, 12.653f, 2.683f, 12.439f, 2.547f, 12.22f)
+            lineTo(2.142f, 11.545f)
+            curveTo(1.362f, 10.203f, 2.147f, 8.648f, 3.41f, 8.1f)
+            lineTo(3.997f, 7.829f)
+            curveTo(5.342f, 7.171f, 6.515f, 6.322f, 7.588f, 5.236f)
+            lineTo(7.772f, 5.066f)
+            curveTo(8.734f, 4.263f, 10.218f, 4.187f, 11.179f, 5.147f)
+            lineTo(11.332f, 5.3f)
+            lineTo(13.703f, 2.882f)
+            lineTo(13.886f, 2.713f)
+            close()
+            moveTo(6.897f, 7.604f)
+            curveTo(6.084f, 8.217f, 5.213f, 8.738f, 4.266f, 9.175f)
+            lineTo(3.94f, 9.321f)
+            curveTo(3.241f, 9.624f, 2.998f, 10.371f, 3.292f, 10.877f)
+            lineTo(3.677f, 11.517f)
+            curveTo(3.714f, 11.576f, 3.752f, 11.633f, 3.789f, 11.692f)
+            lineTo(5.627f, 11.052f)
+            lineTo(5.727f, 11.026f)
+            curveTo(5.962f, 10.983f, 6.206f, 11.07f, 6.36f, 11.259f)
+            curveTo(6.537f, 11.475f, 6.56f, 11.778f, 6.419f, 12.018f)
+            lineTo(5.355f, 13.823f)
+            curveTo(5.883f, 14.444f, 6.31f, 14.861f, 6.794f, 15.235f)
+            curveTo(7.377f, 15.684f, 8.055f, 16.086f, 9.129f, 16.708f)
+            lineTo(9.227f, 16.757f)
+            curveTo(9.729f, 16.971f, 10.404f, 16.715f, 10.689f, 16.061f)
+            lineTo(10.835f, 15.736f)
+            curveTo(11.272f, 14.79f, 11.792f, 13.918f, 12.405f, 13.106f)
+            lineTo(6.897f, 7.604f)
+            close()
+            moveTo(16.198f, 3.805f)
+            curveTo(15.797f, 3.404f, 15.162f, 3.382f, 14.735f, 3.737f)
+            lineTo(14.652f, 3.813f)
+            lineTo(11.811f, 6.71f)
+            curveTo(11.687f, 6.837f, 11.518f, 6.909f, 11.341f, 6.91f)
+            curveTo(11.163f, 6.911f, 10.993f, 6.84f, 10.867f, 6.715f)
+            lineTo(10.238f, 6.087f)
+            curveTo(9.833f, 5.682f, 9.13f, 5.664f, 8.631f, 6.081f)
+            lineTo(8.534f, 6.171f)
+            curveTo(8.335f, 6.372f, 8.132f, 6.564f, 7.926f, 6.751f)
+            lineTo(13.258f, 12.078f)
+            curveTo(13.445f, 11.872f, 13.64f, 11.671f, 13.842f, 11.472f)
+            lineTo(13.931f, 11.374f)
+            curveTo(14.32f, 10.909f, 14.331f, 10.267f, 14.001f, 9.855f)
+            lineTo(13.925f, 9.771f)
+            lineTo(13.296f, 9.143f)
+            curveTo(13.17f, 9.017f, 13.101f, 8.846f, 13.102f, 8.669f)
+            curveTo(13.102f, 8.492f, 13.174f, 8.323f, 13.3f, 8.198f)
+            lineTo(16.192f, 5.349f)
+            lineTo(16.268f, 5.266f)
+            curveTo(16.597f, 4.868f, 16.6f, 4.289f, 16.274f, 3.888f)
+            lineTo(16.198f, 3.805f)
             close()
         }
     }.build()
@@ -426,6 +516,7 @@ object AppIcons {
             fill = SolidColor(Color(0xFF1C1C1E)),
             stroke = null
         ) {
+            // 简化的个性化图标 - 一个带星星的圆形
             moveTo(12f, 2f)
             curveTo(17.523f, 2f, 22f, 6.477f, 22f, 12f)
             curveTo(22f, 17.523f, 17.523f, 22f, 12f, 22f)
@@ -451,19 +542,19 @@ object AppIcons {
             fill = SolidColor(Color(0xFF1C1C1E)),
             stroke = null
         ) {
+            // 外观图标 - 半个圆
             moveTo(12f, 2f)
             curveTo(17.523f, 2f, 22f, 6.477f, 22f, 12f)
             curveTo(22f, 17.523f, 17.523f, 22f, 12f, 22f)
             curveTo(6.477f, 22f, 2f, 17.523f, 2f, 12f)
             curveTo(2f, 6.477f, 6.477f, 2f, 12f, 2f)
             close()
-            moveTo(12f, 20f)
-            arcToRelative(8f, 8f, 0f, true, false, 0f, -16f)
-            arcToRelative(8f, 8f, 0f, true, false, 0f, 16f)
-            close()
-            moveTo(12f, 16f)
-            arcToRelative(4f, 4f, 0f, true, false, 0f, -8f)
-            arcToRelative(4f, 4f, 0f, true, false, 0f, 8f)
+            moveTo(13f, 3.667f)
+            verticalLineTo(20.333f)
+            curveTo(16f, 20f, 18.5f, 18.833f, 20f, 16.667f)
+            curveTo(21.5f, 14.5f, 21.667f, 12f, 21.667f, 12f)
+            curveTo(21.667f, 12f, 21.5f, 9.5f, 20f, 7.333f)
+            curveTo(18.5f, 5.167f, 16f, 4f, 13f, 3.667f)
             close()
         }
     }.build()
@@ -476,49 +567,36 @@ object AppIcons {
         viewportWidth = 24f,
         viewportHeight = 24f
     ).apply {
+        // 外圆
         path(
-            fill = SolidColor(Color(0xFF1C1C1E)),
-            stroke = null
+            fill = SolidColor(Color.Transparent),
+            stroke = SolidColor(Color(0xFF1C1C1E)),
+            strokeLineWidth = 1.5f
         ) {
             moveTo(12f, 2f)
-            curveTo(17.523f, 2f, 22f, 6.477f, 22f, 12f)
-            curveTo(22f, 17.523f, 17.523f, 22f, 12f, 22f)
-            curveTo(6.477f, 22f, 2f, 17.523f, 2f, 12f)
-            curveTo(2f, 6.477f, 6.477f, 2f, 12f, 2f)
+            arcToRelative(10f, 10f, 0f, true, false, 0f, 20f)
+            arcToRelative(10f, 10f, 0f, true, false, 0f, -20f)
             close()
-            moveTo(4.054f, 13f)
-            horizontalLineTo(7.77f)
-            curveTo(7.853f, 15.181f, 8.208f, 17.171f, 8.762f, 18.703f)
-            curveTo(8.854f, 18.958f, 8.953f, 19.204f, 9.06f, 19.44f)
-            curveTo(6.394f, 18.385f, 4.431f, 15.941f, 4.054f, 13f)
+        }
+        // 垂直椭圆
+        path(
+            fill = SolidColor(Color.Transparent),
+            stroke = SolidColor(Color(0xFF1C1C1E)),
+            strokeLineWidth = 1.5f
+        ) {
+            moveTo(12f, 2f)
+            arcToRelative(4f, 10f, 0f, true, false, 0f, 20f)
+            arcToRelative(4f, 10f, 0f, true, false, 0f, -20f)
             close()
-            moveTo(7.77f, 11f)
-            horizontalLineTo(4.054f)
-            curveTo(4.431f, 8.058f, 6.394f, 5.614f, 9.06f, 4.56f)
-            curveTo(8.953f, 4.795f, 8.854f, 5.042f, 8.762f, 5.297f)
-            curveTo(8.208f, 6.829f, 7.853f, 8.819f, 7.77f, 11f)
-            close()
-            moveTo(16.23f, 11f)
-            horizontalLineTo(19.935f)
-            curveTo(19.569f, 8.058f, 17.606f, 5.614f, 14.939f, 4.56f)
-            curveTo(15.046f, 4.796f, 15.146f, 5.042f, 15.238f, 5.297f)
-            curveTo(15.792f, 6.829f, 16.147f, 8.819f, 16.23f, 11f)
-            close()
-            moveTo(9.771f, 13f)
-            curveTo(9.854f, 14.99f, 10.179f, 16.742f, 10.643f, 18.024f)
-            curveTo(10.914f, 18.775f, 11.213f, 19.313f, 11.495f, 19.644f)
-            curveTo(11.781f, 19.978f, 11.955f, 20f, 12f, 20f)
-            curveTo(12.045f, 20f, 12.219f, 19.978f, 12.505f, 19.644f)
-            curveTo(12.787f, 19.313f, 13.086f, 18.775f, 13.357f, 18.024f)
-            curveTo(13.821f, 16.742f, 14.146f, 14.99f, 14.229f, 13f)
-            horizontalLineTo(9.771f)
-            close()
-            moveTo(14.939f, 19.44f)
-            curveTo(15.046f, 19.204f, 15.146f, 18.958f, 15.238f, 18.703f)
-            curveTo(15.792f, 17.171f, 16.147f, 15.181f, 16.23f, 13f)
-            horizontalLineTo(19.935f)
-            curveTo(19.569f, 15.942f, 17.606f, 18.385f, 14.939f, 19.44f)
-            close()
+        }
+        // 水平线
+        path(
+            fill = SolidColor(Color.Transparent),
+            stroke = SolidColor(Color(0xFF1C1C1E)),
+            strokeLineWidth = 1.5f
+        ) {
+            moveTo(2f, 12f)
+            horizontalLineTo(22f)
         }
     }.build()
 
@@ -534,26 +612,29 @@ object AppIcons {
             fill = SolidColor(Color(0xFF1C1C1E)),
             stroke = null
         ) {
-            moveTo(12f, 2f)
-            arcToRelative(1f, 1f, 0f, false, true, 1f, 1f)
-            verticalLineToRelative(1.062f)
-            curveTo(15.631f, 4.576f, 17.924f, 6.663f, 18.87f, 9.42f)
-            arcToRelative(1f, 1f, 0f, false, true, 0.036f, 0.229f)
-            lineToRelative(0.094f, 0.944f)
-            curveToRelative(0.073f, 0.733f, 0.146f, 1.478f, 0.14f, 2.207f)
-            arcToRelative(6.002f, 6.002f, 0f, false, true, -3.683f, 5.548f)
-            lineToRelative(-0.486f, 0.195f)
-            verticalLineToRelative(1.453f)
-            arcToRelative(2.5f, 2.5f, 0f, false, true, -5f, 0f)
-            verticalLineToRelative(-1.453f)
-            lineToRelative(-0.486f, -0.195f)
-            arcToRelative(6.002f, 6.002f, 0f, false, true, -3.683f, -5.548f)
-            curveTo(5.096f, 13.048f, 5.169f, 12.303f, 5.242f, 11.57f)
-            lineToRelative(0.094f, -0.944f)
-            arcToRelative(1f, 1f, 0f, false, true, 0.036f, -0.229f)
-            curveTo(6.318f, 6.663f, 8.611f, 4.576f, 11f, 4.062f)
-            verticalLineTo(3f)
-            arcToRelative(1f, 1f, 0f, false, true, 1f, -1f)
+            moveTo(3.801f, 9.603f)
+            curveTo(4.257f, 5.419f, 7.791f, 2.25f, 12f, 2.25f)
+            curveTo(16.209f, 2.25f, 19.743f, 5.419f, 20.199f, 9.603f)
+            lineTo(20.873f, 15.783f)
+            curveTo(21.002f, 16.966f, 20.075f, 18f, 18.885f, 18f)
+            horizontalLineTo(16.842f)
+            curveTo(16.287f, 20.156f, 14.33f, 21.75f, 12f, 21.75f)
+            curveTo(9.67f, 21.75f, 7.713f, 20.156f, 7.157f, 18f)
+            horizontalLineTo(5.115f)
+            curveTo(3.925f, 18f, 2.998f, 16.966f, 3.127f, 15.783f)
+            lineTo(3.801f, 9.603f)
+            close()
+            moveTo(9.272f, 18f)
+            curveTo(9.746f, 19.033f, 10.789f, 19.75f, 12f, 19.75f)
+            curveTo(13.211f, 19.75f, 14.254f, 19.033f, 14.728f, 18f)
+            horizontalLineTo(9.272f)
+            close()
+            moveTo(12f, 4.25f)
+            curveTo(8.812f, 4.25f, 6.135f, 6.651f, 5.789f, 9.82f)
+            lineTo(5.115f, 16f)
+            horizontalLineTo(18.885f)
+            lineTo(18.211f, 9.82f)
+            curveTo(17.865f, 6.651f, 15.188f, 4.25f, 12f, 4.25f)
             close()
         }
     }.build()
@@ -570,6 +651,7 @@ object AppIcons {
             fill = SolidColor(Color(0xFF1C1C1E)),
             stroke = null
         ) {
+            // AI 模型图标 - 简化的神经网络/大脑形状
             moveTo(12f, 2f)
             lineTo(2f, 7f)
             lineTo(12f, 12f)
@@ -603,6 +685,7 @@ object AppIcons {
             fill = SolidColor(Color(0xFF1C1C1E)),
             stroke = null
         ) {
+            // 云服务图标
             moveTo(4f, 6f)
             arcToRelative(2f, 2f, 0f, true, true, 4f, 0f)
             arcToRelative(2f, 2f, 0f, true, true, -4f, 0f)
@@ -657,7 +740,7 @@ object AppIcons {
             lineToRelative(3f, -4f)
             arcToRelative(1f, 1f, 0f, false, true, 1.4f, -0.2f)
             close()
-            moveTo(10.8f, 0f)
+            moveTo(17.4f, 7.2f)
             arcToRelative(1f, 1f, 0f, false, true, 1.4f, 0.2f)
             lineToRelative(3f, 4f)
             arcToRelative(1f, 1f, 0f, false, true, 0f, 1.2f)
@@ -743,11 +826,11 @@ object AppIcons {
             arcToRelative(5f, 5f, 0f, false, false, 10f, 0f)
             verticalLineTo(7f)
             arcToRelative(3f, 3f, 0f, true, false, -6f, 0f)
-            verticalLineToRelative(8f)
+            verticalLineTo(8f)
             arcToRelative(1f, 1f, 0f, true, false, 2f, 0f)
             verticalLineTo(9f)
             arcToRelative(1f, 1f, 0f, true, true, 2f, 0f)
-            verticalLineToRelative(6f)
+            verticalLineTo(6f)
             arcToRelative(3f, 3f, 0f, true, true, -6f, 0f)
             verticalLineTo(7f)
             close()
@@ -1219,7 +1302,7 @@ object AppIcons {
         }
     }.build()
 
-    // Text Only 图标（ modality）
+    // Text Only 图标
     val TextOnly = ImageVector.Builder(
         name = "text_only",
         defaultWidth = 24.dp,
