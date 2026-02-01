@@ -1,9 +1,14 @@
 package com.zionchat.app.ui.screens
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,12 +21,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
 import com.zionchat.app.ui.icons.AppIcons
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.*
 
 // 颜色常量 - 完全匹配HTML原型
 val Background = Color(0xFFF5F5F7)
@@ -32,6 +42,24 @@ val GrayLight = Color(0xFFE5E5EA)
 val GrayLighter = Color(0xFFF2F2F7)
 val ActionIcon = Color(0xFF374151)
 val ToggleActive = Color(0xFF34C759)
+val UserMessageBubble = Color(0xFFE5E5EA)
+
+// 消息数据类
+data class ChatMessage(
+    val id: String = UUID.randomUUID().toString(),
+    val content: String,
+    val isUser: Boolean,
+    val timestamp: Long = System.currentTimeMillis(),
+    val isError: Boolean = false
+)
+
+// 历史记录数据类
+data class ChatHistory(
+    val id: String = UUID.randomUUID().toString(),
+    val title: String,
+    val lastMessage: String,
+    val timestamp: Long = System.currentTimeMillis()
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,13 +69,98 @@ fun ChatScreen(navController: NavController) {
     var showToolMenu by remember { mutableStateOf(false) }
     var selectedTool by remember { mutableStateOf<String?>(null) }
     var messageText by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+
+    // 消息列表状态
+    var messages by remember {
+        mutableStateOf(
+            listOf(
+                ChatMessage(
+                    content = "哈喽",
+                    isUser = true
+                ),
+                ChatMessage(
+                    content = "……在，在的，别敲了，再敲我就假装离线了。",
+                    isUser = false
+                )
+            )
+        )
+    }
+
+    // 历史记录状态
+    var chatHistory by remember {
+        mutableStateOf(
+            listOf(
+                ChatHistory(title = "问号信息量分析", lastMessage = "这是一个测试消息"),
+                ChatHistory(title = "AI 小说创作步骤", lastMessage = "你好"),
+                ChatHistory(title = "npm缓存删除指南", lastMessage = "如何删除缓存？"),
+                ChatHistory(title = "无法输出系统提示", lastMessage = "系统错误"),
+                ChatHistory(title = "便宜.fun域名购买建议", lastMessage = "推荐一些域名"),
+                ChatHistory(title = "Clawdbot定义与背景", lastMessage = "什么是Clawdbot"),
+                ChatHistory(title = "克苏鲁恐怖解析", lastMessage = "恐怖小说分析")
+            )
+        )
+    }
+
+    val listState = rememberLazyListState()
+
+    // 滚动到底部当新消息添加时
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+
+    // 发送消息功能
+    fun sendMessage() {
+        if (messageText.isBlank()) return
+
+        val userMessage = ChatMessage(
+            content = messageText.trim(),
+            isUser = true
+        )
+        messages = messages + userMessage
+        messageText = ""
+        isLoading = true
+
+        // 模拟AI回复
+        scope.launch {
+            kotlinx.coroutines.delay(1000)
+            val aiResponse = when {
+                userMessage.content.contains("哈喽") || userMessage.content.contains("你好") ->
+                    "你好！有什么我可以帮助你的吗？"
+                userMessage.content.contains("?") || userMessage.content.contains("？") ->
+                    "这是一个很好的问题！让我来为你解答..."
+                else -> "收到！我会尽力帮助你解决${userMessage.content}相关的问题。"
+            }
+            messages = messages + ChatMessage(
+                content = aiResponse,
+                isUser = false
+            )
+            isLoading = false
+        }
+    }
+
+    // 新建对话
+    fun startNewChat() {
+        messages = emptyList()
+        scope.launch { drawerState.close() }
+    }
+
+    // 删除历史记录
+    fun deleteHistory(historyId: String) {
+        chatHistory = chatHistory.filter { it.id != historyId }
+    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
             SidebarContent(
+                chatHistory = chatHistory,
                 onClose = { scope.launch { drawerState.close() } },
-                onNewChat = { /* 新建对话 */ },
+                onNewChat = ::startNewChat,
+                onHistoryClick = { /* 加载历史对话 */ },
+                onDeleteHistory = ::deleteHistory,
                 navController = navController
             )
         },
@@ -64,15 +177,45 @@ fun ChatScreen(navController: NavController) {
                 // 顶部导航栏
                 TopNavBar(
                     onMenuClick = { scope.launch { drawerState.open() } },
-                    onNewChatClick = { /* 新建对话 */ }
+                    onNewChatClick = ::startNewChat
                 )
 
                 // 聊天内容区域
-                ChatContent(
-                    modifier = Modifier.weight(1f),
-                    // 为底部输入框留出空间
-                    contentPadding = PaddingValues(bottom = 80.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(bottom = 80.dp)
+                ) {
+                    if (messages.isEmpty()) {
+                        // 空状态
+                        EmptyChatState()
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            items(messages, key = { it.id }) { message ->
+                                MessageItem(
+                                    message = message,
+                                    onCopy = { /* 复制 */ },
+                                    onEdit = { /* 编辑 */ },
+                                    onDelete = {
+                                        messages = messages.filter { it.id != message.id }
+                                    }
+                                )
+                            }
+
+                            // 加载指示器
+                            if (isLoading) {
+                                item {
+                                    LoadingIndicator()
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // 底部输入框区域 - 固定在底部
@@ -96,17 +239,230 @@ fun ChatScreen(navController: NavController) {
                     onClearTool = { selectedTool = null },
                     messageText = messageText,
                     onMessageChange = { messageText = it },
-                    onSend = { /* 发送消息 */ }
+                    onSend = ::sendMessage
                 )
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun MessageItem(
+    message: ChatMessage,
+    onCopy: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+    val clipboardManager = LocalClipboardManager.current
+
+    // 时间格式化
+    val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+    val timeStr = timeFormat.format(Date(message.timestamp))
+
+    if (message.isUser) {
+        // 用户消息 - 右对齐
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            Column(
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.padding(start = 60.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .background(UserMessageBubble, RoundedCornerShape(18.dp))
+                        .combinedClickable(
+                            onClick = { },
+                            onLongClick = { showMenu = true }
+                        )
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        text = message.content,
+                        fontSize = 16.sp,
+                        color = TextPrimary
+                    )
+                }
+                Text(
+                    text = timeStr,
+                    fontSize = 11.sp,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(top = 4.dp, end = 8.dp)
+                )
+            }
+        }
+    } else {
+        // AI消息 - 左对齐
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .combinedClickable(
+                    onClick = { },
+                    onLongClick = { showMenu = true }
+                )
+        ) {
+            Text(
+                text = message.content,
+                fontSize = 16.sp,
+                color = TextPrimary,
+                lineHeight = 24.sp
+            )
+
+            Text(
+                text = timeStr,
+                fontSize = 11.sp,
+                color = TextSecondary,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+
+            // 工具栏
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.padding(top = 8.dp)
+            ) {
+                ActionButton(
+                    icon = AppIcons.Copy,
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString(message.content))
+                    }
+                )
+                ActionButton(icon = AppIcons.Edit, onClick = onEdit)
+                ActionButton(icon = AppIcons.Volume, onClick = { })
+                ActionButton(icon = AppIcons.Share, onClick = { })
+                ActionButton(
+                    icon = AppIcons.Refresh,
+                    onClick = { /* 重新生成 */ }
+                )
+                ActionButton(icon = AppIcons.More, onClick = { showMenu = true })
+            }
+        }
+    }
+
+    // 长按菜单
+    if (showMenu) {
+        MessageOptionsDialog(
+            isUser = message.isUser,
+            onCopy = {
+                clipboardManager.setText(AnnotatedString(message.content))
+                showMenu = false
+            },
+            onEdit = {
+                onEdit()
+                showMenu = false
+            },
+            onDelete = {
+                onDelete()
+                showMenu = false
+            },
+            onDismiss = { showMenu = false }
+        )
+    }
+}
+
+@Composable
+fun MessageOptionsDialog(
+    isUser: Boolean,
+    onCopy: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Surface)
+        ) {
+            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                DialogOption(text = "复制", onClick = onCopy)
+                if (isUser) {
+                    DialogOption(text = "编辑", onClick = onEdit)
+                }
+                DialogOption(text = "删除", onClick = onDelete, isDestructive = true)
+                DialogOption(text = "取消", onClick = onDismiss)
+            }
+        }
+    }
+}
+
+@Composable
+fun DialogOption(
+    text: String,
+    onClick: () -> Unit,
+    isDestructive: Boolean = false
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            fontSize = 17.sp,
+            color = if (isDestructive) Color(0xFFFF3B30) else TextPrimary,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+fun LoadingIndicator() {
+    Row(
+        modifier = Modifier.padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(20.dp),
+            strokeWidth = 2.dp,
+            color = TextSecondary
+        )
+        Text(
+            text = "思考中...",
+            fontSize = 14.sp,
+            color = TextSecondary
+        )
+    }
+}
+
+@Composable
+fun EmptyChatState() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Icon(
+                imageVector = AppIcons.ChatGPTLogo,
+                contentDescription = null,
+                tint = TextSecondary,
+                modifier = Modifier.size(48.dp)
+            )
+            Text(
+                text = "开始新的对话",
+                fontSize = 17.sp,
+                color = TextSecondary
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SidebarContent(
+    chatHistory: List<ChatHistory>,
     onClose: () -> Unit,
     onNewChat: () -> Unit,
+    onHistoryClick: (ChatHistory) -> Unit,
+    onDeleteHistory: (String) -> Unit,
     navController: NavController
 ) {
     Column(
@@ -191,27 +547,21 @@ fun SidebarContent(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
-            val historyItems = listOf(
-                "问号信息量分析",
-                "AI 小说创作步骤",
-                "npm缓存删除指南",
-                "无法输出系统提示",
-                "便宜.fun域名购买建议",
-                "Clawdbot定义与背景",
-                "克苏鲁恐怖解析"
-            )
-            historyItems.forEachIndexed { index, item ->
+            chatHistory.forEachIndexed { index, history ->
                 val isSelected = index == 0
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
                         .background(if (isSelected) GrayLighter else Color.Transparent)
-                        .clickable { }
+                        .combinedClickable(
+                            onClick = { onHistoryClick(history) },
+                            onLongClick = { onDeleteHistory(history.id) }
+                        )
                         .padding(horizontal = 12.dp, vertical = 12.dp)
                 ) {
                     Text(
-                        text = item,
+                        text = history.title,
                         fontSize = 15.sp,
                         color = TextPrimary,
                         maxLines = 1
@@ -379,69 +729,15 @@ fun TopNavBar(
 }
 
 @Composable
-fun ChatContent(
-    modifier: Modifier = Modifier,
-    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+fun ActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(contentPadding),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // 用户消息
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            Box(
-                modifier = Modifier
-                    .background(GrayLighter, RoundedCornerShape(18.dp))
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
-            ) {
-                Text(
-                    text = "哈喽",
-                    fontSize = 16.sp,
-                    color = TextPrimary
-                )
-            }
-        }
-
-        // AI 回复
-        Column(
-            modifier = Modifier.fillMaxWidth(0.85f),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = "……在，在的，别敲了，再敲我就假装离线了。",
-                fontSize = 16.sp,
-                color = TextPrimary,
-                lineHeight = 24.sp
-            )
-
-            // 工具栏
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                ActionButton(icon = AppIcons.Copy)
-                ActionButton(icon = AppIcons.Edit)
-                ActionButton(icon = AppIcons.Volume)
-                ActionButton(icon = AppIcons.Share)
-                ActionButton(icon = AppIcons.Refresh)
-                ActionButton(icon = AppIcons.More)
-            }
-        }
-    }
-}
-
-@Composable
-fun ActionButton(icon: androidx.compose.ui.graphics.vector.ImageVector) {
     Box(
         modifier = Modifier
             .size(36.dp)
             .clip(RoundedCornerShape(8.dp))
-            .clickable { }
+            .clickable(onClick = onClick)
             .padding(8.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -612,6 +908,7 @@ fun ToolListItem(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BottomInputArea(
     selectedTool: String?,
@@ -698,21 +995,28 @@ fun BottomInputArea(
                             unfocusedContainerColor = Color.Transparent,
                             focusedIndicatorColor = Color.Transparent,
                             unfocusedIndicatorColor = Color.Transparent
-                        )
+                        ),
+                        singleLine = true
                     )
 
                     // 发送按钮
                     Box(
                         modifier = Modifier
                             .size(36.dp)
-                            .background(TextPrimary, CircleShape)
-                            .clickable(onClick = onSend),
+                            .background(
+                                if (messageText.isNotBlank()) TextPrimary else GrayLight,
+                                CircleShape
+                            )
+                            .clickable(
+                                enabled = messageText.isNotBlank(),
+                                onClick = onSend
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = AppIcons.Send,
                             contentDescription = "Send",
-                            tint = Color.White,
+                            tint = if (messageText.isNotBlank()) Color.White else TextSecondary,
                             modifier = Modifier.size(18.dp)
                         )
                     }
