@@ -11,8 +11,8 @@ android {
         applicationId "com.zionchat.app"
         minSdk 24
         targetSdk 34
-        versionCode 16
-        versionName "0.16"
+        versionCode 17
+        versionName "0.16.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -20,9 +20,29 @@ android {
         }
     }
 
+    def signingKeystorePath = System.getenv("SIGNING_KEYSTORE_PATH")
+    def signingStorePassword = System.getenv("SIGNING_STORE_PASSWORD")
+    def signingKeyAlias = System.getenv("SIGNING_KEY_ALIAS")
+    def signingKeyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+    def hasSigning = signingKeystorePath && signingStorePassword && signingKeyAlias && signingKeyPassword
+
+    signingConfigs {
+        release {
+            if (hasSigning) {
+                storeFile file(signingKeystorePath)
+                storePassword signingStorePassword
+                keyAlias signingKeyAlias
+                keyPassword signingKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
+            if (hasSigning) {
+                signingConfig signingConfigs.release
+            }
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }

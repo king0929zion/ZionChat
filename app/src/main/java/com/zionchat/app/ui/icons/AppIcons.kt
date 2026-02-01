@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
@@ -242,7 +243,7 @@ object AppIcons {
         }
     }.build()
 
-    // Apps 图标 - 完全匹配 HTML 原项目（四个圆环描边）
+    // Apps 图标 - 与 HTML icons.css 一致
     val Apps = ImageVector.Builder(
         name = "apps",
         defaultWidth = 24.dp,
@@ -250,54 +251,14 @@ object AppIcons {
         viewportWidth = 24f,
         viewportHeight = 24f
     ).apply {
-        // 使用描边绘制四个圆环 - 匹配HTML中的 4.25 半径
-        val strokeColor = SolidColor(Color(0xFF1C1C1E))
-        val strokeWidth = 1.5f
-
-        // Top left circle ring
         path(
-            fill = SolidColor(Color.Transparent),
-            stroke = strokeColor,
-            strokeLineWidth = strokeWidth
-        ) {
-            moveTo(6.75f, 2.25f)
-            arcToRelative(4.5f, 4.5f, 0f, true, false, 0f, 9f)
-            arcToRelative(4.5f, 4.5f, 0f, true, false, 0f, -9f)
-            close()
-        }
-        // Top right circle ring
-        path(
-            fill = SolidColor(Color.Transparent),
-            stroke = strokeColor,
-            strokeLineWidth = strokeWidth
-        ) {
-            moveTo(17.25f, 2.25f)
-            arcToRelative(4.5f, 4.5f, 0f, true, false, 0f, 9f)
-            arcToRelative(4.5f, 4.5f, 0f, true, false, 0f, -9f)
-            close()
-        }
-        // Bottom left circle ring
-        path(
-            fill = SolidColor(Color.Transparent),
-            stroke = strokeColor,
-            strokeLineWidth = strokeWidth
-        ) {
-            moveTo(6.75f, 12.75f)
-            arcToRelative(4.5f, 4.5f, 0f, true, false, 0f, 9f)
-            arcToRelative(4.5f, 4.5f, 0f, true, false, 0f, -9f)
-            close()
-        }
-        // Bottom right circle ring
-        path(
-            fill = SolidColor(Color.Transparent),
-            stroke = strokeColor,
-            strokeLineWidth = strokeWidth
-        ) {
-            moveTo(17.25f, 12.75f)
-            arcToRelative(4.5f, 4.5f, 0f, true, false, 0f, 9f)
-            arcToRelative(4.5f, 4.5f, 0f, true, false, 0f, -9f)
-            close()
-        }
+            fill = SolidColor(Color(0xFF000000)),
+            stroke = null,
+            pathFillType = PathFillType.NonZero,
+            pathData = PathParser().parsePathString(
+                "M6.75 4.5a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0 -4.5ZM2.5 6.75a4.25 4.25 0 1 1 8.5 0 4.25 4.25 0 0 1 -8.5 0ZM17.25 4.5a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0 -4.5ZM13 6.75a4.25 4.25 0 1 1 8.5 0 4.25 4.25 0 0 1 -8.5 0ZM6.75 15a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0 -4.5ZM2.5 17.25a4.25 4.25 0 1 1 8.5 0 4.25 4.25 0 0 1 -8.5 0ZM17.25 15a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0 -4.5ZM13 17.25a4.25 4.25 0 1 1 8.5 0 4.25 4.25 0 0 1 -8.5 0Z"
+            ).toNodes()
+        )
     }.build()
 
     // Search 图标
@@ -315,8 +276,9 @@ object AppIcons {
             strokeLineCap = StrokeCap.Round,
             strokeLineJoin = StrokeJoin.Round
         ) {
-            moveTo(11f, 11f)
-            arcTo(8f, 8f, 0f, true, true, 11f, 11.01f)
+            moveTo(19f, 11f)
+            arcToRelative(8f, 8f, 0f, true, true, -16f, 0f)
+            arcToRelative(8f, 8f, 0f, true, true, 16f, 0f)
             close()
             moveTo(21f, 21f)
             lineTo(16.65f, 16.65f)
@@ -738,109 +700,40 @@ object AppIcons {
         }
     }.build()
 
-    // Model 图标 - 匹配 HTML 原项目（AI大脑/星星形状）
+    // Model 图标 - 与 HTML icons.css 一致
     val Model = ImageVector.Builder(
         name = "model",
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f
+        viewportWidth = 960f,
+        viewportHeight = 960f
     ).apply {
         path(
-            fill = SolidColor(Color(0xFF1C1C1E)),
-            stroke = null
-        ) {
-            // 使用星形/AI形状，基于 960x960 缩放
-            // 中心圆点
-            moveTo(12.275f, 15.525f)
-            arcToRelative(1.75f, 1.75f, 0f, true, true, 0f, -3.5f)
-            arcToRelative(1.75f, 1.75f, 0f, true, true, 0f, 3.5f)
-            close()
-            // 左上弧线
-            moveTo(6f, 8.5f)
-            arcToRelative(1.5f, 1.5f, 0f, true, true, 3f, 0f)
-            arcToRelative(1.5f, 1.5f, 0f, true, true, -3f, 0f)
-            close()
-            // 右上弧线
-            moveTo(15f, 8.5f)
-            arcToRelative(1.5f, 1.5f, 0f, true, true, 3f, 0f)
-            arcToRelative(1.5f, 1.5f, 0f, true, true, -3f, 0f)
-            close()
-            // 左下弧线
-            moveTo(6f, 15.5f)
-            arcToRelative(1.5f, 1.5f, 0f, true, true, 3f, 0f)
-            arcToRelative(1.5f, 1.5f, 0f, true, true, -3f, 0f)
-            close()
-            // 右下弧线
-            moveTo(15f, 15.5f)
-            arcToRelative(1.5f, 1.5f, 0f, true, true, 3f, 0f)
-            arcToRelative(1.5f, 1.5f, 0f, true, true, -3f, 0f)
-            close()
-            // 中心连接线
-            moveTo(12f, 4f)
-            curveTo(15.5f, 4f, 18.5f, 5.75f, 20.5f, 8.5f)
-            lineTo(20.7f, 9.1f)
-            lineTo(20.2f, 9.3f)
-            lineTo(19.8f, 8.8f)
-            curveTo(18.1f, 6.5f, 15.5f, 5f, 12f, 5f)
-            curveTo(8.5f, 5f, 5.9f, 6.5f, 4.2f, 8.8f)
-            lineTo(3.8f, 9.3f)
-            lineTo(3.3f, 9.1f)
-            lineTo(3.5f, 8.5f)
-            curveTo(5.5f, 5.75f, 8.5f, 4f, 12f, 4f)
-            close()
-            // 底部
-            moveTo(12f, 22f)
-            curveTo(8.5f, 22f, 5.5f, 20.25f, 3.5f, 17.5f)
-            lineTo(3.3f, 16.9f)
-            lineTo(3.8f, 16.7f)
-            lineTo(4.2f, 17.2f)
-            curveTo(5.9f, 19.5f, 8.5f, 21f, 12f, 21f)
-            curveTo(15.5f, 21f, 18.1f, 19.5f, 19.8f, 17.2f)
-            lineTo(20.2f, 16.7f)
-            lineTo(20.7f, 16.9f)
-            lineTo(20.5f, 17.5f)
-            curveTo(18.5f, 20.25f, 15.5f, 22f, 12f, 22f)
-            close()
-        }
+            fill = SolidColor(Color(0xFF000000)),
+            stroke = null,
+            pathFillType = PathFillType.NonZero,
+            pathData = PathParser().parsePathString(
+                "M491,621q70,0 119,-45t49,-109q0,-57 -36.5,-96.5T534,331q-47,0 -79.5,30T422,435q0,19 7.5,37t21.5,33l57,-57q-3,-2 -4.5,-5t-1.5,-7q0,-11 9,-17.5t23,-6.5q20,0 33,16.5t13,39.5q0,31 -25.5,52.5T492,542q-47,0 -79.5,-38T380,411q0,-29 11,-55.5t31,-46.5l-57,-57q-32,31 -49,72t-17,86q0,88 56,149.5T491,621ZM240,880v-172q-57,-52 -88.5,-121.5T120,440q0,-150 105,-255t255,-105q125,0 221.5,73.5T827,345l52,205q5,19 -7,34.5T840,600h-80v120q0,33 -23.5,56.5T680,800h-80v80h-80v-160h160v-200h108l-38,-155q-23,-91 -98,-148t-172,-57q-116,0 -198,81t-82,197q0,60 24.5,114t69.5,96l26,24v208h-80ZM494,520Z"
+            ).toNodes()
+        )
     }.build()
 
-    // Model Services 图标 - 匹配 HTML 原项目（云朵形状）
+    // Model Services 图标 - 与 HTML icons.css 一致
     val ModelServices = ImageVector.Builder(
         name = "model_services",
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f
+        viewportWidth = 960f,
+        viewportHeight = 960f
     ).apply {
         path(
-            fill = SolidColor(Color(0xFF1C1C1E)),
-            stroke = null
-        ) {
-            // 云朵形状
-            moveTo(18.5f, 10.5f)
-            curveTo(18.2f, 8.0f, 16.0f, 6.0f, 13.5f, 6.0f)
-            curveTo(11.5f, 6.0f, 9.8f, 7.2f, 8.9f, 9.0f)
-            curveTo(6.6f, 9.2f, 4.8f, 11.1f, 4.8f, 13.5f)
-            curveTo(4.8f, 16.0f, 6.8f, 18.0f, 9.3f, 18.0f)
-            lineTo(18.0f, 18.0f)
-            curveTo(20.2f, 18.0f, 22.0f, 16.2f, 22.0f, 14.0f)
-            curveTo(22.0f, 11.8f, 20.3f, 10.1f, 18.5f, 10.5f)
-            close()
-            moveTo(18.0f, 16.0f)
-            lineTo(9.0f, 16.0f)
-            curveTo(7.9f, 16.0f, 7.0f, 15.1f, 7.0f, 14.0f)
-            curveTo(7.0f, 12.9f, 7.9f, 12.0f, 9.0f, 12.0f)
-            lineTo(9.5f, 12.0f)
-            lineTo(10.0f, 11.0f)
-            curveTo(10.5f, 9.5f, 12.0f, 8.5f, 13.5f, 8.5f)
-            curveTo(15.2f, 8.5f, 16.5f, 9.8f, 16.8f, 11.3f)
-            lineTo(17.0f, 12.0f)
-            lineTo(18.0f, 12.0f)
-            curveTo(19.1f, 12.0f, 20.0f, 12.9f, 20.0f, 14.0f)
-            curveTo(20.0f, 15.1f, 19.1f, 16.0f, 18.0f, 16.0f)
-            close()
-        }
+            fill = SolidColor(Color(0xFF000000)),
+            stroke = null,
+            pathFillType = PathFillType.NonZero,
+            pathData = PathParser().parsePathString(
+                "M260,800q-91,0 -155.5,-63T40,583q0,-78 47,-139t123,-78q25,-92 100,-149t170,-57q117,0 198.5,81.5T760,440q69,8 114.5,59.5T920,620q0,75 -52.5,127.5T740,800L260,800ZM260,720h480q42,0 71,-29t29,-71q0,-42 -29,-71t-71,-29h-60v-80q0,-83 -58.5,-141.5T480,240q-83,0 -141.5,58.5T280,440h-20q-58,0 -99,41t-41,99q0,58 41,99t99,41ZM480,480Z"
+            ).toNodes()
+        )
     }.build()
 
     // MCP Tools 图标
@@ -1210,59 +1103,8 @@ object AppIcons {
         }
     }.build()
 
-    // Edit/Pencil 图标
-    val Edit = ImageVector.Builder(
-        name = "edit",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f
-    ).apply {
-        path(
-            fill = SolidColor(Color(0xFF374151)),
-            stroke = null
-        ) {
-            moveTo(15.293f, 4.293f)
-            curveTo(17.064f, 2.522f, 19.936f, 2.522f, 21.707f, 4.293f)
-            curveTo(23.478f, 6.064f, 23.478f, 8.935f, 21.707f, 10.707f)
-            lineTo(14.157f, 18.257f)
-            curveTo(13.644f, 18.769f, 13.301f, 19.119f, 12.898f, 19.394f)
-            curveTo(12.557f, 19.628f, 12.186f, 19.817f, 11.798f, 19.96f)
-            curveTo(11.34f, 20.127f, 10.857f, 20.205f, 10.142f, 20.324f)
-            lineTo(7.27f, 20.802f)
-            curveTo(7.102f, 20.83f, 6.91f, 20.863f, 6.744f, 20.876f)
-            curveTo(6.574f, 20.888f, 6.303f, 20.893f, 6.017f, 20.77f)
-            curveTo(5.663f, 20.618f, 5.381f, 20.337f, 5.229f, 19.983f)
-            curveTo(5.107f, 19.697f, 5.111f, 19.426f, 5.124f, 19.256f)
-            curveTo(5.137f, 19.09f, 5.169f, 18.899f, 5.197f, 18.731f)
-            lineTo(5.677f, 15.859f)
-            curveTo(5.796f, 15.144f, 5.872f, 14.66f, 6.04f, 14.202f)
-            curveTo(6.182f, 13.813f, 6.373f, 13.443f, 6.606f, 13.101f)
-            curveTo(6.882f, 12.698f, 7.231f, 12.355f, 7.743f, 11.842f)
-            lineTo(15.293f, 4.293f)
-            close()
-            moveTo(7.157f, 13.257f)
-            curveTo(6.593f, 13.821f, 6.404f, 14.017f, 6.258f, 14.23f)
-            curveTo(6.118f, 14.435f, 6.003f, 14.657f, 5.918f, 14.89f)
-            curveTo(5.829f, 15.133f, 5.78f, 15.401f, 5.649f, 16.187f)
-            lineTo(5.217f, 18.783f)
-            lineTo(7.813f, 18.351f)
-            curveTo(8.6f, 18.22f, 8.868f, 18.171f, 9.11f, 18.082f)
-            curveTo(9.343f, 17.996f, 9.565f, 17.883f, 9.771f, 17.743f)
-            curveTo(9.984f, 17.597f, 10.179f, 17.407f, 10.743f, 16.842f)
-            lineTo(16.586f, 11f)
-            lineTo(13f, 7.414f)
-            lineTo(7.157f, 13.257f)
-            close()
-            moveTo(18.293f, 5.707f)
-            curveTo(17.303f, 4.717f, 15.697f, 4.717f, 14.707f, 5.707f)
-            lineTo(14.414f, 6f)
-            lineTo(18f, 9.586f)
-            lineTo(18.293f, 9.293f)
-            curveTo(19.283f, 8.302f, 19.283f, 6.697f, 18.293f, 5.707f)
-            close()
-        }
-    }.build()
+    // Edit/Pencil 图标 - 与 HTML 项目一致（复用 NewChat）
+    val Edit: ImageVector = NewChat
 
     // Volume/Speaker 图标
     val Volume = ImageVector.Builder(

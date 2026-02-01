@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 
 @Composable
@@ -36,6 +37,7 @@ fun SettingsScreen(navController: NavController) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .windowInsetsPadding(WindowInsets.navigationBars)
                 .verticalScroll(rememberScrollState())
         ) {
             // User Profile Section
@@ -129,14 +131,16 @@ fun SettingsTopBar(navController: NavController) {
         modifier = Modifier
             .fillMaxWidth()
             .background(Background.copy(alpha = 0.95f))
+            .windowInsetsPadding(WindowInsets.statusBars)
             .padding(horizontal = 16.dp, vertical = 16.dp)
     ) {
         // 返回按钮
         Box(
             modifier = Modifier
                 .size(40.dp)
+                .clip(CircleShape)
                 .background(Surface, CircleShape)
-                .clickable { navController.navigateUp() }
+                .pressableScale(pressedScale = 0.95f) { navController.navigateUp() }
                 .align(Alignment.CenterStart),
             contentAlignment = Alignment.Center
         ) {

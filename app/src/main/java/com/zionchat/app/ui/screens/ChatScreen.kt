@@ -5,6 +5,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,6 +13,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -19,15 +23,22 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
+import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -103,6 +114,9 @@ fun ChatScreen(navController: NavController) {
     }
 
     val listState = rememberLazyListState()
+    var bottomBarHeightPx by remember { mutableIntStateOf(0) }
+    val bottomBarHeightDp = with(LocalDensity.current) { bottomBarHeightPx.toDp() }
+    val bottomContentPadding = maxOf(80.dp, bottomBarHeightDp + 12.dp)
 
     // 滚动到底部当新消息添加时
     LaunchedEffect(messages.size) {
@@ -172,7 +186,9 @@ fun ChatScreen(navController: NavController) {
                 .background(Background)
         ) {
             Column(
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.statusBars)
             ) {
                 // 顶部导航栏
                 TopNavBar(
@@ -184,7 +200,7 @@ fun ChatScreen(navController: NavController) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .padding(bottom = 80.dp)
+                        .padding(bottom = bottomContentPadding)
                 ) {
                     if (messages.isEmpty()) {
                         // 空状态
@@ -218,21 +234,12 @@ fun ChatScreen(navController: NavController) {
                 }
             }
 
-            // 底部输入框区域 - 固定在底部
-            Column(
-                modifier = Modifier.align(Alignment.BottomCenter)
+            // 底部输入框区域 - 固定在底部（高度动态，支持多行/工具标签）
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .onSizeChanged { bottomBarHeightPx = it.height }
             ) {
-                // 底部工具面板（在输入框上方）
-                if (showToolMenu) {
-                    ToolMenuPanel(
-                        onDismiss = { showToolMenu = false },
-                        onToolSelect = { tool ->
-                            selectedTool = tool
-                            showToolMenu = false
-                        }
-                    )
-                }
-
                 BottomInputArea(
                     selectedTool = selectedTool,
                     onToolToggle = { showToolMenu = !showToolMenu },
@@ -240,6 +247,17 @@ fun ChatScreen(navController: NavController) {
                     messageText = messageText,
                     onMessageChange = { messageText = it },
                     onSend = ::sendMessage
+                )
+            }
+
+            // 底部工具面板（覆盖在输入框上方）
+            if (showToolMenu) {
+                ToolMenuPanel(
+                    onDismiss = { showToolMenu = false },
+                    onToolSelect = { tool ->
+                        selectedTool = tool
+                        showToolMenu = false
+                    }
                 )
             }
         }
@@ -376,7 +394,7 @@ fun DialogOption(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .pressableScale(onClick = onClick)
             .padding(16.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -449,6 +467,7 @@ fun SidebarContent(
             .fillMaxHeight()
             .width(280.dp)
             .background(Surface)
+            .windowInsetsPadding(WindowInsets.systemBars)
             .padding(vertical = 8.dp)
     ) {
         // 顶部搜索区域
@@ -486,7 +505,8 @@ fun SidebarContent(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clickable { onNewChat() },
+                    .clip(CircleShape)
+                    .pressableScale(pressedScale = 0.95f, onClick = onNewChat),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -534,6 +554,8 @@ fun SidebarContent(
                         .clip(RoundedCornerShape(12.dp))
                         .background(if (isSelected) GrayLighter else Color.Transparent)
                         .combinedClickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
                             onClick = { onHistoryClick(history) },
                             onLongClick = { onDeleteHistory(history.id) }
                         )
@@ -555,7 +577,7 @@ fun SidebarContent(
                 .fillMaxWidth()
                 .padding(12.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .clickable { navController.navigate("settings") }
+                .pressableScale { navController.navigate("settings") }
                 .padding(12.dp)
         ) {
             Row(
@@ -609,7 +631,7 @@ fun SidebarMenuItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .pressableScale(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -649,8 +671,9 @@ fun TopNavBar(
             Box(
                 modifier = Modifier
                     .size(42.dp)
+                    .clip(CircleShape)
                     .background(Surface, CircleShape)
-                    .clickable(onClick = onMenuClick),
+                    .pressableScale(pressedScale = 0.95f, onClick = onMenuClick),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -693,8 +716,9 @@ fun TopNavBar(
         Box(
             modifier = Modifier
                 .size(42.dp)
+                .clip(CircleShape)
                 .background(Surface, CircleShape)
-                .clickable(onClick = onNewChatClick),
+                .pressableScale(pressedScale = 0.95f, onClick = onNewChatClick),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -716,7 +740,7 @@ fun ActionButton(
         modifier = Modifier
             .size(36.dp)
             .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
+            .pressableScale(pressedScale = 0.95f, onClick = onClick)
             .padding(8.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -830,7 +854,7 @@ fun QuickActionButton(
     Column(
         modifier = modifier
             .background(GrayLighter, RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
+            .pressableScale(pressedScale = 0.95f, onClick = onClick)
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -861,7 +885,7 @@ fun ToolListItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .pressableScale(pressedScale = 0.98f, onClick = onClick)
             .padding(vertical = 12.dp, horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -897,23 +921,30 @@ fun BottomInputArea(
     onMessageChange: (String) -> Unit,
     onSend: () -> Unit
 ) {
+    val canSend = messageText.isNotBlank()
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(Background)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .imePadding()
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(horizontal = 16.dp)
+            .padding(top = 8.dp, bottom = 32.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.Bottom
         ) {
-            // 工具图标按钮 - 44dp 高度
+            // 工具图标按钮 - 44dp，高度对齐输入框底部
             Box(
                 modifier = Modifier
+                    .padding(bottom = 2.dp)
                     .size(44.dp)
+                    .clip(CircleShape)
                     .background(Surface, CircleShape)
-                    .clickable(onClick = onToolToggle),
+                    .pressableScale(pressedScale = 0.95f, onClick = onToolToggle),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -924,107 +955,119 @@ fun BottomInputArea(
                 )
             }
 
-            // 输入框容器 - 高度48dp解决文字遮挡问题
+            // 输入框容器 - 默认48dp，可多行扩展；发送按钮固定右下角
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = 48.dp)
                     .background(Surface, RoundedCornerShape(24.dp))
-                    .padding(start = 12.dp, end = 8.dp)
-                    .padding(vertical = 6.dp),
-                contentAlignment = Alignment.CenterStart
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 20.dp, end = 56.dp, top = 8.dp, bottom = 8.dp)
                 ) {
-                    // 选中的工具标签 - 完全对标HTML项目
+                    // 选中的工具标签 - 位于输入框内部，出现时顶起输入框高度
                     if (selectedTool != null) {
-                        Box(
+                        Row(
                             modifier = Modifier
-                                .background(Color(0xFFE3F2FD), RoundedCornerShape(16.dp))
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            contentAlignment = Alignment.Center
+                                .offset(x = (-12).dp)
+                                .background(Color(0xFFE8F4FD), RoundedCornerShape(16.dp))
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            Icon(
+                                imageVector = AppIcons.Globe,
+                                contentDescription = null,
+                                tint = Color(0xFF007AFF),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = selectedTool.replaceFirstChar { it.uppercase() },
+                                fontSize = 15.sp,
+                                color = Color(0xFF007AFF),
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.offset(y = (-1).dp)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .pressableScale(
+                                        pressedScale = 0.95f,
+                                        onClick = onClearTool
+                                    ),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = AppIcons.Globe,
-                                    contentDescription = null,
-                                    tint = Color(0xFF1976D2),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = selectedTool.replaceFirstChar { it.uppercase() },
-                                    fontSize = 15.sp,
-                                    color = Color(0xFF1976D2),
-                                    fontWeight = FontWeight.Medium
-                                )
                                 Icon(
                                     imageVector = AppIcons.Close,
                                     contentDescription = "Clear",
-                                    tint = Color(0xFF1976D2),
-                                    modifier = Modifier
-                                        .size(16.dp)
-                                        .clickable { onClearTool() }
+                                    tint = Color(0xFF007AFF),
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
 
-                    // 输入框 - 修复文字遮挡问题
-                    TextField(
+                    // 输入框 - 多行自动增高，最大高度120dp
+                    BasicTextField(
                         value = messageText,
                         onValueChange = onMessageChange,
-                        placeholder = {
-                            Text(
-                                text = "Message...",
-                                fontSize = 17.sp,
-                                color = TextSecondary
-                            )
-                        },
                         modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 36.dp),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent
-                        ),
-                        singleLine = true,
-                        textStyle = androidx.compose.ui.text.TextStyle(
+                            .fillMaxWidth()
+                            .heightIn(min = 20.dp, max = 120.dp),
+                        textStyle = TextStyle(
                             fontSize = 17.sp,
                             lineHeight = 22.sp,
                             color = TextPrimary
-                        )
+                        ),
+                        cursorBrush = SolidColor(TextPrimary),
+                        keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(
+                            onSend = { if (canSend) onSend() }
+                        ),
+                        minLines = 1,
+                        maxLines = 5,
+                        decorationBox = { innerTextField ->
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                if (messageText.isEmpty()) {
+                                    Text(
+                                        text = "Message...",
+                                        fontSize = 17.sp,
+                                        lineHeight = 22.sp,
+                                        color = TextSecondary
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
                     )
+                }
 
-                    // 发送按钮 - 稍大(36dp)且往右
-                    Box(
-                        modifier = Modifier
-                            .padding(start = 4.dp)
-                            .size(36.dp)
-                            .background(
-                                if (messageText.isNotBlank()) TextPrimary else GrayLight,
-                                CircleShape
-                            )
-                            .clickable(
-                                enabled = messageText.isNotBlank(),
-                                onClick = onSend
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = AppIcons.Send,
-                            contentDescription = "Send",
-                            tint = if (messageText.isNotBlank()) Color.White else TextSecondary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                // 发送按钮 - 固定在右下角（随输入框高度一起上移）
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 6.dp, bottom = 6.dp)
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(TextPrimary, CircleShape)
+                        .alpha(if (canSend) 1f else 0.4f)
+                        .pressableScale(
+                            enabled = canSend,
+                            pressedScale = 0.95f,
+                            onClick = onSend
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Send,
+                        contentDescription = "Send",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         }

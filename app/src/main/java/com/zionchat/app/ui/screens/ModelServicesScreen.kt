@@ -1,5 +1,6 @@
 package com.zionchat.app.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,18 +12,23 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.zionchat.app.R
+import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 
 // Provider data class
 data class Provider(
     val id: String,
     val name: String,
-    val iconEmoji: String
+    val iconRes: Int
 )
 
 @Composable
@@ -30,33 +36,33 @@ fun ModelServicesScreen(navController: NavController) {
     var searchQuery by remember { mutableStateOf("") }
 
     val providers = listOf(
-        Provider("qwen", "Qwen", "Q"),
-        Provider("doubao", "Doubao", "D"),
-        Provider("openai", "ChatGPT", "C"),
-        Provider("anthropic", "Anthropic", "A"),
-        Provider("google", "Google", "G"),
-        Provider("ollama", "Ollama", "O"),
-        Provider("deepseek", "DeepSeek", "D"),
-        Provider("yi", "Yi", "Y"),
-        Provider("moonshot", "Moonshot", "M"),
-        Provider("gemini", "Gemini", "G"),
-        Provider("grok", "Grok", "G"),
-        Provider("mistral", "Mistral", "M"),
-        Provider("groq", "Groq", "G"),
-        Provider("azure", "Azure", "A"),
-        Provider("claude", "Claude", "C"),
-        Provider("baichuan", "Baichuan", "B"),
-        Provider("zhipu", "Zhipu", "Z"),
-        Provider("minimax", "MiniMax", "M"),
-        Provider("stepfun", "StepFun", "S"),
-        Provider("hunyuan", "Hunyuan", "H"),
-        Provider("silicon", "Silicon", "S"),
-        Provider("together", "Together", "T"),
-        Provider("perplexity", "Perplexity", "P"),
-        Provider("openrouter", "OpenRouter", "O"),
-        Provider("fireworks", "Fireworks", "F"),
-        Provider("cerebras", "Cerebras", "C"),
-        Provider("meta", "Meta", "M")
+        Provider("qwen", "Qwen", R.drawable.llm_qwen),
+        Provider("doubao", "Doubao", R.drawable.llm_doubao),
+        Provider("openai", "ChatGPT", R.drawable.llm_openai),
+        Provider("anthropic", "Anthropic", R.drawable.llm_anthropic),
+        Provider("google", "Google", R.drawable.llm_google),
+        Provider("ollama", "Ollama", R.drawable.llm_ollama),
+        Provider("deepseek", "DeepSeek", R.drawable.llm_deepseek),
+        Provider("yi", "Yi", R.drawable.llm_yi),
+        Provider("moonshot", "Moonshot", R.drawable.llm_moonshot),
+        Provider("gemini", "Gemini", R.drawable.llm_gemini),
+        Provider("grok", "Grok", R.drawable.llm_grok),
+        Provider("mistral", "Mistral", R.drawable.llm_mistral),
+        Provider("groq", "Groq", R.drawable.llm_groq),
+        Provider("azure", "Azure", R.drawable.llm_azure),
+        Provider("claude", "Claude", R.drawable.llm_claude),
+        Provider("baichuan", "Baichuan", R.drawable.llm_baichuan),
+        Provider("zhipu", "Zhipu", R.drawable.llm_zhipu),
+        Provider("minimax", "MiniMax", R.drawable.llm_minimax),
+        Provider("stepfun", "StepFun", R.drawable.llm_stepfun),
+        Provider("hunyuan", "Hunyuan", R.drawable.llm_hunyuan),
+        Provider("silicon", "Silicon", R.drawable.llm_silicon),
+        Provider("together", "Together", R.drawable.llm_together),
+        Provider("perplexity", "Perplexity", R.drawable.llm_perplexity),
+        Provider("openrouter", "OpenRouter", R.drawable.llm_openrouter),
+        Provider("fireworks", "Fireworks", R.drawable.llm_fireworks),
+        Provider("cerebras", "Cerebras", R.drawable.llm_cerebras),
+        Provider("meta", "Meta", R.drawable.llm_meta)
     )
 
     val filteredProviders = providers.filter {
@@ -69,14 +75,16 @@ fun ModelServicesScreen(navController: NavController) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Background.copy(alpha = 0.95f))
+                    .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(horizontal = 16.dp, vertical = 16.dp)
             ) {
                 // 返回按钮
                 Box(
                     modifier = Modifier
                         .size(40.dp)
+                        .clip(CircleShape)
                         .background(Surface, CircleShape)
-                        .clickable { navController.navigateUp() }
+                        .pressableScale(pressedScale = 0.95f) { navController.navigateUp() }
                         .align(Alignment.CenterStart),
                     contentAlignment = Alignment.Center
                 ) {
@@ -101,8 +109,9 @@ fun ModelServicesScreen(navController: NavController) {
                 Box(
                     modifier = Modifier
                         .size(40.dp)
+                        .clip(CircleShape)
                         .background(Surface, CircleShape)
-                        .clickable { navController.navigate("add_provider") }
+                        .pressableScale(pressedScale = 0.95f) { navController.navigate("add_provider") }
                         .align(Alignment.CenterEnd),
                     contentAlignment = Alignment.Center
                 ) {
@@ -121,6 +130,7 @@ fun ModelServicesScreen(navController: NavController) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .windowInsetsPadding(WindowInsets.navigationBars)
         ) {
             // 搜索框
             Row(
@@ -185,25 +195,21 @@ fun ProviderItem(
             .fillMaxWidth()
             .height(56.dp)
             .background(GrayLight, RoundedCornerShape(14.dp))
-            .clickable { onClick() }
+            .clip(RoundedCornerShape(14.dp))
+            .pressableScale(pressedScale = 0.98f, onClick = onClick)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Provider Icon
-        Box(
+        Image(
+            painter = painterResource(id = provider.iconRes),
+            contentDescription = provider.name,
             modifier = Modifier
                 .size(36.dp)
-                .background(Surface, RoundedCornerShape(10.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = provider.iconEmoji,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary
-            )
-        }
+                .clip(RoundedCornerShape(8.dp)),
+            contentScale = ContentScale.Fit
+        )
 
         // Provider Name
         Text(

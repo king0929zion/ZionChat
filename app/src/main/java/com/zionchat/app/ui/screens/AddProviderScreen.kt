@@ -2,7 +2,6 @@ package com.zionchat.app.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -18,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 
 @Composable
@@ -55,19 +55,22 @@ fun AddProviderScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Background)
+                .windowInsetsPadding(WindowInsets.navigationBars)
         ) {
             // Top Navigation Bar
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(horizontal = 16.dp, vertical = 16.dp)
             ) {
                 // 返回按钮
                 Box(
                     modifier = Modifier
                         .size(40.dp)
+                        .clip(CircleShape)
                         .background(Surface, CircleShape)
-                        .clickable { navController.navigateUp() }
+                        .pressableScale(pressedScale = 0.95f) { navController.navigateUp() }
                         .align(Alignment.CenterStart),
                     contentAlignment = Alignment.Center
                 ) {
@@ -92,8 +95,9 @@ fun AddProviderScreen(
                 Box(
                     modifier = Modifier
                         .size(40.dp)
+                        .clip(CircleShape)
                         .background(Surface, CircleShape)
-                        .clickable { navController.navigateUp() }
+                        .pressableScale(pressedScale = 0.95f) { navController.navigateUp() }
                         .align(Alignment.CenterEnd),
                     contentAlignment = Alignment.Center
                 ) {
@@ -122,8 +126,9 @@ fun AddProviderScreen(
                     Box(
                         modifier = Modifier
                             .size(64.dp)
+                            .clip(RoundedCornerShape(16.dp))
                             .background(GrayLighter, RoundedCornerShape(16.dp))
-                            .clickable { showAvatarModal = true },
+                            .pressableScale(pressedScale = 0.95f) { showAvatarModal = true },
                         contentAlignment = Alignment.Center
                     ) {
                         if (selectedAvatar.isNotEmpty()) {
@@ -214,8 +219,9 @@ fun AddProviderScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clip(RoundedCornerShape(20.dp))
                             .background(Surface, RoundedCornerShape(20.dp))
-                            .clickable { navController.navigate("models") }
+                            .pressableScale(pressedScale = 0.98f) { navController.navigate("models") }
                             .padding(horizontal = 16.dp, vertical = 14.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
@@ -252,7 +258,7 @@ fun AddProviderScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.5f))
-                    .clickable { showAvatarModal = false }
+                    .pressableScale(pressedScale = 1f) { showAvatarModal = false }
             ) {
                 Surface(
                     modifier = Modifier
@@ -307,8 +313,9 @@ fun AddProviderScreen(
                                             Box(
                                                 modifier = Modifier
                                                     .size(48.dp)
+                                                    .clip(RoundedCornerShape(14.dp))
                                                     .background(GrayLighter, RoundedCornerShape(14.dp))
-                                                    .clickable {
+                                                    .pressableScale(pressedScale = 0.95f) {
                                                         selectedAvatar = avatars[index]
                                                         showAvatarModal = false
                                                     },
@@ -436,11 +443,12 @@ fun TypeOption(
     Box(
         modifier = modifier
             .height(36.dp)
+            .clip(RoundedCornerShape(16.dp))
             .background(
                 if (selected) TextPrimary else Color.Transparent,
                 RoundedCornerShape(16.dp)
             )
-            .clickable { onClick() },
+            .pressableScale(pressedScale = 0.95f, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Text(

@@ -13,10 +13,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 
 @Composable
@@ -43,20 +45,24 @@ fun ModelsScreen(navController: NavController) {
             modifier = Modifier
                 .fillMaxSize()
                 .background(Background)
+                .windowInsetsPadding(WindowInsets.navigationBars)
         ) {
             // Top Navigation Bar
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(horizontal = 16.dp, vertical = 16.dp)
             ) {
                 // Back Button
-                IconButton(
-                    onClick = { navController.popBackStack() },
+                Box(
                     modifier = Modifier
                         .size(40.dp)
                         .align(Alignment.CenterStart)
+                        .clip(CircleShape)
                         .background(Surface, CircleShape)
+                        .pressableScale(pressedScale = 0.95f) { navController.popBackStack() },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = AppIcons.Back,
@@ -76,12 +82,14 @@ fun ModelsScreen(navController: NavController) {
                 )
 
                 // Add Button
-                IconButton(
-                    onClick = { showAddModal = true },
+                Box(
                     modifier = Modifier
                         .size(40.dp)
                         .align(Alignment.CenterEnd)
+                        .clip(CircleShape)
                         .background(Surface, CircleShape)
+                        .pressableScale(pressedScale = 0.95f) { showAddModal = true },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = AppIcons.Plus,

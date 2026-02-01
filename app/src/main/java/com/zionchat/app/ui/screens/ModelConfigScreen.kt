@@ -1,7 +1,6 @@
 package com.zionchat.app.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -13,10 +12,12 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 
 @Composable
@@ -31,20 +32,24 @@ fun ModelConfigScreen(navController: NavController) {
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
+            .windowInsetsPadding(WindowInsets.navigationBars)
     ) {
         // Top Navigation Bar
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.statusBars)
                 .padding(horizontal = 16.dp, vertical = 16.dp)
         ) {
             // Back Button
-            IconButton(
-                onClick = { navController.popBackStack() },
+            Box(
                 modifier = Modifier
                     .size(40.dp)
                     .align(Alignment.CenterStart)
+                    .clip(CircleShape)
                     .background(Surface, CircleShape)
+                    .pressableScale(pressedScale = 0.95f) { navController.popBackStack() },
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = AppIcons.Back,
@@ -64,12 +69,14 @@ fun ModelConfigScreen(navController: NavController) {
             )
 
             // Save Button
-            IconButton(
-                onClick = { navController.popBackStack() },
+            Box(
                 modifier = Modifier
                     .size(40.dp)
                     .align(Alignment.CenterEnd)
+                    .clip(CircleShape)
                     .background(Surface, CircleShape)
+                    .pressableScale(pressedScale = 0.95f) { navController.popBackStack() },
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = AppIcons.Check,
@@ -183,11 +190,13 @@ fun ModelConfigScreen(navController: NavController) {
                             color = TextSecondary
                         )
 
-                        IconButton(
-                            onClick = { headers.add(Header("", "")) },
+                        Box(
                             modifier = Modifier
                                 .size(32.dp)
+                                .clip(CircleShape)
                                 .background(GrayLighter, CircleShape)
+                                .pressableScale(pressedScale = 0.95f) { headers.add(Header("", "")) },
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = AppIcons.Plus,
@@ -244,11 +253,12 @@ fun ModalityOption(
     Row(
         modifier = modifier
             .height(44.dp)
+            .clip(RoundedCornerShape(16.dp))
             .background(
                 if (selected) TextPrimary else androidx.compose.ui.graphics.Color.Transparent,
                 RoundedCornerShape(16.dp)
             )
-            .clickable { onClick() },
+            .pressableScale(pressedScale = 0.95f, onClick = onClick),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -357,9 +367,12 @@ fun HeaderItem(
         }
 
         // Remove Button
-        IconButton(
-            onClick = onRemove,
-            modifier = Modifier.size(32.dp)
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .pressableScale(pressedScale = 0.95f, onClick = onRemove),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = AppIcons.Close,
