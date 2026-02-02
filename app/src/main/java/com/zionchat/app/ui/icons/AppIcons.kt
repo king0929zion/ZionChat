@@ -358,62 +358,55 @@ object AppIcons {
         }
     }.build()
 
-    // Trash/Delete 图标 - 使用填充样式
+    // Trash/Delete 图标 - 使用用户提供的SVG
     val Trash = ImageVector.Builder(
         name = "trash",
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f
+        viewportWidth = 1024f,
+        viewportHeight = 1024f
     ).apply {
         path(
             fill = SolidColor(Color(0xFFFFFFFF)),
             stroke = null,
             pathFillType = PathFillType.NonZero
         ) {
-            // Trash can body
-            moveTo(6f, 7f)
-            lineTo(5f, 20f)
-            curveTo(5f, 21.105f, 5.895f, 22f, 7f, 22f)
-            lineTo(17f, 22f)
-            curveTo(18.105f, 22f, 19f, 21.105f, 19f, 20f)
-            lineTo(18f, 7f)
-            lineTo(6f, 7f)
+            // 垃圾桶图标路径
+            moveTo(202.666667f, 256f)
+            lineTo(160f, 256f)
+            arcTo(32f, 32f, 0f, false, true, 160f, 192f)
+            lineTo(864f, 192f)
+            arcTo(32f, 32f, 0f, false, true, 864f, 256f)
+            lineTo(266.666667f, 256f)
+            lineTo(266.666667f, 821.333333f)
+            arcTo(53.333333f, 53.333333f, 0f, false, false, 320f, 874.666667f)
+            lineTo(704f, 874.666667f)
+            arcTo(53.333333f, 53.333333f, 0f, false, false, 757.333333f, 821.333333f)
+            lineTo(757.333333f, 352f)
+            arcTo(32f, 32f, 0f, false, true, 821.333333f, 352f)
+            lineTo(821.333333f, 821.333333f)
+            curveTo(821.333333f, 886.133333f, 768.8f, 938.666667f, 704f, 938.666667f)
+            lineTo(320f, 938.666667f)
+            curveTo(255.2f, 938.666667f, 202.666667f, 886.133333f, 202.666667f, 821.333333f)
+            lineTo(202.666667f, 256f)
             close()
-
-            // Trash can lid
-            moveTo(9f, 3f)
-            lineTo(15f, 3f)
-            curveTo(15f, 2.448f, 14.552f, 2f, 14f, 2f)
-            lineTo(10f, 2f)
-            curveTo(9.448f, 2f, 9f, 2.448f, 9f, 3f)
+            moveTo(426.666667f, 149.333333f)
+            arcTo(32f, 32f, 0f, false, true, 426.666667f, 85.333333f)
+            lineTo(597.333333f, 85.333333f)
+            arcTo(32f, 32f, 0f, false, true, 597.333333f, 149.333333f)
+            lineTo(426.666667f, 149.333333f)
             close()
-
-            // Top line
-            moveTo(3f, 6f)
-            lineTo(21f, 6f)
-            lineTo(21f, 7f)
-            lineTo(3f, 7f)
+            moveTo(394.666667f, 437.333333f)
+            arcTo(32f, 32f, 0f, false, True, 458.666667f, 437.333333f)
+            lineTo(458.666667f, 693.333333f)
+            arcTo(32f, 32f, 0f, false, True, 394.666667f, 693.333333f)
+            lineTo(394.666667f, 437.333333f)
             close()
-
-            // Left vertical line inside
-            moveTo(10f, 11f)
-            lineTo(10f, 17f)
-            curveTo(10f, 17.552f, 10.448f, 18f, 11f, 18f)
-            curveTo(11.552f, 18f, 12f, 17.552f, 12f, 17f)
-            lineTo(12f, 11f)
-            curveTo(12f, 10.448f, 11.552f, 10f, 11f, 10f)
-            curveTo(10.448f, 10f, 10f, 10.448f, 10f, 11f)
-            close()
-
-            // Right vertical line inside
-            moveTo(14f, 11f)
-            lineTo(14f, 17f)
-            curveTo(14f, 17.552f, 14.448f, 18f, 15f, 18f)
-            curveTo(15.552f, 18f, 16f, 17.552f, 16f, 17f)
-            lineTo(16f, 11f)
-            curveTo(16f, 10.448f, 15.552f, 10f, 15f, 10f)
-            curveTo(14.448f, 10f, 14f, 10.448f, 14f, 11f)
+            moveTo(565.333333f, 437.333333f)
+            arcTo(32f, 32f, 0f, false, True, 629.333333f, 437.333333f)
+            lineTo(629.333333f, 693.333333f)
+            arcTo(32f, 32f, 0f, false, True, 565.333333f, 693.333333f)
+            lineTo(565.333333f, 437.333333f)
             close()
         }
     }.build()

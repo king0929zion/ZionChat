@@ -112,7 +112,7 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
                 // Back Button
                 Box(
@@ -166,6 +166,7 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                 modifier = Modifier.fillMaxWidth()
             )
 
+            // Status row
             if (isFetchingRemote || remoteError != null) {
                 Row(
                     modifier = Modifier
@@ -201,6 +202,12 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                 }
             }
 
+            // Fade gradient below status row
+            TopFadeScrim(
+                color = Background,
+                modifier = Modifier.fillMaxWidth()
+            )
+
             // Model List
             Box(
                 modifier = Modifier
@@ -213,7 +220,7 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     // Search Bar
                     Row(
@@ -319,18 +326,20 @@ fun ModelItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .heightIn(min = 56.dp)
             .background(GrayLight, RoundedCornerShape(20.dp))
             .clip(RoundedCornerShape(20.dp))
             .pressableScale(pressedScale = 0.98f, onClick = onClick)
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
             text = model.displayName,
             fontSize = 17.sp,
-            color = TextPrimary
+            color = TextPrimary,
+            maxLines = 2,
+            modifier = Modifier.weight(1f).padding(end = 12.dp)
         )
 
         ModelToggleSwitch(enabled = model.enabled, onToggle = onToggle)
