@@ -910,9 +910,12 @@ fun ToolMenuPanel(
                         onClick = { onToolSelect("mcp") }
                     )
                 }
-            }
         }
     }
+}
+
+}
+
 }
 
 @Composable

@@ -469,6 +469,8 @@ fun AvatarSelectionModal(
     }
 }
 
+}
+
 @Composable
 fun FormField(
     label: String,

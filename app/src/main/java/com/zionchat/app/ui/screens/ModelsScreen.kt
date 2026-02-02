@@ -228,6 +228,7 @@ fun ModelsScreen(navController: NavController) {
     }
 }
 
+
 @Composable
 fun ModelItem(
     model: ModelConfig,
@@ -494,4 +495,5 @@ fun AddModelModal(
             }
         }
     }
+}
 }
