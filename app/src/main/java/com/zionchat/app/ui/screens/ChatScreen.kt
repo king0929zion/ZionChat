@@ -197,15 +197,16 @@ fun ChatScreen(navController: NavController) {
             }
 
             repository.setCurrentConversationId(conversationId)
+            val safeConversationId = conversationId ?: return@launch
 
             val userMessage = Message(role = "user", content = trimmed)
             // 关键修复：先设置pending状态让UI立即显示，再异步保存到DataStore
-            pendingUserMessage = PendingMessage(conversationId, userMessage)
+            pendingUserMessage = PendingMessage(safeConversationId, userMessage)
             messageText = ""
-            repository.appendMessage(conversationId, userMessage)
+            repository.appendMessage(safeConversationId, userMessage)
 
             // Update conversation title if it's still "New chat" or empty
-            val conversationToCheck = conversation ?: repository.conversationsFlow.first().firstOrNull { it.id == conversationId }
+            val conversationToCheck = conversation ?: repository.conversationsFlow.first().firstOrNull { it.id == safeConversationId }
             if (conversationToCheck?.title.isNullOrBlank() || conversationToCheck?.title == "New chat") {
                 val title = trimmed.lineSequence().firstOrNull().orEmpty().trim().take(24)
                 if (title.isNotBlank()) {
@@ -216,7 +217,7 @@ fun ChatScreen(navController: NavController) {
             val latestDefaultChatModelId = repository.defaultChatModelIdFlow.first()
             if (latestDefaultChatModelId.isNullOrBlank()) {
                 repository.appendMessage(
-                    conversationId,
+                    safeConversationId,
                     Message(
                         role = "assistant",
                         content = "请先在 Settings → Default model 里配置 Chat Model（必填），配置完成后才能开始对话。"
@@ -231,7 +232,7 @@ fun ChatScreen(navController: NavController) {
                     ?: allModels.firstOrNull { extractRemoteModelId(it.id) == latestDefaultChatModelId }
             if (selectedModel == null) {
                 repository.appendMessage(
-                    conversationId,
+                    safeConversationId,
                     Message(
                         role = "assistant",
                         content = "默认对话模型未找到：$latestDefaultChatModelId。请在 Models 中开启/添加该模型，然后在 Settings → Default model 重新选择。"
@@ -244,7 +245,7 @@ fun ChatScreen(navController: NavController) {
             val provider = selectedModel.providerId?.let { pid -> providerList.firstOrNull { it.id == pid } } ?: providerList.firstOrNull()
             if (provider == null || provider.apiUrl.isBlank() || provider.apiKey.isBlank()) {
                 repository.appendMessage(
-                    conversationId,
+                    safeConversationId,
                     Message(
                         role = "assistant",
                         content = "请先在 Settings → Model services 添加供应商，并填写 API URL 与 API Key，然后再对话。"
@@ -271,7 +272,7 @@ fun ChatScreen(navController: NavController) {
 
             // 获取最新的消息列表
             val latestConversations = repository.conversationsFlow.first()
-            val latestConversation = latestConversations.firstOrNull { it.id == conversationId }
+            val latestConversation = latestConversations.firstOrNull { it.id == safeConversationId }
             val currentMessages = latestConversation?.messages.orEmpty()
 
             val requestMessages = buildList {
@@ -318,11 +319,11 @@ fun ChatScreen(navController: NavController) {
                 }
                 // 流式输出完成后，将完整内容保存到消息列表
                 if (fullContent.isNotBlank()) {
-                    repository.appendMessage(conversationId, Message(role = "assistant", content = fullContent))
+                    repository.appendMessage(safeConversationId, Message(role = "assistant", content = fullContent))
                 }
             } catch (e: Exception) {
                 val errorMsg = "请求失败：${e.message ?: e.toString()}"
-                repository.appendMessage(conversationId, Message(role = "assistant", content = errorMsg))
+                repository.appendMessage(safeConversationId, Message(role = "assistant", content = errorMsg))
             } finally {
                 isStreaming = false
                 renderJob.cancel()
