@@ -10,13 +10,6 @@ data class ProviderPreset(
 
 val DEFAULT_PROVIDER_PRESETS: List<ProviderPreset> = listOf(
     ProviderPreset(
-        id = "rikkahub",
-        name = "RikkaHub",
-        type = "openai",
-        apiUrl = "https://api.rikka-ai.com/v1",
-        iconAsset = "rikkahub.svg"
-    ),
-    ProviderPreset(
         id = "kimi",
         name = "Kimi",
         type = "openai",
@@ -143,13 +136,6 @@ val DEFAULT_PROVIDER_PRESETS: List<ProviderPreset> = listOf(
         iconAsset = "stepfun-color.svg"
     ),
     ProviderPreset(
-        id = "juhenext",
-        name = "JuheNext",
-        type = "openai",
-        apiUrl = "https://api.juheai.top/v1",
-        iconAsset = "juhenext.png"
-    ),
-    ProviderPreset(
         id = "hunyuan",
         name = "Hunyuan",
         type = "openai",
@@ -186,7 +172,6 @@ fun resolveProviderIconAsset(provider: ProviderConfig): String? {
 private fun computeAIIconAssetByName(name: String): String? {
     val lowerName = name.lowercase()
     return when {
-        PATTERN_RIKKAHUB.containsMatchIn(lowerName) -> "rikkahub.svg"
         PATTERN_LONGCAT.containsMatchIn(lowerName) -> "longcat.svg"
         PATTERN_IFLOW.containsMatchIn(lowerName) -> "iflow.svg"
         PATTERN_MODELSCOPE.containsMatchIn(lowerName) -> "modelscope.svg"
@@ -207,7 +192,6 @@ private fun computeAIIconAssetByName(name: String): String? {
         PATTERN_ZHIPU.containsMatchIn(lowerName) -> "zhipu-color.svg"
         PATTERN_MOONSHOT.containsMatchIn(lowerName) -> "moonshot.svg"
         PATTERN_STEP.containsMatchIn(lowerName) -> "stepfun-color.svg"
-        PATTERN_JUHENEXT.containsMatchIn(lowerName) -> "juhenext.png"
         PATTERN_302.containsMatchIn(lowerName) -> "302ai.svg"
         PATTERN_HUNYUAN.containsMatchIn(lowerName) -> "hunyuan-color.svg"
         PATTERN_XAI.containsMatchIn(lowerName) -> "xai.svg"
@@ -215,7 +199,6 @@ private fun computeAIIconAssetByName(name: String): String? {
     }
 }
 
-private val PATTERN_RIKKAHUB = Regex("rikka|auto")
 private val PATTERN_LONGCAT = Regex("longcat")
 private val PATTERN_IFLOW = Regex("iflow")
 private val PATTERN_MODELSCOPE = Regex("modelscope")
@@ -235,7 +218,6 @@ private val PATTERN_SILLICON_CLOUD = Regex("silicon|硅基")
 private val PATTERN_AIHUBMIX = Regex("aihubmix")
 private val PATTERN_HUNYUAN = Regex("hunyuan|tencent")
 private val PATTERN_XAI = Regex("xai")
-private val PATTERN_JUHENEXT = Regex("juhenext")
 private val PATTERN_MOONSHOT = Regex("moonshot|月之暗面")
 private val PATTERN_302 = Regex("302")
 private val PATTERN_STEP = Regex("step|阶跃")

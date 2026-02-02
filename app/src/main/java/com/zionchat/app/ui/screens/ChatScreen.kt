@@ -6,6 +6,9 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -34,6 +37,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -56,12 +60,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloat
+import kotlin.math.roundToInt
 
 // 颜色常量 - 完全匹配HTML原型
 private data class PendingMessage(val conversationId: String, val message: Message)
@@ -77,8 +83,6 @@ fun ChatScreen(navController: NavController) {
     var showToolMenu by remember { mutableStateOf(false) }
     var selectedTool by remember { mutableStateOf<String?>(null) }
     var messageText by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-    var isCreatingConversation by remember { mutableStateOf(false) }
 
     val conversations by repository.conversationsFlow.collectAsState(initial = emptyList())
     val currentConversationId by repository.currentConversationIdFlow.collectAsState(initial = null)
@@ -86,14 +90,41 @@ fun ChatScreen(navController: NavController) {
     val customInstructions by repository.customInstructionsFlow.collectAsState(initial = "")
     val defaultChatModelId by repository.defaultChatModelIdFlow.collectAsState(initial = null)
 
-    val currentConversation = remember(conversations, currentConversationId) {
-        // First try to find by currentConversationId, otherwise default to first conversation
-        // This ensures we always show a conversation if one exists
-        if (!currentConversationId.isNullOrBlank()) {
-            conversations.firstOrNull { it.id == currentConversationId }
+    // 本地优先的会话选择：避免 DataStore 状态滞后导致“首条消息消失/会话跳回”
+    var preferredConversationId by remember { mutableStateOf<String?>(null) }
+    var preferredConversationSetAtMs by remember { mutableStateOf(0L) }
+
+    LaunchedEffect(currentConversationId) {
+        if (preferredConversationId.isNullOrBlank() && !currentConversationId.isNullOrBlank()) {
+            preferredConversationId = currentConversationId
+            preferredConversationSetAtMs = System.currentTimeMillis()
+        }
+    }
+
+    val effectiveConversationId = remember(
+        conversations,
+        currentConversationId,
+        preferredConversationId,
+        preferredConversationSetAtMs
+    ) {
+        val preferred = preferredConversationId?.trim().takeIf { !it.isNullOrBlank() }
+        val fromStore = currentConversationId?.trim().takeIf { !it.isNullOrBlank() }
+        if (preferred == null) {
+            fromStore ?: conversations.firstOrNull()?.id
         } else {
-            conversations.firstOrNull()
-        } ?: conversations.firstOrNull()
+            val inList = conversations.any { it.id == preferred }
+            val withinGrace = System.currentTimeMillis() - preferredConversationSetAtMs < 2500
+            when {
+                inList || withinGrace -> preferred
+                !fromStore.isNullOrBlank() -> fromStore
+                else -> conversations.firstOrNull()?.id
+            }
+        }
+    }
+
+    val currentConversation = remember(conversations, effectiveConversationId) {
+        val cid = effectiveConversationId?.trim().orEmpty()
+        if (cid.isBlank()) null else conversations.firstOrNull { it.id == cid }
     }
 
     LaunchedEffect(conversations, currentConversationId) {
@@ -110,103 +141,134 @@ fun ChatScreen(navController: NavController) {
     val bottomContentPadding = maxOf(80.dp, bottomBarHeightDp + 12.dp)
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
-    // 流式输出状态
-    var streamingContent by remember { mutableStateOf("") }
+    // Pending 消息：在 DataStore 落盘前立即显示，彻底修复“首条消息消失”
+    var pendingMessages by remember { mutableStateOf<List<PendingMessage>>(emptyList()) }
+
+    // 流式输出：用同一条 assistant 消息实时更新，避免结束时“闪一下重新渲染”
     var isStreaming by remember { mutableStateOf(false) }
+    var streamingMessageId by remember { mutableStateOf<String?>(null) }
+    var streamingConversationId by remember { mutableStateOf<String?>(null) }
 
-    // 关键修复：本地消息缓存，确保首条消息立即显示（在DataStore更新前）
-    var localMessages by remember { mutableStateOf<List<Message>>(emptyList()) }
-    var pendingUserMessage by remember { mutableStateOf<PendingMessage?>(null) }
-
-    // 同步本地消息与DataStore消息
-    LaunchedEffect(messages, pendingUserMessage, currentConversation?.id) {
-        val dataStoreMessages = messages
-        val pending = pendingUserMessage
-        if (pending != null && pending.conversationId == currentConversation?.id) {
-            // 检查pending消息是否已经在DataStore中
-            val found = dataStoreMessages.any { it.id == pending.message.id }
-            if (found) {
-                // DataStore已更新，清除pending状态
-                pendingUserMessage = null
-                localMessages = dataStoreMessages
-            } else {
-                // 还没更新，显示pending消息 + DataStore消息
-                localMessages = dataStoreMessages + pending.message
-            }
-        } else {
-            localMessages = dataStoreMessages
+    // 清理已落盘的 pending，避免列表不断增长
+    LaunchedEffect(conversations, pendingMessages) {
+        if (pendingMessages.isEmpty()) return@LaunchedEffect
+        val updated = pendingMessages.filter { pending ->
+            val convo = conversations.firstOrNull { it.id == pending.conversationId } ?: return@filter true
+            convo.messages.none { it.id == pending.message.id }
+        }
+        if (updated.size != pendingMessages.size) {
+            pendingMessages = updated
         }
     }
 
-    // 滚动到底部当新消息添加时
-    LaunchedEffect(localMessages.size, currentConversation?.id) {
-        if (localMessages.isNotEmpty()) {
-            listState.animateScrollToItem(localMessages.size - 1)
+    val localMessages = remember(messages, pendingMessages, effectiveConversationId) {
+        val convoId = effectiveConversationId?.trim().orEmpty()
+        val dataStoreMessages = messages
+        if (convoId.isBlank()) return@remember dataStoreMessages
+        val pendingForConversation = pendingMessages
+            .filter { it.conversationId == convoId }
+            .map { it.message }
+            .filterNot { pendingMsg -> dataStoreMessages.any { it.id == pendingMsg.id } }
+        dataStoreMessages + pendingForConversation
+    }
+
+    val shouldAutoScroll by remember(listState) {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val total = layoutInfo.totalItemsCount
+            if (total == 0) return@derivedStateOf true
+            val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisibleIndex >= total - 2
+        }
+    }
+    val latestLocalMessagesSize by rememberUpdatedState(localMessages.size)
+    val latestShouldAutoScroll by rememberUpdatedState(shouldAutoScroll)
+    val latestEffectiveConversationId by rememberUpdatedState(effectiveConversationId)
+
+    var lastAutoScrolledConversationId by remember { mutableStateOf<String?>(null) }
+    var scrollToBottomToken by remember { mutableIntStateOf(0) }
+
+    // 进入新会话时直接定位到底部；新消息仅在“接近底部”时自动滚动，避免跳动
+    LaunchedEffect(effectiveConversationId, localMessages.size) {
+        val convoId = effectiveConversationId?.trim().orEmpty()
+        if (convoId.isBlank() || localMessages.isEmpty()) return@LaunchedEffect
+
+        if (lastAutoScrolledConversationId != convoId) {
+            lastAutoScrolledConversationId = convoId
+            listState.scrollToItem(localMessages.size - 1, scrollOffset = Int.MAX_VALUE)
+            return@LaunchedEffect
+        }
+        if (shouldAutoScroll) {
+            listState.animateScrollToItem(localMessages.size - 1, scrollOffset = Int.MAX_VALUE)
+        }
+    }
+
+    // 发送消息时强制滚动到底部
+    LaunchedEffect(scrollToBottomToken) {
+        if (latestLocalMessagesSize > 0) {
+            listState.animateScrollToItem(latestLocalMessagesSize - 1, scrollOffset = Int.MAX_VALUE)
+        }
+    }
+
+    // 流式过程中节流保持到底部（仅当用户未手动上滑）
+    LaunchedEffect(isStreaming, streamingMessageId, streamingConversationId) {
+        if (!isStreaming) return@LaunchedEffect
+        while (isStreaming) {
+            val convoId = latestEffectiveConversationId?.trim().orEmpty()
+            if (convoId.isNotBlank() && convoId == streamingConversationId && latestShouldAutoScroll) {
+                val lastIndex = latestLocalMessagesSize - 1
+                if (lastIndex >= 0) {
+                    listState.scrollToItem(lastIndex, scrollOffset = Int.MAX_VALUE)
+                }
+            }
+            delay(120)
         }
     }
 
     fun startNewChat() {
         scope.launch {
-            repository.createConversation()
+            val created = repository.createConversation()
+            preferredConversationId = created.id
+            preferredConversationSetAtMs = System.currentTimeMillis()
             selectedTool = null
             messageText = ""
             drawerState.close()
+            scrollToBottomToken++
         }
     }
 
     fun sendMessage() {
         val trimmed = messageText.trim()
-        if (trimmed.isEmpty() || isLoading || isStreaming) return
+        if (trimmed.isEmpty() || isStreaming) return
 
         scope.launch {
-            // 关键修复：从 DataStore 获取最新的 conversationId，而不是依赖可能过期的 compose state
-            var conversationId = repository.currentConversationIdFlow.first()
-            var conversation: Conversation? = null
-            if (conversationId.isNullOrBlank()) {
-                val existingConversations = repository.conversationsFlow.first()
-                if (existingConversations.isNotEmpty()) {
-                    conversationId = existingConversations.first().id
-                    repository.setCurrentConversationId(conversationId)
-                }
+            val nowMs = System.currentTimeMillis()
+            val initialConversations = repository.conversationsFlow.first()
+
+            var conversationId = effectiveConversationId?.trim().takeIf { !it.isNullOrBlank() }
+                ?: repository.currentConversationIdFlow.first()?.trim().takeIf { !it.isNullOrBlank() }
+            var conversation = conversationId?.let { cid -> initialConversations.firstOrNull { it.id == cid } }
+
+            if (conversation == null) {
+                val created = repository.createConversation()
+                conversation = created
+                conversationId = created.id
             }
 
-            // If we don't have a valid conversation, create one
-            if (conversationId.isNullOrBlank()) {
-                isCreatingConversation = true
-                try {
-                    val created = repository.createConversation()
-                    conversation = created
-                    conversationId = created.id
-                } finally {
-                    isCreatingConversation = false
-                }
-            } else {
-                // 获取最新的对话列表来确认这个 conversation 存在
-                val conversations = repository.conversationsFlow.first()
-                conversation = conversations.firstOrNull { it.id == conversationId }
-                if (conversation == null) {
-                    isCreatingConversation = true
-                    try {
-                        val created = repository.createConversation()
-                        conversation = created
-                        conversationId = created.id
-                    } finally {
-                        isCreatingConversation = false
-                    }
-                }
-            }
-
-            repository.setCurrentConversationId(conversationId)
             val safeConversationId = conversationId ?: return@launch
+            preferredConversationId = safeConversationId
+            preferredConversationSetAtMs = nowMs
+            repository.setCurrentConversationId(safeConversationId)
 
             val userMessage = Message(role = "user", content = trimmed)
-            // 关键修复：先设置pending状态让UI立即显示，再异步保存到DataStore
-            pendingUserMessage = PendingMessage(safeConversationId, userMessage)
+            pendingMessages = pendingMessages + PendingMessage(safeConversationId, userMessage)
             messageText = ""
+            scrollToBottomToken++
             repository.appendMessage(safeConversationId, userMessage)
 
             // Update conversation title if it's still "New chat" or empty
-            val conversationToCheck = conversation ?: repository.conversationsFlow.first().firstOrNull { it.id == safeConversationId }
+            val conversationToCheck =
+                conversation ?: repository.conversationsFlow.first().firstOrNull { it.id == safeConversationId }
             if (conversationToCheck?.title.isNullOrBlank() || conversationToCheck?.title == "New chat") {
                 val title = trimmed.lineSequence().firstOrNull().orEmpty().trim().take(24)
                 if (title.isNotBlank()) {
@@ -271,63 +333,66 @@ fun ChatScreen(navController: NavController) {
             }
 
             // 获取最新的消息列表
-            val latestConversations = repository.conversationsFlow.first()
-            val latestConversation = latestConversations.firstOrNull { it.id == safeConversationId }
+            val refreshedConversations = repository.conversationsFlow.first()
+            val latestConversation = refreshedConversations.firstOrNull { it.id == safeConversationId }
             val currentMessages = latestConversation?.messages.orEmpty()
 
             val requestMessages = buildList {
                 if (systemMessage != null) add(systemMessage)
                 addAll(currentMessages)
-                add(userMessage)
+                if (currentMessages.lastOrNull()?.id != userMessage.id) add(userMessage)
             }
 
             // 流式输出
+            val assistantMessage = Message(role = "assistant", content = "")
+            pendingMessages = pendingMessages + PendingMessage(safeConversationId, assistantMessage)
             isStreaming = true
-            streamingContent = ""
-            val streamBuffer = StringBuilder()
-            var fullContent = ""
-            val renderJob = launch {
-                while (isStreaming || streamBuffer.isNotEmpty()) {
-                    if (streamBuffer.isNotEmpty()) {
-                        val step = when {
-                            streamBuffer.length > 200 -> 16
-                            streamBuffer.length > 80 -> 10
-                            else -> 6
+            streamingMessageId = assistantMessage.id
+            streamingConversationId = safeConversationId
+            scrollToBottomToken++
+
+            fun updateAssistantContent(content: String) {
+                pendingMessages =
+                    pendingMessages.map { pending ->
+                        if (pending.conversationId == safeConversationId && pending.message.id == assistantMessage.id) {
+                            pending.copy(message = pending.message.copy(content = content))
+                        } else {
+                            pending
                         }
-                        val take = minOf(step, streamBuffer.length)
-                        val next = streamBuffer.substring(0, take)
-                        streamBuffer.delete(0, take)
-                        streamingContent += next
-                    } else {
-                        delay(16)
                     }
-                }
             }
 
             try {
+                val fullContent = StringBuilder()
+                var lastUiUpdateMs = 0L
+
                 chatApiClient.chatCompletionsStream(
                     provider = provider,
                     modelId = extractRemoteModelId(selectedModel.id),
                     messages = requestMessages,
                     extraHeaders = selectedModel.headers
                 ).collect { chunk ->
-                    fullContent += chunk
-                    streamBuffer.append(chunk)
+                    fullContent.append(chunk)
+                    val now = System.currentTimeMillis()
+                    if (now - lastUiUpdateMs >= 33L || fullContent.length % 80 == 0) {
+                        updateAssistantContent(fullContent.toString())
+                        lastUiUpdateMs = now
+                    }
                 }
-                while (streamBuffer.isNotEmpty()) {
-                    delay(16)
-                }
-                // 流式输出完成后，将完整内容保存到消息列表
-                if (fullContent.isNotBlank()) {
-                    repository.appendMessage(safeConversationId, Message(role = "assistant", content = fullContent))
+
+                val finalContent = fullContent.toString()
+                updateAssistantContent(finalContent)
+                if (finalContent.isNotBlank()) {
+                    repository.appendMessage(safeConversationId, assistantMessage.copy(content = finalContent))
                 }
             } catch (e: Exception) {
                 val errorMsg = "请求失败：${e.message ?: e.toString()}"
-                repository.appendMessage(safeConversationId, Message(role = "assistant", content = errorMsg))
+                updateAssistantContent(errorMsg)
+                repository.appendMessage(safeConversationId, assistantMessage.copy(content = errorMsg))
             } finally {
                 isStreaming = false
-                renderJob.cancel()
-                streamingContent = ""
+                streamingMessageId = null
+                streamingConversationId = null
             }
         }
     }
@@ -337,17 +402,25 @@ fun ChatScreen(navController: NavController) {
         drawerContent = {
             SidebarContent(
                 conversations = conversations,
-                currentConversationId = currentConversation?.id,
+                currentConversationId = effectiveConversationId,
                 onClose = { scope.launch { drawerState.close() } },
                 onNewChat = ::startNewChat,
                 onConversationClick = { convo ->
                     scope.launch {
+                        preferredConversationId = convo.id
+                        preferredConversationSetAtMs = System.currentTimeMillis()
                         repository.setCurrentConversationId(convo.id)
                         drawerState.close()
+                        scrollToBottomToken++
                     }
                 },
                 onDeleteConversation = { id ->
-                    scope.launch { repository.deleteConversation(id) }
+                    scope.launch {
+                        repository.deleteConversation(id)
+                        if (preferredConversationId == id) {
+                            preferredConversationId = null
+                        }
+                    }
                 },
                 navController = navController
             )
@@ -389,41 +462,30 @@ fun ChatScreen(navController: NavController) {
                             items(localMessages, key = { it.id }) { message ->
                                 MessageItem(
                                     message = message,
-                                    conversationId = currentConversation?.id,
+                                    conversationId = effectiveConversationId,
+                                    isStreaming = isStreaming
+                                        && streamingConversationId == effectiveConversationId
+                                        && message.id == streamingMessageId,
                                     onEdit = { /* TODO: 编辑消息 */ },
                                     onDelete = { convoId, messageId ->
                                         scope.launch { repository.deleteMessage(convoId, messageId) }
                                     }
                                 )
                             }
-
-                            // 流式输出内容
-                            if (isStreaming && streamingContent.isNotEmpty()) {
-                                item {
-                                    StreamingMessageItem(content = streamingContent)
-                                }
-                            }
-
-                            // 加载指示器（仅在非流式时显示）
-                            if (isLoading && !isStreaming) {
-                                item {
-                                    LoadingIndicator()
-                                }
-                            }
                         }
                     }
 
                     TopFadeScrim(
                         color = Background,
-                        height = 36.dp,
+                        height = 48.dp,
                         modifier = Modifier
                             .align(Alignment.TopCenter)
-                            .offset(y = (-8).dp)
+                            .offset(y = (-16).dp)
                             .zIndex(1f)
                     )
                     BottomFadeScrim(
                         color = Background,
-                        height = 40.dp,
+                        height = 52.dp,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .zIndex(1f)
@@ -481,6 +543,7 @@ fun ChatScreen(navController: NavController) {
 fun MessageItem(
     message: Message,
     conversationId: String?,
+    isStreaming: Boolean = false,
     onEdit: () -> Unit,
     onDelete: (conversationId: String, messageId: String) -> Unit
 ) {
@@ -534,25 +597,44 @@ fun MessageItem(
                 )
             )
 
-            // 工具栏
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.padding(top = 8.dp)
-            ) {
-                ActionButton(
-                    icon = AppIcons.Copy,
-                    onClick = {
-                        clipboardManager.setText(AnnotatedString(message.content))
-                    }
+            if (isStreaming) {
+                val infiniteTransition = rememberInfiniteTransition(label = "cursor_pulse")
+                val cursorAlpha by infiniteTransition.animateFloat(
+                    initialValue = 0.3f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(600, easing = LinearEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "cursor_alpha"
                 )
-                ActionButton(icon = AppIcons.Edit, onClick = onEdit)
-                ActionButton(icon = AppIcons.Volume, onClick = { })
-                ActionButton(icon = AppIcons.Share, onClick = { })
-                ActionButton(
-                    icon = AppIcons.Refresh,
-                    onClick = { /* 重新生成 */ }
+                Box(
+                    modifier = Modifier
+                        .padding(top = 10.dp)
+                        .size(8.dp)
+                        .background(TextSecondary.copy(alpha = cursorAlpha), CircleShape)
                 )
-                ActionButton(icon = AppIcons.More, onClick = { showMenu = true })
+            } else {
+                // 工具栏
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    ActionButton(
+                        icon = AppIcons.Copy,
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(message.content))
+                        }
+                    )
+                    ActionButton(icon = AppIcons.Edit, onClick = onEdit)
+                    ActionButton(icon = AppIcons.Volume, onClick = { })
+                    ActionButton(icon = AppIcons.Share, onClick = { })
+                    ActionButton(
+                        icon = AppIcons.Refresh,
+                        onClick = { /* 重新生成 */ }
+                    )
+                    ActionButton(icon = AppIcons.More, onClick = { showMenu = true })
+                }
             }
         }
     }
@@ -629,93 +711,6 @@ fun DialogOption(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun StreamingMessageItem(content: String) {
-    var visibleLength by remember { mutableIntStateOf(0) }
-    val contentLength = content.length
-    // 渐变动画状态
-
-    // 当内容变化时，逐步显示新字符，创造渐变效果
-    LaunchedEffect(content) {
-        if (visibleLength < contentLength) {
-            // 使用更快的动画速度，让流式输出更自然
-            val durationPerChar = 8L // 每字符8ms
-            while (visibleLength < contentLength) {
-                visibleLength = contentLength
-                break // 直接显示到最新位置，用alpha动画代替
-            }
-        }
-    }
-
-    // 使用Alpha渐变动画让整个内容平滑出现
-    val alpha by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = tween(durationMillis = 150, easing = LinearEasing),
-        label = "streaming_alpha"
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth(0.85f)
-            .animateContentSize()
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = { }
-            )
-    ) {
-        // 使用 MarkdownText 支持实时 Markdown 渲染
-        MarkdownText(
-            markdown = content,
-            textStyle = TextStyle(
-                fontSize = 16.sp,
-                lineHeight = 24.sp,
-                color = TextPrimary.copy(alpha = alpha)
-            )
-        )
-
-        // 脉动光标指示正在流式输出
-        val infiniteTransition = rememberInfiniteTransition(label = "cursor_pulse")
-        val cursorAlpha by infiniteTransition.animateFloat(
-            initialValue = 0.3f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(600, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "cursor_alpha"
-        )
-
-        Box(
-            modifier = Modifier
-                .padding(top = 8.dp)
-                .size(8.dp)
-                .background(TextSecondary.copy(alpha = cursorAlpha), CircleShape)
-        )
-    }
-}
-
-@Composable
-fun LoadingIndicator() {
-    Row(
-        modifier = Modifier.padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(20.dp),
-            strokeWidth = 2.dp,
-            color = TextSecondary
-        )
-        Text(
-            text = "思考中...",
-            fontSize = 14.sp,
-            color = TextSecondary
-        )
-    }
-}
-
 @Composable
 fun EmptyChatState() {
     Box(
@@ -724,18 +719,13 @@ fun EmptyChatState() {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(
-                imageVector = AppIcons.ChatGPTLogo,
-                contentDescription = null,
-                tint = TextSecondary,
-                modifier = Modifier.size(48.dp)
-            )
             Text(
-                text = "开始新的对话",
-                fontSize = 17.sp,
-                color = TextSecondary
+                text = "What's on your mind today?",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF0D0D0D)
             )
         }
     }
@@ -1057,6 +1047,15 @@ fun ToolMenuPanel(
     onDismiss: () -> Unit,
     onToolSelect: (String) -> Unit
 ) {
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    var dragOffsetPx by remember { mutableFloatStateOf(0f) }
+    val dismissThresholdPx = remember(density) { with(density) { 120.dp.toPx() } }
+
+    LaunchedEffect(visible) {
+        if (!visible) dragOffsetPx = 0f
+    }
+
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(),
@@ -1081,6 +1080,34 @@ fun ToolMenuPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
+                        .offset { IntOffset(0, dragOffsetPx.roundToInt()) }
+                        .draggable(
+                            orientation = Orientation.Vertical,
+                            state = rememberDraggableState { delta ->
+                                dragOffsetPx = (dragOffsetPx + delta).coerceAtLeast(0f)
+                            },
+                            onDragStopped = { velocity ->
+                                val shouldDismiss =
+                                    dragOffsetPx > dismissThresholdPx || velocity > 2400f
+                                if (shouldDismiss) {
+                                    onDismiss()
+                                    dragOffsetPx = 0f
+                                } else {
+                                    scope.launch {
+                                        animate(
+                                            initialValue = dragOffsetPx,
+                                            targetValue = 0f,
+                                            animationSpec = tween(
+                                                durationMillis = 180,
+                                                easing = LinearEasing
+                                            )
+                                        ) { value, _ ->
+                                            dragOffsetPx = value
+                                        }
+                                    }
+                                }
+                            }
+                        )
                         .animateEnterExit(
                             enter = slideInVertically(initialOffsetY = { it }),
                             exit = slideOutVertically(targetOffsetY = { it })
@@ -1257,7 +1284,7 @@ fun BottomInputArea(
     imeVisible: Boolean = false
 ) {
     val hasText = messageText.trim().isNotEmpty()
-    val sendEnabled = hasText
+    val sendEnabled = hasText && sendAllowed
     val sendBackground = if (sendEnabled) TextPrimary else GrayLight
     val sendIconTint = if (sendEnabled) Color.White else TextSecondary
     val maxTextHeight = if (selectedTool != null) 140.dp else 120.dp
@@ -1284,7 +1311,7 @@ fun BottomInputArea(
         "mcp" -> AppIcons.MCPTools
         else -> AppIcons.Globe
     }
-    val bottomPadding = if (imeVisible) 12.dp else 24.dp
+    val bottomPadding = if (imeVisible) 8.dp else 24.dp
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1396,7 +1423,7 @@ fun BottomInputArea(
                         cursorBrush = SolidColor(TextPrimary),
                         keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(
-                            onSend = { if (hasText) onSend() }
+                            onSend = { if (sendEnabled) onSend() }
                         ),
                         minLines = 1,
                         maxLines = maxLines,
@@ -1407,7 +1434,7 @@ fun BottomInputArea(
                             ) {
                                 if (messageText.isEmpty()) {
                                     Text(
-                                        text = "Message...",
+                                        text = "Ask anything",
                                         fontSize = 17.sp,
                                         lineHeight = 22.sp,
                                         color = TextSecondary

@@ -118,7 +118,7 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
             ) {
                 // Back Button
                 Box(
@@ -212,7 +212,7 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .padding(horizontal = 16.dp, vertical = 2.dp)
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
@@ -275,7 +275,7 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                             }
                         )
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
 
                 PullRefreshIndicator(
@@ -288,14 +288,15 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
 
                 TopFadeScrim(
                     color = Background,
-                    height = 28.dp,
+                    height = 40.dp,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
+                        .offset(y = (-10).dp)
                         .zIndex(1f)
                 )
                 BottomFadeScrim(
                     color = Background,
-                    height = 32.dp,
+                    height = 44.dp,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .zIndex(1f)
