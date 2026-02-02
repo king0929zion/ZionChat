@@ -51,6 +51,13 @@ import com.zionchat.app.ui.icons.AppIcons
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import androidx.compose.animation.animateFloatAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.mutableIntStateOf
 
 // 颜色常量 - 完全匹配HTML原型
 val Background = Color(0xFFF5F5F7)
@@ -113,9 +120,9 @@ fun ChatScreen(navController: NavController) {
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
     // 滚动到底部当新消息添加时
-    LaunchedEffect(messages.size, currentConversation?.id) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+    LaunchedEffect(localMessages.size, currentConversation?.id) {
+        if (localMessages.isNotEmpty()) {
+            listState.animateScrollToItem(localMessages.size - 1)
         }
     }
 
@@ -131,6 +138,29 @@ fun ChatScreen(navController: NavController) {
     // 流式输出状态
     var streamingContent by remember { mutableStateOf("") }
     var isStreaming by remember { mutableStateOf(false) }
+
+    // 关键修复：本地消息缓存，确保首条消息立即显示（在DataStore更新前）
+    var localMessages by remember { mutableStateOf<List<Message>>(emptyList()) }
+    var pendingUserMessage by remember { mutableStateOf<Message?>(null) }
+
+    // 同步本地消息与DataStore消息
+    LaunchedEffect(messages, pendingUserMessage) {
+        val dataStoreMessages = messages
+        if (pendingUserMessage != null) {
+            // 检查pending消息是否已经在DataStore中
+            val found = dataStoreMessages.any { it.id == pendingUserMessage!!.id }
+            if (found) {
+                // DataStore已更新，清除pending状态
+                pendingUserMessage = null
+                localMessages = dataStoreMessages
+            } else {
+                // 还没更新，显示pending消息 + DataStore消息
+                localMessages = dataStoreMessages + pendingUserMessage!!
+            }
+        } else {
+            localMessages = dataStoreMessages
+        }
+    }
 
     fun sendMessage() {
         val trimmed = messageText.trim()
@@ -156,8 +186,10 @@ fun ChatScreen(navController: NavController) {
             }
 
             val userMessage = Message(role = "user", content = trimmed)
-            repository.appendMessage(conversationId, userMessage)
+            // 关键修复：先设置pending状态让UI立即显示，再异步保存到DataStore
+            pendingUserMessage = userMessage
             messageText = ""
+            repository.appendMessage(conversationId, userMessage)
 
             // Update conversation title if it's still "New chat" or empty
             val conversationToCheck = conversation ?: repository.conversationsFlow.first().firstOrNull { it.id == conversationId }
@@ -308,7 +340,7 @@ fun ChatScreen(navController: NavController) {
                         .weight(1f)
                         .padding(bottom = bottomContentPadding)
                 ) {
-                    if (messages.isEmpty()) {
+                    if (localMessages.isEmpty()) {
                         // 空状态
                         EmptyChatState()
                     } else {
@@ -318,7 +350,7 @@ fun ChatScreen(navController: NavController) {
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            items(messages, key = { it.id }) { message ->
+                            items(localMessages, key = { it.id }) { message ->
                                 MessageItem(
                                     message = message,
                                     conversationId = currentConversation?.id,
@@ -550,6 +582,29 @@ fun DialogOption(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun StreamingMessageItem(content: String) {
+    // 渐变动画状态
+    var visibleLength by remember { mutableIntStateOf(0) }
+    val contentLength = content.length
+
+    // 当内容变化时，逐步显示新字符，创造渐变效果
+    LaunchedEffect(content) {
+        if (visibleLength < contentLength) {
+            // 使用更快的动画速度，让流式输出更自然
+            val durationPerChar = 8L // 每字符8ms
+            while (visibleLength < contentLength) {
+                visibleLength = contentLength
+                break // 直接显示到最新位置，用alpha动画代替
+            }
+        }
+    }
+
+    // 使用Alpha渐变动画让整个内容平滑出现
+    val alpha by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = tween(durationMillis = 150, easing = LinearEasing),
+        label = "streaming_alpha"
+    )
+
     Column(
         modifier = Modifier
             .fillMaxWidth(0.85f)
@@ -562,21 +617,28 @@ fun StreamingMessageItem(content: String) {
         Text(
             text = content,
             fontSize = 16.sp,
-            color = TextPrimary,
+            color = TextPrimary.copy(alpha = alpha),
             lineHeight = 24.sp
         )
 
-        // 闪烁光标指示正在流式输出
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.padding(top = 8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .background(TextSecondary.copy(alpha = 0.6f), CircleShape)
-            )
-        }
+        // 脉动光标指示正在流式输出
+        val infiniteTransition = rememberInfiniteTransition(label = "cursor_pulse")
+        val cursorAlpha by infiniteTransition.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(600, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "cursor_alpha"
+        )
+
+        Box(
+            modifier = Modifier
+                .padding(top = 8.dp)
+                .size(8.dp)
+                .background(TextSecondary.copy(alpha = cursorAlpha), CircleShape)
+        )
     }
 }
 
