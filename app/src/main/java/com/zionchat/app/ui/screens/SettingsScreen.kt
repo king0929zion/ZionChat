@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.zionchat.app.R
 import com.zionchat.app.LocalAppRepository
+import com.zionchat.app.data.extractRemoteModelId
+import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.rememberResourceDrawablePainter
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
@@ -37,121 +39,134 @@ fun SettingsScreen(navController: NavController) {
     val models by repository.modelsFlow.collectAsState(initial = emptyList())
     val defaultChatModelId by repository.defaultChatModelIdFlow.collectAsState(initial = null)
     val defaultChatModelName = remember(models, defaultChatModelId) {
-        models.firstOrNull { it.id == defaultChatModelId }?.displayName
+        val id = defaultChatModelId?.trim().orEmpty()
+        if (id.isBlank()) null
+        else models.firstOrNull { it.id == id }?.displayName
+            ?: models.firstOrNull { extractRemoteModelId(it.id) == id }?.displayName
     }
 
     Scaffold(
         topBar = { SettingsTopBar(navController) },
         containerColor = Background
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
         ) {
-            // User Profile Section
-            UserProfileSection()
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // User Profile Section
+                UserProfileSection()
 
-            // My ChatGPT 分组
-            SettingsGroup(title = "My ChatGPT", itemCount = 2) {
-                SettingsItem(
-                    icon = { Icon(AppIcons.Personalization, null, Modifier.size(22.dp), tint = Color.Unspecified) },
-                    label = "Personalization",
-                    showDivider = true,
-                    onClick = { navController.navigate("personalization") }
-                )
-                SettingsItem(
-                    icon = {
-                        Icon(
-                            painter = rememberResourceDrawablePainter(R.drawable.ic_apps),
-                            contentDescription = null,
-                            modifier = Modifier.size(22.dp),
-                            tint = Color.Unspecified
-                        )
-                    },
-                    label = "Apps",
-                    onClick = { }
-                )
+                // My ChatGPT 分组
+                SettingsGroup(title = "My ChatGPT", itemCount = 2) {
+                    SettingsItem(
+                        icon = { Icon(AppIcons.Personalization, null, Modifier.size(22.dp), tint = Color.Unspecified) },
+                        label = "Personalization",
+                        showDivider = true,
+                        onClick = { navController.navigate("personalization") }
+                    )
+                    SettingsItem(
+                        icon = {
+                            Icon(
+                                painter = rememberResourceDrawablePainter(R.drawable.ic_apps),
+                                contentDescription = null,
+                                modifier = Modifier.size(22.dp),
+                                tint = Color.Unspecified
+                            )
+                        },
+                        label = "Apps",
+                        onClick = { }
+                    )
+                }
+
+                // Appearance 分组
+                SettingsGroup(title = "Appearance", itemCount = 2) {
+                    SettingsItem(
+                        icon = { Icon(AppIcons.Appearance, null, Modifier.size(22.dp), tint = Color.Unspecified) },
+                        label = "Appearance",
+                        value = "Light",
+                        showChevron = true,
+                        showDivider = true,
+                        onClick = { }
+                    )
+                    SettingsItem(
+                        icon = { Icon(AppIcons.Accent, null, Modifier.size(22.dp), tint = Color.Unspecified) },
+                        label = "Accent color",
+                        value = "Default",
+                        showChevron = true,
+                        onClick = { }
+                    )
+                }
+
+                // General 分组
+                SettingsGroup(title = "General", itemCount = 2) {
+                    SettingsItem(
+                        icon = { Icon(AppIcons.Language, null, Modifier.size(22.dp), tint = Color.Unspecified) },
+                        label = "Language",
+                        value = "English",
+                        showChevron = true,
+                        showDivider = true,
+                        onClick = { }
+                    )
+                    SettingsItem(
+                        icon = { Icon(AppIcons.Notifications, null, Modifier.size(22.dp), tint = Color.Unspecified) },
+                        label = "Notifications",
+                        showChevron = true,
+                        onClick = { }
+                    )
+                }
+
+                // AI Model 分组
+                SettingsGroup(title = "AI Model", itemCount = 3) {
+                    SettingsItem(
+                        icon = {
+                            Icon(
+                                painter = rememberResourceDrawablePainter(R.drawable.ic_model),
+                                contentDescription = null,
+                                modifier = Modifier.size(22.dp),
+                                tint = Color.Unspecified
+                            )
+                        },
+                        label = "Default model",
+                        value = defaultChatModelName ?: "Not set",
+                        showChevron = true,
+                        showDivider = true,
+                        onClick = { navController.navigate("default_model") }
+                    )
+                    SettingsItem(
+                        icon = {
+                            Icon(
+                                painter = rememberResourceDrawablePainter(R.drawable.ic_model_services),
+                                contentDescription = null,
+                                modifier = Modifier.size(22.dp),
+                                tint = Color.Unspecified
+                            )
+                        },
+                        label = "Model services",
+                        showChevron = true,
+                        showDivider = true,
+                        onClick = { navController.navigate("model_services") }
+                    )
+                    SettingsItem(
+                        icon = { Icon(AppIcons.MCPTools, null, Modifier.size(22.dp), tint = Color.Unspecified) },
+                        label = "MCP Tools",
+                        showChevron = true,
+                        onClick = { }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
             }
 
-            // Appearance 分组
-            SettingsGroup(title = "Appearance", itemCount = 2) {
-                SettingsItem(
-                    icon = { Icon(AppIcons.Appearance, null, Modifier.size(22.dp), tint = Color.Unspecified) },
-                    label = "Appearance",
-                    value = "Light",
-                    showChevron = true,
-                    showDivider = true,
-                    onClick = { }
-                )
-                SettingsItem(
-                    icon = { Icon(AppIcons.Accent, null, Modifier.size(22.dp), tint = Color.Unspecified) },
-                    label = "Accent color",
-                    value = "Default",
-                    showChevron = true,
-                    onClick = { }
-                )
-            }
-
-            // General 分组
-            SettingsGroup(title = "General", itemCount = 2) {
-                SettingsItem(
-                    icon = { Icon(AppIcons.Language, null, Modifier.size(22.dp), tint = Color.Unspecified) },
-                    label = "Language",
-                    value = "English",
-                    showChevron = true,
-                    showDivider = true,
-                    onClick = { }
-                )
-                SettingsItem(
-                    icon = { Icon(AppIcons.Notifications, null, Modifier.size(22.dp), tint = Color.Unspecified) },
-                    label = "Notifications",
-                    showChevron = true,
-                    onClick = { }
-                )
-            }
-
-            // AI Model 分组
-            SettingsGroup(title = "AI Model", itemCount = 3) {
-                SettingsItem(
-                    icon = {
-                        Icon(
-                            painter = rememberResourceDrawablePainter(R.drawable.ic_model),
-                            contentDescription = null,
-                            modifier = Modifier.size(22.dp),
-                            tint = Color.Unspecified
-                        )
-                    },
-                    label = "Default model",
-                    value = defaultChatModelName ?: "Not set",
-                    showChevron = true,
-                    showDivider = true,
-                    onClick = { navController.navigate("default_model") }
-                )
-                SettingsItem(
-                    icon = {
-                        Icon(
-                            painter = rememberResourceDrawablePainter(R.drawable.ic_model_services),
-                            contentDescription = null,
-                            modifier = Modifier.size(22.dp),
-                            tint = Color.Unspecified
-                        )
-                    },
-                    label = "Model services",
-                    showChevron = true,
-                    showDivider = true,
-                    onClick = { navController.navigate("model_services") }
-                )
-                SettingsItem(
-                    icon = { Icon(AppIcons.MCPTools, null, Modifier.size(22.dp), tint = Color.Unspecified) },
-                    label = "MCP Tools",
-                    showChevron = true,
-                    onClick = { }
-                )
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
+            TopFadeScrim(
+                color = Background,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }

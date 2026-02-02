@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.zionchat.app.data.extractRemoteModelId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -140,6 +141,38 @@ class AppRepository(context: Context) {
         }
     }
 
+    suspend fun deleteProviderAndModels(providerId: String) {
+        val existingProviders = providersFlow.first()
+        val existingModels = modelsFlow.first()
+
+        val providers = existingProviders.filterNot { it.id == providerId }
+        val removedModels = existingModels.filter { it.providerId == providerId }
+        val remainingModels = existingModels.filterNot { it.providerId == providerId }
+
+        val removedStorageIds = removedModels.map { it.id }.toSet()
+        val removedRemoteIds = removedModels.map { extractRemoteModelId(it.id) }.toSet()
+        val remainingRemoteIds = remainingModels.map { extractRemoteModelId(it.id) }.toSet()
+
+        dataStore.edit { prefs ->
+            prefs[providersKey] = gson.toJson(providers)
+            prefs[modelsKey] = gson.toJson(remainingModels)
+
+            fun maybeClearDefaultModel(key: androidx.datastore.preferences.core.Preferences.Key<String>) {
+                val value = prefs[key]?.trim().orEmpty()
+                if (value.isBlank()) return
+                val shouldClear =
+                    removedStorageIds.contains(value) ||
+                        (removedRemoteIds.contains(value) && !remainingRemoteIds.contains(value))
+                if (shouldClear) prefs.remove(key)
+            }
+
+            maybeClearDefaultModel(defaultChatModelIdKey)
+            maybeClearDefaultModel(defaultVisionModelIdKey)
+            maybeClearDefaultModel(defaultImageModelIdKey)
+            maybeClearDefaultModel(defaultTitleModelIdKey)
+        }
+    }
+
     suspend fun upsertModel(model: ModelConfig) {
         val models = modelsFlow.first().toMutableList()
         val index = models.indexOfFirst { it.id == model.id }
@@ -182,10 +215,13 @@ class AppRepository(context: Context) {
         }
     }
 
-    suspend fun setAllModelsEnabled(enabled: Boolean) {
+    suspend fun setAllModelsEnabled(providerId: String, enabled: Boolean) {
         val models = modelsFlow.first()
         if (models.isEmpty()) return
-        val updated = models.map { it.copy(enabled = enabled) }
+        val updated = models.map { model ->
+            if (model.providerId == providerId) model.copy(enabled = enabled) else model
+        }
+        if (updated == models) return
         dataStore.edit { prefs ->
             prefs[modelsKey] = gson.toJson(updated)
         }

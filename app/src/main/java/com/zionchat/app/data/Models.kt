@@ -20,6 +20,16 @@ data class ModelConfig(
     val headers: List<HttpHeader> = emptyList()
 )
 
+private const val MODEL_ID_SEPARATOR = "::"
+
+fun buildModelStorageId(providerId: String, modelId: String): String {
+    return "${providerId.trim()}$MODEL_ID_SEPARATOR${modelId.trim()}"
+}
+
+fun extractRemoteModelId(storageId: String): String {
+    return storageId.substringAfter(MODEL_ID_SEPARATOR, storageId).trim()
+}
+
 data class HttpHeader(
     val key: String,
     val value: String

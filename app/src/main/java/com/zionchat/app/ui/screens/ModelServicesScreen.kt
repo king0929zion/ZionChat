@@ -1,30 +1,35 @@
 package com.zionchat.app.ui.screens
 
+import androidx.compose.foundation.Orientation
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.FractionalThreshold
+import androidx.compose.material.rememberSwipeableState
+import androidx.compose.material.swipeable
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -34,25 +39,18 @@ import com.zionchat.app.data.ProviderConfig
 import com.zionchat.app.data.ProviderPreset
 import com.zionchat.app.data.resolveProviderIconAsset
 import com.zionchat.app.ui.components.AssetIcon
+import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @Composable
 fun ModelServicesScreen(navController: NavController) {
     val repository = LocalAppRepository.current
-    var searchQuery by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
 
     val configuredProviders by repository.providersFlow.collectAsState(initial = emptyList())
-
-    val filteredConfiguredProviders = remember(configuredProviders, searchQuery) {
-        if (searchQuery.isBlank()) configuredProviders
-        else configuredProviders.filter { it.name.contains(searchQuery, ignoreCase = true) }
-    }
-
-    val filteredPresetProviders = remember(searchQuery) {
-        if (searchQuery.isBlank()) DEFAULT_PROVIDER_PRESETS
-        else DEFAULT_PROVIDER_PRESETS.filter { it.name.contains(searchQuery, ignoreCase = true) }
-    }
 
     Scaffold(
         topBar = {
@@ -111,53 +109,11 @@ fun ModelServicesScreen(navController: NavController) {
         },
         containerColor = Background
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // 搜索框
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .height(48.dp)
-                    .background(GrayLight, RoundedCornerShape(12.dp))
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = AppIcons.Search,
-                    contentDescription = "Search",
-                    tint = TextSecondary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                TextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = {
-                        Text(
-                            text = "Enter provider name",
-                            fontSize = 17.sp,
-                            color = TextSecondary
-                        )
-                    },
-                    textStyle = TextStyle(
-                        fontSize = 17.sp,
-                        color = TextPrimary
-                    ),
-                    modifier = Modifier.weight(1f),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        cursorColor = TextPrimary
-                    )
-                )
-            }
-
             // Provider List
             Column(
                 modifier = Modifier
@@ -166,23 +122,26 @@ fun ModelServicesScreen(navController: NavController) {
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                filteredConfiguredProviders.forEach { provider ->
-                    ConfiguredProviderItem(
+                configuredProviders.forEach { provider ->
+                    SwipeableConfiguredProviderItem(
                         provider = provider,
                         iconAsset = resolveProviderIconAsset(provider),
                         onClick = {
                             navController.navigate("add_provider?preset=&providerId=${provider.id}")
+                        },
+                        onDelete = {
+                            scope.launch { repository.deleteProviderAndModels(provider.id) }
                         }
                     )
                 }
 
-                if (filteredConfiguredProviders.isNotEmpty() && filteredPresetProviders.isNotEmpty()) {
+                if (configuredProviders.isNotEmpty() && DEFAULT_PROVIDER_PRESETS.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Divider(color = GrayLight, modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(4.dp))
                 }
 
-                filteredPresetProviders.forEach { provider ->
+                DEFAULT_PROVIDER_PRESETS.forEach { provider ->
                     ProviderItem(
                         provider = provider,
                         onClick = {
@@ -192,6 +151,11 @@ fun ModelServicesScreen(navController: NavController) {
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }
+
+            TopFadeScrim(
+                color = Background,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }
@@ -215,7 +179,7 @@ private fun ProviderItem(
         ProviderIcon(
             iconAsset = provider.iconAsset,
             contentDescription = provider.name,
-            modifier = Modifier.size(36.dp)
+            modifier = Modifier.size(32.dp)
         )
 
         Text(
@@ -229,41 +193,86 @@ private fun ProviderItem(
 }
 
 @Composable
-private fun ConfiguredProviderItem(
+@OptIn(ExperimentalMaterialApi::class)
+private fun SwipeableConfiguredProviderItem(
     provider: ProviderConfig,
     iconAsset: String?,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDelete: () -> Unit
 ) {
-    Row(
+    val itemScope = rememberCoroutineScope()
+    val actionWidth = 72.dp
+    val actionWidthPx = with(LocalDensity.current) { actionWidth.toPx() }
+    val swipeableState = rememberSwipeableState(initialValue = 0)
+    val anchors = remember(actionWidthPx) { mapOf(0f to 0, -actionWidthPx to 1) }
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(56.dp)
-            .background(GrayLight, RoundedCornerShape(14.dp))
             .clip(RoundedCornerShape(14.dp))
-            .pressableScale(pressedScale = 0.98f, onClick = onClick)
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        ProviderIcon(
-            iconAsset = iconAsset,
-            contentDescription = provider.name,
-            modifier = Modifier.size(36.dp)
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(actionWidth)
+                .align(Alignment.CenterEnd)
+                .background(Color(0xFFFF3B30))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {
+                    onDelete()
+                    itemScope.launch { swipeableState.animateTo(0) }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = AppIcons.Trash,
+                contentDescription = "Delete",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+        }
 
-        Column(modifier = Modifier.weight(1f)) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .offset { IntOffset(swipeableState.offset.value.roundToInt(), 0) }
+                .background(GrayLight, RoundedCornerShape(14.dp))
+                .swipeable(
+                    state = swipeableState,
+                    anchors = anchors,
+                    thresholds = { _, _ -> FractionalThreshold(0.3f) },
+                    orientation = Orientation.Horizontal
+                )
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {
+                    if (swipeableState.currentValue != 0) {
+                        itemScope.launch { swipeableState.animateTo(0) }
+                    } else {
+                        onClick()
+                    }
+                }
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            ProviderIcon(
+                iconAsset = iconAsset,
+                contentDescription = provider.name,
+                modifier = Modifier.size(32.dp)
+            )
+
             Text(
                 text = provider.name,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Normal,
                 color = TextPrimary,
-                maxLines = 1
-            )
-            Text(
-                text = provider.apiUrl,
-                fontSize = 13.sp,
-                color = TextSecondary,
-                maxLines = 1
+                maxLines = 1,
+                modifier = Modifier.weight(1f)
             )
         }
     }

@@ -52,15 +52,8 @@ val DEFAULT_PROVIDER_PRESETS: List<ProviderPreset> = listOf(
         iconAsset = "minimax-color.svg"
     ),
     ProviderPreset(
-        id = "aihubmix",
-        name = "AiHubMix",
-        type = "openai",
-        apiUrl = "https://aihubmix.com/v1",
-        iconAsset = "aihubmix-color.svg"
-    ),
-    ProviderPreset(
         id = "siliconflow",
-        name = "硅基流动",
+        name = "SiliconFlow",
         type = "openai",
         apiUrl = "https://api.siliconflow.cn/v1",
         iconAsset = "siliconflow.svg"
@@ -80,29 +73,15 @@ val DEFAULT_PROVIDER_PRESETS: List<ProviderPreset> = listOf(
         iconAsset = "openrouter.svg"
     ),
     ProviderPreset(
-        id = "tokenpony",
-        name = "小马算力",
-        type = "openai",
-        apiUrl = "https://api.tokenpony.cn/v1",
-        iconAsset = "tokenpony.svg"
-    ),
-    ProviderPreset(
         id = "alibabacloud",
-        name = "阿里云百炼（Qwen）",
+        name = "Qwen",
         type = "openai",
         apiUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1",
         iconAsset = "qwen-color.svg"
     ),
     ProviderPreset(
-        id = "bytedance",
-        name = "豆包",
-        type = "openai",
-        apiUrl = "https://ark.cn-beijing.volces.com/api/v3",
-        iconAsset = "doubao-color.svg"
-    ),
-    ProviderPreset(
         id = "doubao",
-        name = "豆包",
+        name = "Doubao",
         type = "openai",
         apiUrl = "https://ark.cn-beijing.volces.com/api/v3",
         iconAsset = "doubao-color.svg"
@@ -144,21 +123,21 @@ val DEFAULT_PROVIDER_PRESETS: List<ProviderPreset> = listOf(
     ),
     ProviderPreset(
         id = "moonshot",
-        name = "月之暗面",
+        name = "Moonshot",
         type = "openai",
         apiUrl = "https://api.moonshot.cn/v1",
         iconAsset = "moonshot.svg"
     ),
     ProviderPreset(
         id = "zhipu",
-        name = "智谱AI开放平台",
+        name = "Zhipu",
         type = "openai",
         apiUrl = "https://open.bigmodel.cn/api/paas/v4",
         iconAsset = "zhipu-color.svg"
     ),
     ProviderPreset(
         id = "stepfun",
-        name = "阶跃星辰",
+        name = "StepFun",
         type = "openai",
         apiUrl = "https://api.stepfun.com/v1",
         iconAsset = "stepfun-color.svg"
@@ -171,15 +150,8 @@ val DEFAULT_PROVIDER_PRESETS: List<ProviderPreset> = listOf(
         iconAsset = "juhenext.png"
     ),
     ProviderPreset(
-        id = "302ai",
-        name = "302.AI",
-        type = "openai",
-        apiUrl = "https://api.302.ai/v1",
-        iconAsset = "302ai.svg"
-    ),
-    ProviderPreset(
         id = "hunyuan",
-        name = "腾讯Hunyuan",
+        name = "Hunyuan",
         type = "openai",
         apiUrl = "https://api.hunyuan.cloud.tencent.com/v1",
         iconAsset = "hunyuan-color.svg"
@@ -191,18 +163,15 @@ val DEFAULT_PROVIDER_PRESETS: List<ProviderPreset> = listOf(
         apiUrl = "https://api.x.ai/v1",
         iconAsset = "xai.svg"
     ),
-    ProviderPreset(
-        id = "ackai",
-        name = "AckAI",
-        type = "openai",
-        apiUrl = "https://ackai.fun/v1",
-        iconAsset = "openai.svg"
-    ),
 )
 
 fun findProviderPreset(presetId: String?): ProviderPreset? {
-    val id = presetId?.trim().orEmpty()
-    if (id.isBlank()) return null
+    val rawId = presetId?.trim().orEmpty()
+    if (rawId.isBlank()) return null
+    val id = when (rawId.lowercase()) {
+        "bytedance" -> "doubao"
+        else -> rawId
+    }
     return DEFAULT_PROVIDER_PRESETS.firstOrNull { it.id == id }
 }
 

@@ -30,8 +30,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.zionchat.app.LocalAppRepository
+import com.zionchat.app.data.extractRemoteModelId
 import com.zionchat.app.data.ModelConfig
 import com.zionchat.app.data.ProviderConfig
+import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import kotlinx.coroutines.launch
@@ -79,36 +81,48 @@ fun DefaultModelScreen(navController: NavController) {
     ) {
         DefaultModelTopBar(navController)
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp)
-                .verticalScroll(rememberScrollState())
-        ) {
-            Spacer(modifier = Modifier.height(8.dp))
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Spacer(modifier = Modifier.height(8.dp))
 
-            DefaultModelType.values().forEachIndexed { index, type ->
-                DefaultModelSection(
-                    type = type,
-                    selectedModelId = selectedMap[type],
-                    resolveDisplayName = { id -> models.firstOrNull { it.id == id }?.displayName },
-                    onOpenSelector = { selectorType = type }
-                )
-                if (index != DefaultModelType.values().lastIndex) {
-                    Spacer(modifier = Modifier.height(16.dp))
+                DefaultModelType.values().forEachIndexed { index, type ->
+                    DefaultModelSection(
+                        type = type,
+                        selectedModelId = selectedMap[type],
+                        resolveDisplayName = { id ->
+                            val key = id?.trim().orEmpty()
+                            if (key.isBlank()) null
+                            else models.firstOrNull { it.id == key }?.displayName
+                                ?: models.firstOrNull { extractRemoteModelId(it.id) == key }?.displayName
+                        },
+                        onOpenSelector = { selectorType = type }
+                    )
+                    if (index != DefaultModelType.values().lastIndex) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Configure default models for different tasks. Chat Model is required, others are optional.",
+                    fontSize = 13.sp,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 24.dp)
+                )
+
+                Spacer(modifier = Modifier.height(32.dp))
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "Configure default models for different tasks. Chat Model is required, others are optional.",
-                fontSize = 13.sp,
-                color = TextSecondary,
-                modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 24.dp)
+            TopFadeScrim(
+                color = Background,
+                modifier = Modifier.align(Alignment.TopCenter)
             )
-
-            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 
@@ -326,6 +340,19 @@ private fun DefaultModelSelectorModal(
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
+                        if (!required) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = CardDefaults.cardColors(containerColor = GrayLighter)
+                            ) {
+                                DefaultModelNoneOptionRow(
+                                    selected = selectedModelId.isNullOrBlank(),
+                                    onClick = onClear
+                                )
+                            }
+                        }
+
                         grouped.forEach { (providerName, providerModels) ->
                             Column {
                                 Text(
@@ -343,7 +370,11 @@ private fun DefaultModelSelectorModal(
                                     providerModels.forEachIndexed { index, model ->
                                         DefaultModelOptionRow(
                                             model = model,
-                                            selected = model.id == selectedModelId,
+                                            selected = run {
+                                                val selectedKey = selectedModelId?.trim().orEmpty()
+                                                selectedKey.isNotBlank() &&
+                                                    (model.id == selectedKey || extractRemoteModelId(model.id) == selectedKey)
+                                            },
                                             onClick = { onSelect(model.id) }
                                         )
                                         if (index != providerModels.lastIndex) {
@@ -351,30 +382,6 @@ private fun DefaultModelSelectorModal(
                                         }
                                     }
                                 }
-                            }
-                        }
-                    }
-
-                    if (!required) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .pressableScale(pressedScale = 0.98f, onClick = onClear),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = CardDefaults.cardColors(containerColor = GrayLighter)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 14.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "Clear Selection",
-                                    fontSize = 16.sp,
-                                    color = Color(0xFFFF3B30)
-                                )
                             }
                         }
                     }
@@ -420,12 +427,46 @@ private fun DefaultModelOptionRow(
     }
 }
 
+@Composable
+private fun DefaultModelNoneOptionRow(
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = "Not set",
+            fontSize = 16.sp,
+            color = TextPrimary
+        )
+        androidx.compose.material3.Icon(
+            imageVector = AppIcons.Check,
+            contentDescription = null,
+            tint = TextPrimary,
+            modifier = Modifier
+                .size(22.dp)
+                .alpha(if (selected) 1f else 0f)
+        )
+    }
+}
+
 private fun groupModelsByProvider(
     providers: List<ProviderConfig>,
     models: List<ModelConfig>
 ): List<Pair<String, List<ModelConfig>>> {
     val providerNameById = providers.associateBy({ it.id }, { it.name })
     return models
+        .filter { it.enabled }
         .groupBy { model ->
             model.providerId?.let { providerNameById[it] } ?: "Other"
         }

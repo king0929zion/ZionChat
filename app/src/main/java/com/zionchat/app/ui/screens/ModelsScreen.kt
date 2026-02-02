@@ -10,6 +10,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,6 +27,8 @@ import com.zionchat.app.LocalChatApiClient
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.data.ModelConfig
 import com.zionchat.app.data.ProviderConfig
+import com.zionchat.app.data.buildModelStorageId
+import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import kotlinx.coroutines.launch
@@ -33,7 +38,6 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
     val repository = LocalAppRepository.current
     val chatApiClient = LocalChatApiClient.current
     val scope = rememberCoroutineScope()
-    var searchQuery by remember { mutableStateOf("") }
     var showAddModal by remember { mutableStateOf(false) }
 
     val providers by repository.providersFlow.collectAsState(initial = emptyList())
@@ -65,7 +69,7 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
             repository.upsertModels(
                 modelIds.map { idValue ->
                     ModelConfig(
-                        id = idValue,
+                        id = buildModelStorageId(provider.id, idValue),
                         displayName = idValue,
                         enabled = false,
                         providerId = provider.id
@@ -76,15 +80,21 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
         fetchedSignature = signature
         isFetchingRemote = false
     }
-    val filteredModels = remember(models, searchQuery) {
-        if (searchQuery.isBlank()) models
-        else models.filter {
-            it.displayName.contains(searchQuery, ignoreCase = true) ||
-                it.id.contains(searchQuery, ignoreCase = true)
-        }
+    val providerModels = remember(models, activeProvider?.id) {
+        val pid = activeProvider?.id
+        if (pid.isNullOrBlank()) emptyList()
+        else models.filter { it.providerId == pid }
     }
-    val selectedCount = models.count { it.enabled }
-    val isSelectAll = models.isNotEmpty() && selectedCount == models.size
+
+    val visibleModels = remember(providerModels) {
+        providerModels.sortedBy { it.displayName.lowercase() }
+    }
+    val selectedCount = providerModels.count { it.enabled }
+    val isSelectAll = providerModels.isNotEmpty() && selectedCount == providerModels.size
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = isFetchingRemote,
+        onRefresh = { fetchedSignature = null }
+    )
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -145,49 +155,6 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                 }
             }
 
-            // Search Box
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .height(48.dp)
-                    .background(GrayLight, RoundedCornerShape(20.dp))
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = AppIcons.Search,
-                    contentDescription = "Search",
-                    tint = TextSecondary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                TextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = {
-                        Text(
-                            text = "Name or ID",
-                            fontSize = 17.sp,
-                            color = TextSecondary
-                        )
-                    },
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        cursorColor = TextPrimary
-                    ),
-                    textStyle = androidx.compose.ui.text.TextStyle(
-                        fontSize = 17.sp,
-                        color = TextPrimary
-                    ),
-                    singleLine = true
-                )
-            }
-
             // Select All Row
             Row(
                 modifier = Modifier
@@ -210,7 +177,7 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "$selectedCount / ${models.size} selected",
+                        text = "$selectedCount / ${providerModels.size} selected",
                         fontSize = 15.sp,
                         color = TextSecondary
                     )
@@ -219,7 +186,8 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                         enabled = isSelectAll,
                         onToggle = {
                             val target = !isSelectAll
-                            scope.launch { repository.setAllModelsEnabled(target) }
+                            val pid = activeProvider?.id ?: return@ModelToggleSwitch
+                            scope.launch { repository.setAllModelsEnabled(pid, target) }
                         }
                     )
                 }
@@ -261,25 +229,45 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
             }
 
             // Model List
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .weight(1f)
+                    .pullRefresh(pullRefreshState)
             ) {
-                filteredModels.forEach { model ->
-                    ModelItem(
-                        model = model,
-                        onToggle = {
-                            scope.launch { repository.upsertModel(model.copy(enabled = !model.enabled)) }
-                        },
-                        onClick = {
-                            navController.navigate("model_config?id=${model.id}")
-                        }
-                    )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    visibleModels.forEach { model ->
+                        ModelItem(
+                            model = model,
+                            onToggle = {
+                                scope.launch { repository.upsertModel(model.copy(enabled = !model.enabled)) }
+                            },
+                            onClick = {
+                                navController.navigate("model_config?id=${model.id}")
+                            }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+
+                TopFadeScrim(
+                    color = Background,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+
+                PullRefreshIndicator(
+                    refreshing = isFetchingRemote,
+                    state = pullRefreshState,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    contentColor = TextPrimary,
+                    backgroundColor = Surface
+                )
             }
         }
 
@@ -289,12 +277,13 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
             onDismiss = { showAddModal = false },
             onAdd = { id, name ->
                 scope.launch {
+                    val provider = activeProvider ?: return@launch
                     repository.upsertModel(
                         ModelConfig(
-                            id = id.trim(),
+                            id = buildModelStorageId(provider.id, id.trim()),
                             displayName = name.trim(),
                             enabled = false,
-                            providerId = activeProvider?.id
+                            providerId = provider.id
                         )
                     )
                     showAddModal = false

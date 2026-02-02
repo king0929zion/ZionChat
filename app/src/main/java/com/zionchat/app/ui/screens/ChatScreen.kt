@@ -43,6 +43,8 @@ import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.LocalChatApiClient
 import com.zionchat.app.data.Conversation
 import com.zionchat.app.data.Message
+import com.zionchat.app.data.extractRemoteModelId
+import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.rememberResourceDrawablePainter
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
@@ -152,7 +154,10 @@ fun ChatScreen(navController: NavController) {
                 return@launch
             }
 
-            val selectedModel = repository.modelsFlow.first().firstOrNull { it.id == latestDefaultChatModelId }
+            val allModels = repository.modelsFlow.first()
+            val selectedModel =
+                allModels.firstOrNull { it.id == latestDefaultChatModelId }
+                    ?: allModels.firstOrNull { extractRemoteModelId(it.id) == latestDefaultChatModelId }
             if (selectedModel == null) {
                 repository.appendMessage(
                     conversationId,
@@ -201,9 +206,9 @@ fun ChatScreen(navController: NavController) {
             isLoading = true
             val result = chatApiClient.chatCompletions(
                 provider = provider,
-                modelId = selectedModel.id,
+                modelId = extractRemoteModelId(selectedModel.id),
                 messages = requestMessages,
-                extraHeaders = selectedModel?.headers.orEmpty()
+                extraHeaders = selectedModel.headers
             )
             val reply = result.getOrElse { throwable ->
                 "请求失败：${throwable.message ?: throwable.toString()}"
@@ -286,6 +291,11 @@ fun ChatScreen(navController: NavController) {
                             }
                         }
                     }
+
+                    TopFadeScrim(
+                        color = Background,
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
                 }
             }
 
@@ -1043,10 +1053,13 @@ fun BottomInputArea(
     onSend: () -> Unit,
     sendAllowed: Boolean = true
 ) {
-    val canSend = sendAllowed && messageText.trim().isNotEmpty()
-    val sendAlpha = if (canSend) 1f else 0.4f
-    val sendBackground = TextPrimary.copy(alpha = sendAlpha)
+    val hasText = messageText.trim().isNotEmpty()
+    val sendEnabled = hasText
+    val sendBackground = if (sendEnabled) TextPrimary else GrayLight
+    val sendIconTint = if (sendEnabled) Color.White else TextSecondary
     val inputMinHeight = 44.dp
+    val maxTextHeight = if (selectedTool != null) 140.dp else 120.dp
+    val maxLines = if (selectedTool != null) 6 else 5
     val toolLabel = when (selectedTool) {
         "camera" -> "Camera"
         "photos" -> "Photos"
@@ -1077,7 +1090,7 @@ fun BottomInputArea(
             .fillMaxWidth()
             .imePadding()
             .padding(horizontal = 16.dp)
-            .padding(top = 6.dp, bottom = 20.dp)
+            .padding(top = 6.dp, bottom = 28.dp)
             .background(Background)
     ) {
         Row(
@@ -1112,7 +1125,7 @@ fun BottomInputArea(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 20.dp, end = 60.dp, top = 6.dp, bottom = 6.dp)
+                        .padding(start = 20.dp, end = 56.dp, top = 8.dp, bottom = 8.dp)
                 ) {
                     // 选中的工具标签 - 位于输入框内部，出现时顶起输入框高度
                     if (selectedTool != null) {
@@ -1173,7 +1186,7 @@ fun BottomInputArea(
                         onValueChange = onMessageChange,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 32.dp, max = 120.dp),
+                            .heightIn(min = 28.dp, max = maxTextHeight),
                         textStyle = TextStyle(
                             fontSize = 17.sp,
                             lineHeight = 22.sp,
@@ -1182,10 +1195,10 @@ fun BottomInputArea(
                         cursorBrush = SolidColor(TextPrimary),
                         keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(
-                            onSend = { if (canSend) onSend() }
+                            onSend = { if (hasText) onSend() }
                         ),
                         minLines = 1,
-                        maxLines = 5,
+                        maxLines = maxLines,
                         decorationBox = { innerTextField ->
                             Box(
                                 modifier = Modifier.fillMaxSize(),
@@ -1215,7 +1228,7 @@ fun BottomInputArea(
                         .background(sendBackground, CircleShape)
                         .zIndex(2f)
                         .pressableScale(
-                            enabled = canSend,
+                            enabled = sendEnabled,
                             pressedScale = 0.95f,
                             onClick = onSend
                         ),
@@ -1224,7 +1237,7 @@ fun BottomInputArea(
                     Icon(
                         imageVector = AppIcons.Send,
                         contentDescription = "Send",
-                        tint = Color.White.copy(alpha = sendAlpha),
+                        tint = sendIconTint,
                         modifier = Modifier.size(18.dp)
                     )
                 }

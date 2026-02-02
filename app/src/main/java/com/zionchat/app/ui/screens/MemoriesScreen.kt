@@ -12,19 +12,16 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 
@@ -35,7 +32,6 @@ private data class MemoryItemUi(
 
 @Composable
 fun MemoriesScreen(navController: NavController) {
-    var query by rememberSaveable { mutableStateOf("") }
     var items by remember {
         mutableStateOf(
             listOf(
@@ -91,11 +87,6 @@ fun MemoriesScreen(navController: NavController) {
         )
     }
 
-    val filtered = remember(items, query) {
-        if (query.isBlank()) items
-        else items.filter { it.content.contains(query, ignoreCase = true) || it.from.contains(query, ignoreCase = true) }
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -103,145 +94,104 @@ fun MemoriesScreen(navController: NavController) {
     ) {
         MemoriesTopBar(navController)
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-        ) {
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Search
-            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Surface, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 16.dp, vertical = 2.dp)
-                ) {
-                    TextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(end = 32.dp),
-                        placeholder = {
-                            Text(
-                                text = "Search memories...",
-                                fontSize = 16.sp,
-                                color = Color(0xFFC7C7CC)
-                            )
-                        },
-                        singleLine = true,
-                        textStyle = TextStyle(fontSize = 16.sp, color = TextPrimary),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            cursorColor = TextPrimary
-                        )
-                    )
-
-                    androidx.compose.material3.Icon(
-                        imageVector = AppIcons.Search,
-                        contentDescription = null,
-                        tint = Color(0xFFC7C7CC),
-                        modifier = Modifier
-                            .size(20.dp)
-                            .align(Alignment.CenterEnd)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Count + Clear
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "${items.size} memories",
-                    fontSize = 15.sp,
-                    color = TextSecondary
-                )
-                TextButton(
-                    onClick = { items = emptyList() }
-                ) {
-                    Text(
-                        text = "Clear All",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFFFF3B30)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // List
+        Box(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
             ) {
-                filtered.forEach { item ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .pressableScale(pressedScale = 0.98f, onClick = { }),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Surface)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Count + Clear
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${items.size} memories",
+                        fontSize = 15.sp,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                    TextButton(
+                        onClick = { items = emptyList() }
                     ) {
-                        Row(
+                        Text(
+                            text = "Clear All",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFFFF3B30)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // List
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items.forEach { item ->
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.Top
+                                .pressableScale(pressedScale = 0.98f, onClick = { }),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Surface)
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = item.content,
-                                    fontSize = 16.sp,
-                                    color = TextPrimary,
-                                    lineHeight = 22.sp
-                                )
-                                Text(
-                                    text = item.from,
-                                    fontSize = 13.sp,
-                                    color = Color(0xFFB0B0B5),
-                                    modifier = Modifier.padding(top = 8.dp)
-                                )
-                            }
-                            Box(
+                            Row(
                                 modifier = Modifier
-                                    .size(36.dp)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        items = items.filterNot { it === item }
-                                    },
-                                contentAlignment = Alignment.Center
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.Top
                             ) {
-                                androidx.compose.material3.Icon(
-                                    imageVector = AppIcons.Trash,
-                                    contentDescription = "Delete",
-                                    tint = Color(0xFF8E8E93),
-                                    modifier = Modifier.size(20.dp)
-                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = item.content,
+                                        fontSize = 16.sp,
+                                        color = TextPrimary,
+                                        lineHeight = 22.sp
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            items = items.filterNot { it === item }
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    androidx.compose.material3.Icon(
+                                        imageVector = AppIcons.Trash,
+                                        contentDescription = "Delete",
+                                        tint = Color(0xFF8E8E93),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                             }
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(32.dp))
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            TopFadeScrim(
+                color = Background,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }
