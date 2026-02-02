@@ -5,6 +5,7 @@ import java.util.UUID
 data class ProviderConfig(
     val id: String = UUID.randomUUID().toString(),
     val presetId: String? = null,
+    val iconAsset: String? = null,
     val name: String,
     val type: String,
     val apiUrl: String,
@@ -38,4 +39,3 @@ data class Message(
     val content: String,
     val timestamp: Long = System.currentTimeMillis()
 )
-

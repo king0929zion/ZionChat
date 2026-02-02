@@ -13,12 +13,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.data.ProviderConfig
+import com.zionchat.app.data.DEFAULT_PROVIDER_PRESETS
+import com.zionchat.app.data.findProviderPreset
+import com.zionchat.app.data.resolveProviderIconAsset
+import com.zionchat.app.ui.components.AssetIcon
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import kotlinx.coroutines.launch
@@ -37,7 +42,7 @@ fun AddProviderScreen(
     var apiUrl by remember { mutableStateOf("") }
     var selectedType by remember { mutableStateOf("openai") }
     var showAvatarModal by remember { mutableStateOf(false) }
-    var selectedAvatar by remember { mutableStateOf("") }
+    var selectedIconAsset by remember { mutableStateOf("") }
 
     val providers by repository.providersFlow.collectAsState(initial = emptyList())
     val activeProviderId = remember(providerId) { providerId?.takeIf { it.isNotBlank() } }
@@ -45,15 +50,7 @@ fun AddProviderScreen(
         activeProviderId?.let { id -> providers.firstOrNull { it.id == id } }
     }
 
-    // Preset data
-    val presetData = remember(preset) {
-        when (preset) {
-            "openai" -> PresetData("ChatGPT", "openai", "https://api.openai.com/v1")
-            "anthropic" -> PresetData("Anthropic", "anthropic", "https://api.anthropic.com/v1")
-            "google" -> PresetData("Google", "google", "https://generativelanguage.googleapis.com/v1beta")
-            else -> null
-        }
-    }
+    val presetData = remember(preset) { findProviderPreset(preset) }
 
     LaunchedEffect(existingProvider?.id) {
         existingProvider?.let {
@@ -61,15 +58,17 @@ fun AddProviderScreen(
             apiKey = it.apiKey
             apiUrl = it.apiUrl
             selectedType = it.type
+            selectedIconAsset = resolveProviderIconAsset(it).orEmpty()
         }
     }
 
-    LaunchedEffect(presetData?.name, existingProvider?.id) {
+    LaunchedEffect(presetData?.id, existingProvider?.id) {
         if (existingProvider != null) return@LaunchedEffect
         presetData?.let {
             providerName = it.name
             apiUrl = it.apiUrl
             selectedType = it.type
+            selectedIconAsset = it.iconAsset.orEmpty()
         }
     }
 
@@ -127,9 +126,12 @@ fun AddProviderScreen(
                                         name = providerName.trim(),
                                         type = selectedType.trim(),
                                         apiUrl = apiUrl.trim(),
-                                        apiKey = apiKey.trim()
+                                        apiKey = apiKey.trim(),
+                                        iconAsset = selectedIconAsset.trim().takeIf { it.isNotBlank() }
+                                            ?: existingProvider.iconAsset
                                     ) ?: ProviderConfig(
                                         presetId = preset?.takeIf { it.isNotBlank() },
+                                        iconAsset = selectedIconAsset.trim().takeIf { it.isNotBlank() },
                                         name = providerName.trim(),
                                         type = selectedType.trim(),
                                         apiUrl = apiUrl.trim(),
@@ -172,8 +174,13 @@ fun AddProviderScreen(
                             .pressableScale(pressedScale = 0.95f) { showAvatarModal = true },
                         contentAlignment = Alignment.Center
                     ) {
-                        if (selectedAvatar.isNotEmpty()) {
-                            Text(text = selectedAvatar, fontSize = 32.sp)
+                        if (selectedIconAsset.isNotEmpty()) {
+                            AssetIcon(
+                                assetFileName = selectedIconAsset,
+                                contentDescription = providerName.ifBlank { "Provider" },
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
                         } else {
                             Icon(
                                 imageVector = AppIcons.ChatGPTLogo,
@@ -297,18 +304,12 @@ fun AddProviderScreen(
             visible = showAvatarModal,
             onDismiss = { showAvatarModal = false },
             onSelectAvatar = { avatar ->
-                selectedAvatar = avatar
+                selectedIconAsset = avatar
                 showAvatarModal = false
             }
         )
     }
 }
-
-data class PresetData(
-    val name: String,
-    val type: String,
-    val apiUrl: String
-)
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
@@ -368,40 +369,44 @@ fun AvatarSelectionModal(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Avatar Grid
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        val avatars = listOf(
-                            "🔴", "🟣", "🔵", "🟢", "🟡",
-                            "🦙", "🔷", "🌙", "💎", "🤖",
-                            "🌀", "⚡", "🔶", "🟠", "🟤"
-                        )
-
-                        for (row in 0 until 3) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly
-                            ) {
-                                for (col in 0 until 5) {
-                                    val index = row * 5 + col
-                                    if (index < avatars.size) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 200.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        DEFAULT_PROVIDER_PRESETS
+                            .filter { !it.iconAsset.isNullOrBlank() }
+                            .chunked(5)
+                            .forEach { rowItems ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly
+                                ) {
+                                    rowItems.forEach { presetItem ->
                                         Box(
                                             modifier = Modifier
                                                 .size(48.dp)
                                                 .clip(RoundedCornerShape(14.dp))
                                                 .background(GrayLighter, RoundedCornerShape(14.dp))
                                                 .pressableScale(pressedScale = 0.95f) {
-                                                    onSelectAvatar(avatars[index])
+                                                    onSelectAvatar(presetItem.iconAsset.orEmpty())
                                                 },
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Text(
-                                                text = avatars[index],
-                                                fontSize = 24.sp
+                                            AssetIcon(
+                                                assetFileName = presetItem.iconAsset.orEmpty(),
+                                                contentDescription = presetItem.name,
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .padding(8.dp),
+                                                contentScale = ContentScale.Fit
                                             )
                                         }
                                     }
                                 }
                             }
-                        }
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))

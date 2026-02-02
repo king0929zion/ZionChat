@@ -485,7 +485,6 @@ fun SidebarContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.statusBars)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -594,7 +593,6 @@ fun SidebarContent(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(12.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .pressableScale { navController.navigate("settings") }
@@ -970,6 +968,8 @@ fun BottomInputArea(
     onSend: () -> Unit
 ) {
     val canSend = messageText.trim().isNotEmpty()
+    val sendAlpha = if (canSend) 1f else 0.4f
+    val sendBackground = TextPrimary.copy(alpha = sendAlpha)
     val inputMinHeight = if (selectedTool != null) 68.dp else 44.dp
     val toolLabel = when (selectedTool) {
         "camera" -> "Camera"
@@ -999,7 +999,7 @@ fun BottomInputArea(
             .fillMaxWidth()
             .imePadding()
             .padding(horizontal = 16.dp)
-            .padding(top = 8.dp, bottom = 4.dp)
+            .padding(top = 6.dp, bottom = 12.dp)
             .background(Background)
     ) {
         Row(
@@ -1128,11 +1128,10 @@ fun BottomInputArea(
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(end = 6.dp, bottom = 6.dp)
+                        .padding(end = 6.dp, bottom = 4.dp)
                         .size(36.dp)
                         .clip(CircleShape)
-                        .background(TextPrimary, CircleShape)
-                        .alpha(if (canSend) 1f else 0.4f)
+                        .background(sendBackground, CircleShape)
                         .zIndex(2f)
                         .pressableScale(
                             enabled = canSend,
@@ -1144,7 +1143,7 @@ fun BottomInputArea(
                     Icon(
                         imageVector = AppIcons.Send,
                         contentDescription = "Send",
-                        tint = Color.White,
+                        tint = Color.White.copy(alpha = sendAlpha),
                         modifier = Modifier.size(18.dp)
                     )
                 }
