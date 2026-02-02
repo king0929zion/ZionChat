@@ -1102,10 +1102,10 @@ fun BottomInputArea(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.Bottom
         ) {
-            // 工具图标按钮 - 44dp，高度对齐输入框底部
+            // 工具图标按钮 - 46dp，与输入框等高
             Box(
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(46.dp)
                     .clip(CircleShape)
                     .background(Surface, CircleShape)
                     .pressableScale(pressedScale = 0.95f, onClick = onToolToggle),
