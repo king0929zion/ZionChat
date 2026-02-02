@@ -1057,7 +1057,6 @@ fun BottomInputArea(
     val sendEnabled = hasText
     val sendBackground = if (sendEnabled) TextPrimary else GrayLight
     val sendIconTint = if (sendEnabled) Color.White else TextSecondary
-    val inputMinHeight = 44.dp
     val maxTextHeight = if (selectedTool != null) 140.dp else 120.dp
     val maxLines = if (selectedTool != null) 6 else 5
     val toolLabel = when (selectedTool) {
@@ -1082,9 +1081,6 @@ fun BottomInputArea(
         "mcp" -> AppIcons.MCPTools
         else -> AppIcons.Globe
     }
-    val isSingleLineLike = messageText.isEmpty() || (!messageText.contains('\n') && messageText.length < 60)
-    val inputAlignment = if (isSingleLineLike) Alignment.CenterStart else Alignment.TopStart
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1115,17 +1111,19 @@ fun BottomInputArea(
                 )
             }
 
-            // 输入框容器 - 默认48dp，可多行扩展；发送按钮固定右下角
+            // 输入框容器 - 默认44dp与工具按钮对齐，可多行扩展；发送按钮固定右下角
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = inputMinHeight)
-                    .background(Surface, RoundedCornerShape(24.dp))
+                    .heightIn(min = 44.dp)
+                    .wrapContentHeight()
+                    .background(Surface, RoundedCornerShape(24.dp)),
+                contentAlignment = Alignment.CenterStart
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 20.dp, end = 56.dp, top = 8.dp, bottom = 8.dp)
+                        .padding(start = 16.dp, end = 48.dp, top = 8.dp, bottom = 8.dp)
                 ) {
                     // 选中的工具标签 - 位于输入框内部，出现时顶起输入框高度
                     if (selectedTool != null) {
@@ -1186,7 +1184,7 @@ fun BottomInputArea(
                         onValueChange = onMessageChange,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 28.dp, max = maxTextHeight),
+                            .heightIn(min = 24.dp, max = maxTextHeight),
                         textStyle = TextStyle(
                             fontSize = 17.sp,
                             lineHeight = 22.sp,
@@ -1201,8 +1199,8 @@ fun BottomInputArea(
                         maxLines = maxLines,
                         decorationBox = { innerTextField ->
                             Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = inputAlignment
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.CenterStart
                             ) {
                                 if (messageText.isEmpty()) {
                                     Text(
