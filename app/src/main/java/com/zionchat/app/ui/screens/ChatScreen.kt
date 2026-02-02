@@ -1125,7 +1125,6 @@ fun BottomInputArea(
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = 52.dp)
-                    .wrapContentHeight()
                     .background(Surface, RoundedCornerShape(26.dp)),
                 contentAlignment = Alignment.CenterStart
             ) {
