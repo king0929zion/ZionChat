@@ -184,15 +184,12 @@ private fun computeAIIconAssetByName(name: String): String? {
         PATTERN_MINIMAX.containsMatchIn(lowerName) -> "minimax-color.svg"
         PATTERN_DEEPSEEK.containsMatchIn(lowerName) -> "deepseek-color.svg"
         PATTERN_OPENROUTER.containsMatchIn(lowerName) -> "openrouter.svg"
-        PATTERN_TOKENPONY.containsMatchIn(lowerName) -> "tokenpony.svg"
         PATTERN_QWEN.containsMatchIn(lowerName) -> "qwen-color.svg"
         PATTERN_DOUBAO.containsMatchIn(lowerName) -> "doubao-color.svg"
         PATTERN_SILLICON_CLOUD.containsMatchIn(lowerName) -> "siliconflow.svg"
-        PATTERN_AIHUBMIX.containsMatchIn(lowerName) -> "aihubmix-color.svg"
         PATTERN_ZHIPU.containsMatchIn(lowerName) -> "zhipu-color.svg"
         PATTERN_MOONSHOT.containsMatchIn(lowerName) -> "moonshot.svg"
         PATTERN_STEP.containsMatchIn(lowerName) -> "stepfun-color.svg"
-        PATTERN_302.containsMatchIn(lowerName) -> "302ai.svg"
         PATTERN_HUNYUAN.containsMatchIn(lowerName) -> "hunyuan-color.svg"
         PATTERN_XAI.containsMatchIn(lowerName) -> "xai.svg"
         else -> null
@@ -215,10 +212,7 @@ private val PATTERN_ZHIPU = Regex("zhipu|智谱|glm")
 private val PATTERN_DOUBAO = Regex("doubao|豆包|bytedance|火山")
 private val PATTERN_QWEN = Regex("qwen|aliyun|阿里云|百炼")
 private val PATTERN_SILLICON_CLOUD = Regex("silicon|硅基")
-private val PATTERN_AIHUBMIX = Regex("aihubmix")
 private val PATTERN_HUNYUAN = Regex("hunyuan|tencent")
 private val PATTERN_XAI = Regex("xai")
 private val PATTERN_MOONSHOT = Regex("moonshot|月之暗面")
-private val PATTERN_302 = Regex("302")
 private val PATTERN_STEP = Regex("step|阶跃")
-private val PATTERN_TOKENPONY = Regex("tokenpony|小马算力")

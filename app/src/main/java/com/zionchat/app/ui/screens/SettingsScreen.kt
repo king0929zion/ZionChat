@@ -204,6 +204,7 @@ fun SettingsTopBar(navController: NavController) {
             text = "Settings",
             fontSize = 17.sp,
             fontWeight = FontWeight.SemiBold,
+            fontFamily = SourceSans3,
             color = TextPrimary,
             modifier = Modifier.align(Alignment.Center)
         )
@@ -287,6 +288,7 @@ fun SettingsGroup(
             text = title.uppercase(),
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
+            fontFamily = SourceSans3,
             color = TextSecondary,
             modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
         )
@@ -356,6 +358,7 @@ fun SettingsItem(
             Text(
                 text = label,
                 fontSize = 16.sp,
+                fontFamily = SourceSans3,
                 color = TextPrimary,
                 modifier = Modifier.weight(1f)
             )

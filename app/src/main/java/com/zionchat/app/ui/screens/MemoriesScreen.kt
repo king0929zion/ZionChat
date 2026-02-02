@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
@@ -15,12 +14,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.zionchat.app.ui.components.FloatingTopBar
 import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
@@ -88,147 +87,119 @@ fun MemoriesScreen(navController: NavController) {
         )
     }
 
-    Column(
+    val contentTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 86.dp
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
     ) {
-        MemoriesTopBar(navController)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(top = contentTopPadding)
+        ) {
+            Spacer(modifier = Modifier.height(8.dp))
 
-        Box(modifier = Modifier.fillMaxSize()) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Count + Clear
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${items.size} memories",
+                    fontSize = 15.sp,
+                    fontFamily = SourceSans3,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
+                TextButton(onClick = { items = emptyList() }) {
+                    Text(
+                        text = "Clear All",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        fontFamily = SourceSans3,
+                        color = Color(0xFFFF3B30)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // List
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Count + Clear
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "${items.size} memories",
-                        fontSize = 15.sp,
-                        color = TextSecondary,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
-                    TextButton(
-                        onClick = { items = emptyList() }
+                items.forEach { item ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .pressableScale(pressedScale = 0.98f, onClick = { }),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Surface)
                     ) {
-                        Text(
-                            text = "Clear All",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFFFF3B30)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // List
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items.forEach { item ->
-                        Card(
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .pressableScale(pressedScale = 0.98f, onClick = { }),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = Surface)
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.Top
                         ) {
-                            Row(
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = item.content,
+                                    fontSize = 16.sp,
+                                    color = TextPrimary,
+                                    lineHeight = 22.sp
+                                )
+                            }
+                            Box(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.Top
+                                    .size(36.dp)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        items = items.filterNot { it === item }
+                                    },
+                                contentAlignment = Alignment.Center
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = item.content,
-                                        fontSize = 16.sp,
-                                        color = TextPrimary,
-                                        lineHeight = 22.sp
-                                    )
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clickable(
-                                            interactionSource = remember { MutableInteractionSource() },
-                                            indication = null
-                                        ) {
-                                            items = items.filterNot { it === item }
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    androidx.compose.material3.Icon(
-                                        imageVector = AppIcons.Trash,
-                                        contentDescription = "Delete",
-                                        tint = Color(0xFF8E8E93),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
+                                androidx.compose.material3.Icon(
+                                    imageVector = AppIcons.Trash,
+                                    contentDescription = "Delete",
+                                    tint = Color(0xFF8E8E93),
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(32.dp))
             }
 
-            TopFadeScrim(
-                color = Background,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            Spacer(modifier = Modifier.height(32.dp))
         }
-    }
-}
 
-@Composable
-private fun MemoriesTopBar(navController: NavController) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Background.copy(alpha = 0.95f))
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(horizontal = 16.dp, vertical = 16.dp)
-    ) {
-        Box(
+        TopFadeScrim(
+            color = Background,
+            height = 64.dp,
             modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(Surface, CircleShape)
-                .pressableScale(pressedScale = 0.95f) { navController.navigateUp() }
-                .align(Alignment.CenterStart),
-            contentAlignment = Alignment.Center
-        ) {
-            androidx.compose.material3.Icon(
-                imageVector = AppIcons.Back,
-                contentDescription = "Back",
-                tint = TextPrimary,
-                modifier = Modifier.size(20.dp)
-            )
-        }
+                .align(Alignment.TopCenter)
+                .offset(y = (-20).dp)
+        )
 
-        Text(
-            text = "Memories",
-            fontSize = 17.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TextPrimary,
-            modifier = Modifier.align(Alignment.Center)
+        FloatingTopBar(
+            title = "Memories",
+            onBack = { navController.navigateUp() },
+            modifier = Modifier.align(Alignment.TopCenter)
         )
     }
 }

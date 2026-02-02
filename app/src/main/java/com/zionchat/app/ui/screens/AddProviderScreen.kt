@@ -24,6 +24,8 @@ import com.zionchat.app.data.DEFAULT_PROVIDER_PRESETS
 import com.zionchat.app.data.findProviderPreset
 import com.zionchat.app.data.resolveProviderIconAsset
 import com.zionchat.app.ui.components.AssetIcon
+import com.zionchat.app.ui.components.FloatingTopBar
+import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.*
@@ -103,47 +105,199 @@ fun AddProviderScreen(
             }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    val contentTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 86.dp
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Background)
+    ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .background(Background)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(top = contentTopPadding),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Top Navigation Bar
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
+            // Avatar Selection
+            Column(
+                modifier = Modifier.padding(vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // 返回按钮
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Surface, CircleShape)
-                        .pressableScale(pressedScale = 0.95f) { navController.navigateUp() }
-                        .align(Alignment.CenterStart),
+                        .size(64.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(GrayLighter, RoundedCornerShape(16.dp))
+                        .pressableScale(pressedScale = 0.95f) { showAvatarModal = true },
                     contentAlignment = Alignment.Center
                 ) {
+                    if (selectedIconAsset.isNotEmpty()) {
+                        AssetIcon(
+                            assetFileName = selectedIconAsset,
+                            contentDescription = providerName.ifBlank { "Provider" },
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                            error = {
+                                Icon(
+                                    imageVector = AppIcons.ChatGPTLogo,
+                                    contentDescription = "Select Avatar",
+                                    tint = TextSecondary,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        )
+                    } else {
+                        Icon(
+                            imageVector = AppIcons.ChatGPTLogo,
+                            contentDescription = "Select Avatar",
+                            tint = TextSecondary,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Tap to change avatar",
+                    fontSize = 13.sp,
+                    fontFamily = SourceSans3,
+                    color = TextSecondary
+                )
+            }
+
+            // Form Fields
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // Provider Name
+                FormField(
+                    label = "Provider Name",
+                    value = providerName,
+                    onValueChange = { providerName = it },
+                    placeholder = "Enter provider name"
+                )
+
+                // Provider Type
+                Column {
+                    Text(
+                        text = "Provider Type",
+                        fontSize = 13.sp,
+                        fontFamily = SourceSans3,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(GrayLighter, RoundedCornerShape(20.dp))
+                            .padding(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        TypeOption(
+                            text = "OpenAI",
+                            selected = selectedType == "openai",
+                            onClick = { selectedType = "openai" },
+                            modifier = Modifier.weight(1f)
+                        )
+                        TypeOption(
+                            text = "Anthropic",
+                            selected = selectedType == "anthropic",
+                            onClick = { selectedType = "anthropic" },
+                            modifier = Modifier.weight(1f)
+                        )
+                        TypeOption(
+                            text = "Google",
+                            selected = selectedType == "google",
+                            onClick = { selectedType = "google" },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                // API Key
+                FormField(
+                    label = "API Key",
+                    value = apiKey,
+                    onValueChange = { apiKey = it },
+                    placeholder = "Enter API key"
+                )
+
+                // API URL
+                FormField(
+                    label = "API URL",
+                    value = apiUrl,
+                    onValueChange = { apiUrl = it },
+                    placeholder = "https://api.example.com/v1"
+                )
+
+                // Models Section
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Surface, RoundedCornerShape(20.dp))
+                        .pressableScale(pressedScale = 0.98f) {
+                            scope.launch {
+                                repository.upsertProvider(
+                                    ProviderConfig(
+                                        id = editingProviderId,
+                                        presetId = existingProvider?.presetId ?: presetData?.id,
+                                        iconAsset = selectedIconAsset.ifBlank { existingProvider?.iconAsset ?: presetData?.iconAsset },
+                                        name = providerName,
+                                        type = selectedType,
+                                        apiUrl = apiUrl,
+                                        apiKey = apiKey
+                                    )
+                                )
+                                navController.navigate("models?providerId=$editingProviderId")
+                            }
+                        }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Models",
+                            fontSize = 13.sp,
+                            fontFamily = SourceSans3,
+                            color = TextSecondary
+                        )
+                        Text(
+                            text = "Configure models",
+                            fontSize = 17.sp,
+                            fontFamily = SourceSans3,
+                            color = TextPrimary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
                     Icon(
-                        imageVector = AppIcons.Back,
-                        contentDescription = "Back",
-                        tint = TextPrimary,
+                        imageVector = AppIcons.ChevronRight,
+                        contentDescription = "Navigate",
+                        tint = TextSecondary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
+            }
 
-                // Title
-                Text(
-                    text = "Add Provider",
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary,
-                    modifier = Modifier.align(Alignment.Center)
-                )
+            Spacer(modifier = Modifier.height(32.dp))
+        }
 
-                // 保存按钮
+        TopFadeScrim(
+            color = Background,
+            height = 64.dp,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .offset(y = (-20).dp)
+        )
+
+        FloatingTopBar(
+            title = "Add Provider",
+            onBack = { navController.navigateUp() },
+            modifier = Modifier.align(Alignment.TopCenter),
+            trailing = {
                 Box(
                     modifier = Modifier
                         .size(40.dp)
@@ -173,8 +327,7 @@ fun AddProviderScreen(
                                 )
                                 navController.navigateUp()
                             }
-                        }
-                        .align(Alignment.CenterEnd),
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -185,176 +338,7 @@ fun AddProviderScreen(
                     )
                 }
             }
-
-            // Content
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Avatar Selection
-                Column(
-                    modifier = Modifier.padding(vertical = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(GrayLighter, RoundedCornerShape(16.dp))
-                            .pressableScale(pressedScale = 0.95f) { showAvatarModal = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (selectedIconAsset.isNotEmpty()) {
-                            AssetIcon(
-                                assetFileName = selectedIconAsset,
-                                contentDescription = providerName.ifBlank { "Provider" },
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop,
-                                error = {
-                                    Icon(
-                                        imageVector = AppIcons.ChatGPTLogo,
-                                        contentDescription = "Select Avatar",
-                                        tint = TextSecondary,
-                                        modifier = Modifier.size(28.dp)
-                                    )
-                                }
-                            )
-                        } else {
-                            Icon(
-                                imageVector = AppIcons.ChatGPTLogo,
-                                contentDescription = "Select Avatar",
-                                tint = TextSecondary,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "Tap to change avatar",
-                        fontSize = 13.sp,
-                        color = TextSecondary
-                    )
-                }
-
-                // Form Fields
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    // Provider Name
-                    FormField(
-                        label = "Provider Name",
-                        value = providerName,
-                        onValueChange = { providerName = it },
-                        placeholder = "Enter provider name"
-                    )
-
-                    // Provider Type
-                    Column {
-                        Text(
-                            text = "Provider Type",
-                            fontSize = 13.sp,
-                            color = TextSecondary,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(GrayLighter, RoundedCornerShape(20.dp))
-                                .padding(6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            TypeOption(
-                                text = "OpenAI",
-                                selected = selectedType == "openai",
-                                onClick = { selectedType = "openai" },
-                                modifier = Modifier.weight(1f)
-                            )
-                            TypeOption(
-                                text = "Anthropic",
-                                selected = selectedType == "anthropic",
-                                onClick = { selectedType = "anthropic" },
-                                modifier = Modifier.weight(1f)
-                            )
-                            TypeOption(
-                                text = "Google",
-                                selected = selectedType == "google",
-                                onClick = { selectedType = "google" },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-
-                    // API Key
-                    FormField(
-                        label = "API Key",
-                        value = apiKey,
-                        onValueChange = { apiKey = it },
-                        placeholder = "Enter API key"
-                    )
-
-                    // API URL
-                    FormField(
-                        label = "API URL",
-                        value = apiUrl,
-                        onValueChange = { apiUrl = it },
-                        placeholder = "https://api.example.com/v1"
-                    )
-
-                    // Models Section
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(Surface, RoundedCornerShape(20.dp))
-                            .pressableScale(pressedScale = 0.98f) {
-                                scope.launch {
-                                    repository.upsertProvider(
-                                        ProviderConfig(
-                                            id = editingProviderId,
-                                            presetId = existingProvider?.presetId ?: presetData?.id,
-                                            iconAsset = selectedIconAsset.ifBlank { existingProvider?.iconAsset ?: presetData?.iconAsset },
-                                            name = providerName,
-                                            type = selectedType,
-                                            apiUrl = apiUrl,
-                                            apiKey = apiKey
-                                        )
-                                    )
-                                    navController.navigate("models?providerId=$editingProviderId")
-                                }
-                            }
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = "Models",
-                                fontSize = 13.sp,
-                                color = TextSecondary
-                            )
-                            Text(
-                                text = "Configure models",
-                                fontSize = 17.sp,
-                                color = TextPrimary,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
-                        Icon(
-                            imageVector = AppIcons.ChevronRight,
-                            contentDescription = "Navigate",
-                            tint = TextSecondary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(32.dp))
-            }
-        }
+        )
 
         AvatarSelectionModal(
             visible = showAvatarModal,
@@ -528,6 +512,7 @@ fun FormField(
         Text(
             text = label,
             fontSize = 13.sp,
+            fontFamily = SourceSans3,
             color = TextSecondary,
             modifier = Modifier.padding(bottom = 6.dp)
         )
@@ -547,6 +532,7 @@ fun FormField(
                     Text(
                         text = placeholder,
                         fontSize = 17.sp,
+                        fontFamily = SourceSans3,
                         color = TextSecondary
                     )
                 },
@@ -558,6 +544,7 @@ fun FormField(
                 ),
                 textStyle = androidx.compose.ui.text.TextStyle(
                     fontSize = 17.sp,
+                    fontFamily = SourceSans3,
                     color = TextPrimary
                 ),
                 singleLine = true
@@ -588,6 +575,7 @@ fun TypeOption(
             text = text,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
+            fontFamily = SourceSans3,
             color = if (selected) Surface else TextPrimary
         )
     }

@@ -15,7 +15,6 @@ import androidx.compose.material.rememberSwipeableState
 import androidx.compose.material.swipeable
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -39,6 +38,7 @@ import com.zionchat.app.data.ProviderConfig
 import com.zionchat.app.data.ProviderPreset
 import com.zionchat.app.data.resolveProviderIconAsset
 import com.zionchat.app.ui.components.AssetIcon
+import com.zionchat.app.ui.components.FloatingTopBar
 import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
@@ -53,50 +53,71 @@ fun ModelServicesScreen(navController: NavController) {
 
     val configuredProviders by repository.providersFlow.collectAsState(initial = emptyList())
 
-    Scaffold(
-        topBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Background.copy(alpha = 0.95f))
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
-            ) {
-                // 返回按钮
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Surface, CircleShape)
-                        .pressableScale(pressedScale = 0.95f) { navController.navigateUp() }
-                        .align(Alignment.CenterStart),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = AppIcons.Back,
-                        contentDescription = "Back",
-                        tint = TextPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+    val contentTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 86.dp
 
-                // 标题
-                Text(
-                    text = "Model Services",
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary,
-                    modifier = Modifier.align(Alignment.Center)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Background)
+    ) {
+        // Provider List
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(top = contentTopPadding, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            configuredProviders.forEach { provider ->
+                SwipeableConfiguredProviderItem(
+                    provider = provider,
+                    iconAsset = resolveProviderIconAsset(provider),
+                    onClick = {
+                        navController.navigate("add_provider?preset=&providerId=${provider.id}")
+                    },
+                    onDelete = {
+                        scope.launch { repository.deleteProviderAndModels(provider.id) }
+                    }
                 )
+            }
 
-                // 添加按钮
+            if (configuredProviders.isNotEmpty() && DEFAULT_PROVIDER_PRESETS.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Divider(color = GrayLight, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            DEFAULT_PROVIDER_PRESETS.forEach { provider ->
+                ProviderItem(
+                    provider = provider,
+                    onClick = {
+                        navController.navigate("add_provider?preset=${provider.id}&providerId=")
+                    }
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        TopFadeScrim(
+            color = Background,
+            height = 64.dp,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .offset(y = (-20).dp)
+        )
+
+        FloatingTopBar(
+            title = "Model Services",
+            onBack = { navController.navigateUp() },
+            modifier = Modifier.align(Alignment.TopCenter),
+            trailing = {
                 Box(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
                         .background(Surface, CircleShape)
-                        .pressableScale(pressedScale = 0.95f) { navController.navigate("add_provider?preset=&providerId=") }
-                        .align(Alignment.CenterEnd),
+                        .pressableScale(pressedScale = 0.95f) { navController.navigate("add_provider?preset=&providerId=") },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -107,57 +128,7 @@ fun ModelServicesScreen(navController: NavController) {
                     )
                 }
             }
-        },
-        containerColor = Background
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            // Provider List
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                configuredProviders.forEach { provider ->
-                    SwipeableConfiguredProviderItem(
-                        provider = provider,
-                        iconAsset = resolveProviderIconAsset(provider),
-                        onClick = {
-                            navController.navigate("add_provider?preset=&providerId=${provider.id}")
-                        },
-                        onDelete = {
-                            scope.launch { repository.deleteProviderAndModels(provider.id) }
-                        }
-                    )
-                }
-
-                if (configuredProviders.isNotEmpty() && DEFAULT_PROVIDER_PRESETS.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Divider(color = GrayLight, modifier = Modifier.fillMaxWidth())
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-
-                DEFAULT_PROVIDER_PRESETS.forEach { provider ->
-                    ProviderItem(
-                        provider = provider,
-                        onClick = {
-                            navController.navigate("add_provider?preset=${provider.id}&providerId=")
-                        }
-                    )
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
-            TopFadeScrim(
-                color = Background,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
-        }
+        )
     }
 }
 
@@ -180,13 +151,14 @@ private fun ProviderItem(
         ProviderIcon(
             iconAsset = provider.iconAsset,
             contentDescription = provider.name,
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(28.dp)
         )
 
         Text(
             text = provider.name,
             fontSize = 17.sp,
             fontWeight = FontWeight.Normal,
+            fontFamily = SourceSans3,
             color = TextPrimary,
             maxLines = 1
         )
@@ -271,13 +243,14 @@ private fun SwipeableConfiguredProviderItem(
             ProviderIcon(
                 iconAsset = iconAsset,
                 contentDescription = provider.name,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(28.dp)
             )
 
             Text(
                 text = provider.name,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Normal,
+                fontFamily = SourceSans3,
                 color = TextPrimary,
                 maxLines = 1,
                 modifier = Modifier.weight(1f)

@@ -33,6 +33,7 @@ import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.data.extractRemoteModelId
 import com.zionchat.app.data.ModelConfig
 import com.zionchat.app.data.ProviderConfig
+import com.zionchat.app.ui.components.FloatingTopBar
 import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
@@ -75,56 +76,64 @@ fun DefaultModelScreen(navController: NavController) {
         )
     }
 
-    Column(
+    val contentTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 86.dp
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
     ) {
-        DefaultModelTopBar(navController)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(top = contentTopPadding)
+        ) {
+            Spacer(modifier = Modifier.height(8.dp))
 
-        Box(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                Spacer(modifier = Modifier.height(8.dp))
-
-                DefaultModelType.values().forEachIndexed { index, type ->
-                    DefaultModelSection(
-                        type = type,
-                        selectedModelId = selectedMap[type],
-                        resolveDisplayName = { id ->
-                            val key = id?.trim().orEmpty()
-                            if (key.isBlank()) null
-                            else models.firstOrNull { it.id == key }?.displayName
-                                ?: models.firstOrNull { extractRemoteModelId(it.id) == key }?.displayName
-                        },
-                        onOpenSelector = { selectorType = type }
-                    )
-                    if (index != DefaultModelType.values().lastIndex) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "Configure default models for different tasks. Chat Model is required, others are optional.",
-                    fontSize = 13.sp,
-                    color = TextSecondary,
-                    modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 24.dp)
+            DefaultModelType.values().forEachIndexed { index, type ->
+                DefaultModelSection(
+                    type = type,
+                    selectedModelId = selectedMap[type],
+                    resolveDisplayName = { id ->
+                        val key = id?.trim().orEmpty()
+                        if (key.isBlank()) null
+                        else models.firstOrNull { it.id == key }?.displayName
+                            ?: models.firstOrNull { extractRemoteModelId(it.id) == key }?.displayName
+                    },
+                    onOpenSelector = { selectorType = type }
                 )
-
-                Spacer(modifier = Modifier.height(32.dp))
+                if (index != DefaultModelType.values().lastIndex) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
             }
 
-            TopFadeScrim(
-                color = Background,
-                modifier = Modifier.align(Alignment.TopCenter)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Configure default models for different tasks. Chat Model is required, others are optional.",
+                fontSize = 13.sp,
+                color = TextSecondary,
+                modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 24.dp)
             )
+
+            Spacer(modifier = Modifier.height(32.dp))
         }
+
+        TopFadeScrim(
+            color = Background,
+            height = 64.dp,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .offset(y = (-20).dp)
+        )
+
+        FloatingTopBar(
+            title = "Default Model",
+            onBack = { navController.navigateUp() },
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
     }
 
     DefaultModelSelectorModal(
@@ -161,42 +170,6 @@ fun DefaultModelScreen(navController: NavController) {
 }
 
 @Composable
-private fun DefaultModelTopBar(navController: NavController) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Background.copy(alpha = 0.95f))
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(horizontal = 16.dp, vertical = 16.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(Surface, CircleShape)
-                .pressableScale(pressedScale = 0.95f) { navController.navigateUp() }
-                .align(Alignment.CenterStart),
-            contentAlignment = Alignment.Center
-        ) {
-            androidx.compose.material3.Icon(
-                imageVector = AppIcons.Back,
-                contentDescription = "Back",
-                tint = TextPrimary,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-
-        Text(
-            text = "Default Model",
-            fontSize = 17.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TextPrimary,
-            modifier = Modifier.align(Alignment.Center)
-        )
-    }
-}
-
-@Composable
 private fun DefaultModelSection(
     type: DefaultModelType,
     selectedModelId: String?,
@@ -213,6 +186,7 @@ private fun DefaultModelSection(
             text = type.title.uppercase(),
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
+            fontFamily = SourceSans3,
             color = TextSecondary,
             modifier = Modifier.weight(1f)
         )

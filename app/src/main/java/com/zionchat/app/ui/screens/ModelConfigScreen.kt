@@ -1,18 +1,44 @@
 package com.zionchat.app.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -20,9 +46,18 @@ import androidx.navigation.NavController
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.data.HttpHeader
 import com.zionchat.app.data.ModelConfig
+import com.zionchat.app.ui.components.BottomFadeScrim
+import com.zionchat.app.ui.components.FloatingTopBar
+import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
-import com.zionchat.app.ui.theme.*
+import com.zionchat.app.ui.theme.Background
+import com.zionchat.app.ui.theme.GrayLight
+import com.zionchat.app.ui.theme.GrayLighter
+import com.zionchat.app.ui.theme.SourceSans3
+import com.zionchat.app.ui.theme.Surface
+import com.zionchat.app.ui.theme.TextPrimary
+import com.zionchat.app.ui.theme.TextSecondary
 import kotlinx.coroutines.launch
 
 @Composable
@@ -32,108 +67,54 @@ fun ModelConfigScreen(
 ) {
     val repository = LocalAppRepository.current
     val scope = rememberCoroutineScope()
+
     val models by repository.modelsFlow.collectAsState(initial = emptyList())
     val existingModel = remember(models, modelId) { models.firstOrNull { it.id == modelId } }
 
-    var modelName by remember(existingModel) { mutableStateOf(existingModel?.displayName ?: "GPT-4o") }
-    var selectedModality by remember { mutableStateOf("text-image") }
-    val headers = remember(existingModel) {
+    var modelName by remember(existingModel?.id) { mutableStateOf(existingModel?.displayName.orEmpty()) }
+    var selectedModality by remember(existingModel?.id) { mutableStateOf("text-image") }
+    val headers = remember(existingModel?.id) {
         mutableStateListOf<Header>().apply {
             existingModel?.headers?.forEach { add(Header(it.key, it.value)) }
         }
     }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Background)
-        ) {
-        // Top Navigation Bar
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(horizontal = 16.dp, vertical = 16.dp)
-        ) {
-            // Back Button
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .align(Alignment.CenterStart)
-                    .clip(CircleShape)
-                    .background(Surface, CircleShape)
-                    .pressableScale(pressedScale = 0.95f) { navController.popBackStack() },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = AppIcons.Back,
-                    contentDescription = "Back",
-                    tint = TextPrimary,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+    val contentTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 82.dp
 
-            // Title
-            Text(
-                text = "Model Configuration",
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary,
-                modifier = Modifier.align(Alignment.Center)
+    fun save() {
+        val id = existingModel?.id ?: modelId ?: return
+        scope.launch {
+            repository.upsertModel(
+                ModelConfig(
+                    id = id,
+                    displayName = modelName.trim().ifBlank { existingModel?.displayName ?: id },
+                    enabled = existingModel?.enabled ?: true,
+                    providerId = existingModel?.providerId,
+                    headers = headers
+                        .filter { it.key.isNotBlank() }
+                        .map { HttpHeader(it.key.trim(), it.value.trim()) }
+                )
             )
-
-            // Save Button
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .align(Alignment.CenterEnd)
-                        .clip(CircleShape)
-                        .background(Surface, CircleShape)
-                        .pressableScale(pressedScale = 0.95f) {
-                            val id = existingModel?.id ?: modelId ?: return@pressableScale
-                            scope.launch {
-                                repository.upsertModel(
-                                    ModelConfig(
-                                        id = id,
-                                        displayName = modelName.trim().ifBlank { existingModel?.displayName ?: id },
-                                        enabled = existingModel?.enabled ?: true,
-                                        providerId = existingModel?.providerId,
-                                        headers = headers
-                                            .filter { it.key.isNotBlank() }
-                                            .map { HttpHeader(it.key.trim(), it.value.trim()) }
-                                    )
-                                )
-                                navController.popBackStack()
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = AppIcons.Check,
-                    contentDescription = "Save",
-                    tint = TextPrimary,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
+            navController.popBackStack()
         }
+    }
 
-        // Content
+    Box(modifier = Modifier.fillMaxSize().background(Background)) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp)
+                .padding(top = contentTopPadding, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Model Name
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = "Model Name",
                     fontSize = 13.sp,
-                    color = TextSecondary,
-                    modifier = Modifier.padding(bottom = 6.dp)
+                    fontFamily = SourceSans3,
+                    color = TextSecondary
                 )
-
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = Surface,
@@ -153,12 +134,12 @@ fun ModelConfigScreen(
                             )
                         },
                         colors = TextFieldDefaults.colors(
-                            focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                            unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                            focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                            unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
                         ),
-                        textStyle = androidx.compose.ui.text.TextStyle(
+                        textStyle = TextStyle(
                             fontSize = 17.sp,
                             color = TextPrimary
                         ),
@@ -167,15 +148,13 @@ fun ModelConfigScreen(
                 }
             }
 
-            // Input Modality
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = "Input Modality",
                     fontSize = 13.sp,
-                    color = TextSecondary,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    fontFamily = SourceSans3,
+                    color = TextSecondary
                 )
-
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -200,14 +179,14 @@ fun ModelConfigScreen(
                 }
             }
 
-            // Custom Headers
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = Surface,
                 shape = RoundedCornerShape(20.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp)
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -217,6 +196,7 @@ fun ModelConfigScreen(
                         Text(
                             text = "Custom Headers",
                             fontSize = 13.sp,
+                            fontFamily = SourceSans3,
                             color = TextSecondary
                         )
 
@@ -241,7 +221,7 @@ fun ModelConfigScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 24.dp),
+                                .padding(vertical = 16.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -251,8 +231,6 @@ fun ModelConfigScreen(
                             )
                         }
                     } else {
-                        Spacer(modifier = Modifier.height(12.dp))
-
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             headers.forEachIndexed { index, header ->
                                 HeaderItem(
@@ -269,11 +247,48 @@ fun ModelConfigScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+
+        BottomFadeScrim(
+            color = Background,
+            height = 44.dp,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
+
+        TopFadeScrim(
+            color = Background,
+            height = 64.dp,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .offset(y = (-20).dp)
+        )
+
+        FloatingTopBar(
+            title = "Model configuration",
+            onBack = { navController.popBackStack() },
+            modifier = Modifier.align(Alignment.TopCenter),
+            trailing = {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Surface, CircleShape)
+                        .pressableScale(pressedScale = 0.95f, onClick = ::save),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Check,
+                        contentDescription = "Save",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        )
     }
 }
 
 @Composable
-fun ModalityOption(
+private fun ModalityOption(
     iconVector: androidx.compose.ui.graphics.vector.ImageVector,
     text: String,
     selected: Boolean,
@@ -284,10 +299,7 @@ fun ModalityOption(
         modifier = modifier
             .height(44.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(
-                if (selected) TextPrimary else androidx.compose.ui.graphics.Color.Transparent,
-                RoundedCornerShape(16.dp)
-            )
+            .background(if (selected) TextPrimary else Color.Transparent, RoundedCornerShape(16.dp))
             .pressableScale(pressedScale = 0.95f, onClick = onClick),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
@@ -304,13 +316,14 @@ fun ModalityOption(
             text = text,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
+            fontFamily = SourceSans3,
             color = if (selected) Surface else TextPrimary
         )
     }
 }
 
 @Composable
-fun HeaderItem(
+private fun HeaderItem(
     header: Header,
     onKeyChange: (String) -> Unit,
     onValueChange: (String) -> Unit,
@@ -324,11 +337,11 @@ fun HeaderItem(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Key
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "Header Key",
                 fontSize = 11.sp,
+                fontFamily = SourceSans3,
                 color = TextSecondary
             )
             TextField(
@@ -343,12 +356,12 @@ fun HeaderItem(
                     )
                 },
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                    unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                    focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                    unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
                 ),
-                textStyle = androidx.compose.ui.text.TextStyle(
+                textStyle = TextStyle(
                     fontSize = 15.sp,
                     color = TextPrimary
                 ),
@@ -356,19 +369,18 @@ fun HeaderItem(
             )
         }
 
-        // Divider
         Box(
             modifier = Modifier
                 .width(1.dp)
                 .height(32.dp)
-                .background(androidx.compose.ui.graphics.Color(0xFFD1D1D6))
+                .background(Color(0xFFD1D1D6))
         )
 
-        // Value
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "Header Value",
                 fontSize = 11.sp,
+                fontFamily = SourceSans3,
                 color = TextSecondary
             )
             TextField(
@@ -383,12 +395,12 @@ fun HeaderItem(
                     )
                 },
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                    unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                    focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                    unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
                 ),
-                textStyle = androidx.compose.ui.text.TextStyle(
+                textStyle = TextStyle(
                     fontSize = 15.sp,
                     color = TextPrimary
                 ),
@@ -396,7 +408,6 @@ fun HeaderItem(
             )
         }
 
-        // Remove Button
         Box(
             modifier = Modifier
                 .size(32.dp)
@@ -414,7 +425,8 @@ fun HeaderItem(
     }
 }
 
-data class Header(
+private data class Header(
     val key: String,
     val value: String
 )
+

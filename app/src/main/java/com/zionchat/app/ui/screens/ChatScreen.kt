@@ -266,13 +266,16 @@ fun ChatScreen(navController: NavController) {
             scrollToBottomToken++
             repository.appendMessage(safeConversationId, userMessage)
 
-            // Update conversation title if it's still "New chat" or empty
-            val conversationToCheck =
-                conversation ?: repository.conversationsFlow.first().firstOrNull { it.id == safeConversationId }
-            if (conversationToCheck?.title.isNullOrBlank() || conversationToCheck?.title == "New chat") {
+            // Update conversation title only using the latest persisted conversation to avoid wiping messages.
+            val latestConversationForTitle =
+                repository.conversationsFlow.first().firstOrNull { it.id == safeConversationId }
+            if (
+                latestConversationForTitle != null &&
+                    (latestConversationForTitle.title.isBlank() || latestConversationForTitle.title == "New chat")
+            ) {
                 val title = trimmed.lineSequence().firstOrNull().orEmpty().trim().take(24)
                 if (title.isNotBlank()) {
-                    repository.updateConversation(conversationToCheck!!.copy(title = title))
+                    repository.updateConversation(latestConversationForTitle.copy(title = title))
                 }
             }
 
@@ -282,7 +285,7 @@ fun ChatScreen(navController: NavController) {
                     safeConversationId,
                     Message(
                         role = "assistant",
-                        content = "请先在 Settings → Default model 里配置 Chat Model（必填），配置完成后才能开始对话。"
+                        content = "Please configure Chat Model (required) in Settings → Default model before chatting."
                     )
                 )
                 return@launch
@@ -297,7 +300,7 @@ fun ChatScreen(navController: NavController) {
                     safeConversationId,
                     Message(
                         role = "assistant",
-                        content = "默认对话模型未找到：$latestDefaultChatModelId。请在 Models 中开启/添加该模型，然后在 Settings → Default model 重新选择。"
+                        content = "Default chat model not found: $latestDefaultChatModelId. Enable or add it in Models, then re-select it in Settings → Default model."
                     )
                 )
                 return@launch
@@ -310,7 +313,7 @@ fun ChatScreen(navController: NavController) {
                     safeConversationId,
                     Message(
                         role = "assistant",
-                        content = "请先在 Settings → Model services 添加供应商，并填写 API URL 与 API Key，然后再对话。"
+                        content = "Please add a provider in Settings → Model services, and fill in API URL and API Key."
                     )
                 )
                 return@launch
@@ -386,7 +389,7 @@ fun ChatScreen(navController: NavController) {
                     repository.appendMessage(safeConversationId, assistantMessage.copy(content = finalContent))
                 }
             } catch (e: Exception) {
-                val errorMsg = "请求失败：${e.message ?: e.toString()}"
+                val errorMsg = "Request failed: ${e.message ?: e.toString()}"
                 updateAssistantContent(errorMsg)
                 repository.appendMessage(safeConversationId, assistantMessage.copy(content = errorMsg))
             } finally {
@@ -477,10 +480,10 @@ fun ChatScreen(navController: NavController) {
 
                     TopFadeScrim(
                         color = Background,
-                        height = 48.dp,
+                        height = 56.dp,
                         modifier = Modifier
                             .align(Alignment.TopCenter)
-                            .offset(y = (-16).dp)
+                            .offset(y = (-22).dp)
                             .zIndex(1f)
                     )
                     BottomFadeScrim(
@@ -678,12 +681,12 @@ fun MessageOptionsDialog(
             colors = CardDefaults.cardColors(containerColor = Surface)
         ) {
             Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                DialogOption(text = "复制", onClick = onCopy)
+                DialogOption(text = "Copy", onClick = onCopy)
                 if (isUser) {
-                    DialogOption(text = "编辑", onClick = onEdit)
+                    DialogOption(text = "Edit", onClick = onEdit)
                 }
-                DialogOption(text = "删除", onClick = onDelete, isDestructive = true)
-                DialogOption(text = "取消", onClick = onDismiss)
+                DialogOption(text = "Delete", onClick = onDelete, isDestructive = true)
+                DialogOption(text = "Cancel", onClick = onDismiss)
             }
         }
     }
@@ -932,6 +935,7 @@ fun SidebarMenuItem(
         Text(
             text = label,
             fontSize = 16.sp,
+            fontFamily = SourceSans3,
             color = TextPrimary
         )
     }
@@ -1229,6 +1233,7 @@ fun QuickActionButton(
             text = label,
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
+            fontFamily = SourceSans3,
             color = TextPrimary
         )
     }
@@ -1260,6 +1265,7 @@ fun ToolListItem(
             Text(
                 text = title,
                 fontSize = 16.sp,
+                fontFamily = SourceSans3,
                 color = TextPrimary
             )
             Text(
@@ -1311,7 +1317,7 @@ fun BottomInputArea(
         "mcp" -> AppIcons.MCPTools
         else -> AppIcons.Globe
     }
-    val bottomPadding = if (imeVisible) 8.dp else 24.dp
+    val bottomPadding = if (imeVisible) 4.dp else 24.dp
     Column(
         modifier = Modifier
             .fillMaxWidth()
