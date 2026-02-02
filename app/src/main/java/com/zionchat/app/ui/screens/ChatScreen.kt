@@ -174,11 +174,12 @@ fun ChatScreen(navController: NavController) {
             if (conversationId.isNullOrBlank()) {
                 isCreatingConversation = true
                 try {
-                    conversation = repository.createConversation()
+                    val created = repository.createConversation()
+                    conversation = created
+                    conversationId = created.id
                 } finally {
                     isCreatingConversation = false
                 }
-                conversationId = conversation!!.id
             } else {
                 // 获取最新的对话列表来确认这个 conversation 存在
                 val conversations = repository.conversationsFlow.first()
@@ -186,11 +187,12 @@ fun ChatScreen(navController: NavController) {
                 if (conversation == null) {
                     isCreatingConversation = true
                     try {
-                        conversation = repository.createConversation()
+                        val created = repository.createConversation()
+                        conversation = created
+                        conversationId = created.id
                     } finally {
                         isCreatingConversation = false
                     }
-                    conversationId = conversation!!.id
                 }
             }
 
