@@ -30,6 +30,7 @@ import com.zionchat.app.data.ModelConfig
 import com.zionchat.app.data.ProviderConfig
 import com.zionchat.app.data.buildModelStorageId
 import com.zionchat.app.ui.components.TopFadeScrim
+import com.zionchat.app.ui.components.BottomFadeScrim
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import kotlinx.coroutines.launch
@@ -41,7 +42,6 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
     val chatApiClient = LocalChatApiClient.current
     val scope = rememberCoroutineScope()
     var showAddModal by remember { mutableStateOf(false) }
-    var searchQuery by remember { mutableStateOf("") }
 
     val providers by repository.providersFlow.collectAsState(initial = emptyList())
     val models by repository.modelsFlow.collectAsState(initial = emptyList())
@@ -89,11 +89,8 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
         else models.filter { it.providerId == pid }
     }
 
-    val filteredModels = remember(providerModels, searchQuery) {
-        val query = searchQuery.trim().lowercase()
-        providerModels
-            .filter { query.isEmpty() || it.displayName.lowercase().contains(query) }
-            .sortedBy { it.displayName.lowercase() }
+    val filteredModels = remember(providerModels) {
+        providerModels.sortedBy { it.displayName.lowercase() }
     }
 
     val pullRefreshState = rememberPullRefreshState(
@@ -112,7 +109,7 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 // Back Button
                 Box(
@@ -160,12 +157,6 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                 }
             }
 
-            // Fade gradient below title bar
-            TopFadeScrim(
-                color = Background,
-                modifier = Modifier.fillMaxWidth()
-            )
-
             // Status row
             if (isFetchingRemote || remoteError != null) {
                 Row(
@@ -202,12 +193,6 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                 }
             }
 
-            // Fade gradient below status row
-            TopFadeScrim(
-                color = Background,
-                modifier = Modifier.fillMaxWidth()
-            )
-
             // Model List
             Box(
                 modifier = Modifier
@@ -218,58 +203,10 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Search Bar
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(44.dp)
-                            .background(GrayLight, RoundedCornerShape(22.dp))
-                            .padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(
-                            imageVector = AppIcons.Search,
-                            contentDescription = "Search",
-                            tint = TextSecondary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        androidx.compose.foundation.text.BasicTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            modifier = Modifier.weight(1f),
-                            textStyle = androidx.compose.ui.text.TextStyle(
-                                fontSize = 16.sp,
-                                color = TextPrimary
-                            ),
-                            singleLine = true,
-                            decorationBox = { innerTextField ->
-                                if (searchQuery.isEmpty()) {
-                                    Text(
-                                        text = "Search models...",
-                                        fontSize = 16.sp,
-                                        color = TextSecondary
-                                    )
-                                }
-                                innerTextField()
-                            }
-                        )
-                        if (searchQuery.isNotEmpty()) {
-                            Icon(
-                                imageVector = AppIcons.Close,
-                                contentDescription = "Clear",
-                                tint = TextSecondary,
-                                modifier = Modifier
-                                    .size(18.dp)
-                                    .clickable { searchQuery = "" }
-                            )
-                        }
-                    }
-
                     filteredModels.forEach { model ->
                         ModelItem(
                             model = model,
@@ -290,6 +227,21 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                     modifier = Modifier.align(Alignment.TopCenter),
                     contentColor = TextPrimary,
                     backgroundColor = Surface
+                )
+
+                TopFadeScrim(
+                    color = Background,
+                    height = 28.dp,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .zIndex(1f)
+                )
+                BottomFadeScrim(
+                    color = Background,
+                    height = 32.dp,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .zIndex(1f)
                 )
             }
         }

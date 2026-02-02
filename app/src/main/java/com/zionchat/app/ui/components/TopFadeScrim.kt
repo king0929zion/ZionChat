@@ -32,3 +32,23 @@ fun TopFadeScrim(
     )
 }
 
+@Composable
+fun BottomFadeScrim(
+    color: Color,
+    height: Dp = 24.dp,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        color.copy(alpha = 0f),
+                        color
+                    )
+                )
+            )
+    )
+}

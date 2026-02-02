@@ -1,6 +1,7 @@
 package com.zionchat.app.ui.screens
 
 import androidx.compose.animation.*
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -45,9 +46,12 @@ import com.zionchat.app.data.Conversation
 import com.zionchat.app.data.Message
 import com.zionchat.app.data.extractRemoteModelId
 import com.zionchat.app.ui.components.TopFadeScrim
+import com.zionchat.app.ui.components.BottomFadeScrim
+import com.zionchat.app.ui.components.MarkdownText
 import com.zionchat.app.ui.components.rememberResourceDrawablePainter
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
+import com.zionchat.app.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -60,15 +64,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloat
 
 // 颜色常量 - 完全匹配HTML原型
-val Background = Color(0xFFF5F5F7)
-val Surface = Color(0xFFFFFFFF)
-val TextPrimary = Color(0xFF1C1C1E)
-val TextSecondary = Color(0xFF8E8E93)
-val GrayLight = Color(0xFFE5E5EA)
-val GrayLighter = Color(0xFFF2F2F7)
-val ActionIcon = Color(0xFF374151)
-val ToggleActive = Color(0xFF34C759)
-val UserMessageBubble = Color(0xFFE5E5EA)
+private data class PendingMessage(val conversationId: String, val message: Message)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,10 +78,9 @@ fun ChatScreen(navController: NavController) {
     var selectedTool by remember { mutableStateOf<String?>(null) }
     var messageText by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
+    var isCreatingConversation by remember { mutableStateOf(false) }
 
     val conversations by repository.conversationsFlow.collectAsState(initial = emptyList())
-    val providers by repository.providersFlow.collectAsState(initial = emptyList())
-    val models by repository.modelsFlow.collectAsState(initial = emptyList())
     val currentConversationId by repository.currentConversationIdFlow.collectAsState(initial = null)
     val nickname by repository.nicknameFlow.collectAsState(initial = "")
     val customInstructions by repository.customInstructionsFlow.collectAsState(initial = "")
@@ -102,12 +97,8 @@ fun ChatScreen(navController: NavController) {
     }
 
     LaunchedEffect(conversations, currentConversationId) {
-        if (currentConversationId.isNullOrBlank()) {
-            if (conversations.isNotEmpty()) {
-                repository.setCurrentConversationId(conversations.first().id)
-            } else {
-                repository.createConversation()
-            }
+        if (currentConversationId.isNullOrBlank() && conversations.isNotEmpty()) {
+            repository.setCurrentConversationId(conversations.first().id)
         }
     }
 
@@ -125,21 +116,22 @@ fun ChatScreen(navController: NavController) {
 
     // 关键修复：本地消息缓存，确保首条消息立即显示（在DataStore更新前）
     var localMessages by remember { mutableStateOf<List<Message>>(emptyList()) }
-    var pendingUserMessage by remember { mutableStateOf<Message?>(null) }
+    var pendingUserMessage by remember { mutableStateOf<PendingMessage?>(null) }
 
     // 同步本地消息与DataStore消息
-    LaunchedEffect(messages, pendingUserMessage) {
+    LaunchedEffect(messages, pendingUserMessage, currentConversation?.id) {
         val dataStoreMessages = messages
-        if (pendingUserMessage != null) {
+        val pending = pendingUserMessage
+        if (pending != null && pending.conversationId == currentConversation?.id) {
             // 检查pending消息是否已经在DataStore中
-            val found = dataStoreMessages.any { it.id == pendingUserMessage!!.id }
+            val found = dataStoreMessages.any { it.id == pending.message.id }
             if (found) {
                 // DataStore已更新，清除pending状态
                 pendingUserMessage = null
                 localMessages = dataStoreMessages
             } else {
                 // 还没更新，显示pending消息 + DataStore消息
-                localMessages = dataStoreMessages + pendingUserMessage!!
+                localMessages = dataStoreMessages + pending.message
             }
         } else {
             localMessages = dataStoreMessages
@@ -170,24 +162,43 @@ fun ChatScreen(navController: NavController) {
             // 关键修复：从 DataStore 获取最新的 conversationId，而不是依赖可能过期的 compose state
             var conversationId = repository.currentConversationIdFlow.first()
             var conversation: Conversation? = null
+            if (conversationId.isNullOrBlank()) {
+                val existingConversations = repository.conversationsFlow.first()
+                if (existingConversations.isNotEmpty()) {
+                    conversationId = existingConversations.first().id
+                    repository.setCurrentConversationId(conversationId)
+                }
+            }
 
             // If we don't have a valid conversation, create one
             if (conversationId.isNullOrBlank()) {
-                conversation = repository.createConversation()
+                isCreatingConversation = true
+                try {
+                    conversation = repository.createConversation()
+                } finally {
+                    isCreatingConversation = false
+                }
                 conversationId = conversation.id
             } else {
                 // 获取最新的对话列表来确认这个 conversation 存在
                 val conversations = repository.conversationsFlow.first()
                 conversation = conversations.firstOrNull { it.id == conversationId }
                 if (conversation == null) {
-                    conversation = repository.createConversation()
+                    isCreatingConversation = true
+                    try {
+                        conversation = repository.createConversation()
+                    } finally {
+                        isCreatingConversation = false
+                    }
                     conversationId = conversation.id
                 }
             }
 
+            repository.setCurrentConversationId(conversationId)
+
             val userMessage = Message(role = "user", content = trimmed)
             // 关键修复：先设置pending状态让UI立即显示，再异步保存到DataStore
-            pendingUserMessage = userMessage
+            pendingUserMessage = PendingMessage(conversationId, userMessage)
             messageText = ""
             repository.appendMessage(conversationId, userMessage)
 
@@ -270,7 +281,25 @@ fun ChatScreen(navController: NavController) {
             // 流式输出
             isStreaming = true
             streamingContent = ""
+            val streamBuffer = StringBuilder()
             var fullContent = ""
+            val renderJob = launch {
+                while (isStreaming || streamBuffer.isNotEmpty()) {
+                    if (streamBuffer.isNotEmpty()) {
+                        val step = when {
+                            streamBuffer.length > 200 -> 16
+                            streamBuffer.length > 80 -> 10
+                            else -> 6
+                        }
+                        val take = minOf(step, streamBuffer.length)
+                        val next = streamBuffer.substring(0, take)
+                        streamBuffer.delete(0, take)
+                        streamingContent += next
+                    } else {
+                        delay(16)
+                    }
+                }
+            }
 
             try {
                 chatApiClient.chatCompletionsStream(
@@ -280,7 +309,10 @@ fun ChatScreen(navController: NavController) {
                     extraHeaders = selectedModel.headers
                 ).collect { chunk ->
                     fullContent += chunk
-                    streamingContent = fullContent
+                    streamBuffer.append(chunk)
+                }
+                while (streamBuffer.isNotEmpty()) {
+                    delay(16)
                 }
                 // 流式输出完成后，将完整内容保存到消息列表
                 if (fullContent.isNotBlank()) {
@@ -291,6 +323,7 @@ fun ChatScreen(navController: NavController) {
                 repository.appendMessage(conversationId, Message(role = "assistant", content = errorMsg))
             } finally {
                 isStreaming = false
+                renderJob.cancel()
                 streamingContent = ""
             }
         }
@@ -347,7 +380,7 @@ fun ChatScreen(navController: NavController) {
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             items(localMessages, key = { it.id }) { message ->
@@ -379,7 +412,18 @@ fun ChatScreen(navController: NavController) {
 
                     TopFadeScrim(
                         color = Background,
-                        modifier = Modifier.align(Alignment.TopCenter)
+                        height = 36.dp,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .offset(y = (-8).dp)
+                            .zIndex(1f)
+                    )
+                    BottomFadeScrim(
+                        color = Background,
+                        height = 40.dp,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .zIndex(1f)
                     )
                 }
             }
@@ -411,7 +455,8 @@ fun ChatScreen(navController: NavController) {
                     messageText = messageText,
                     onMessageChange = { messageText = it },
                     onSend = ::sendMessage,
-                    sendAllowed = !defaultChatModelId.isNullOrBlank()
+                    sendAllowed = !defaultChatModelId.isNullOrBlank(),
+                    imeVisible = imeVisible
                 )
             }
 
@@ -477,11 +522,13 @@ fun MessageItem(
                     onLongClick = { showMenu = true }
                 )
         ) {
-            Text(
-                text = message.content,
-                fontSize = 16.sp,
-                color = TextPrimary,
-                lineHeight = 24.sp
+            MarkdownText(
+                markdown = message.content,
+                textStyle = TextStyle(
+                    fontSize = 16.sp,
+                    lineHeight = 24.sp,
+                    color = TextPrimary
+                )
             )
 
             // 工具栏
@@ -582,9 +629,9 @@ fun DialogOption(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun StreamingMessageItem(content: String) {
-    // 渐变动画状态
     var visibleLength by remember { mutableIntStateOf(0) }
     val contentLength = content.length
+    // 渐变动画状态
 
     // 当内容变化时，逐步显示新字符，创造渐变效果
     LaunchedEffect(content) {
@@ -608,6 +655,7 @@ fun StreamingMessageItem(content: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth(0.85f)
+            .animateContentSize()
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -1199,7 +1247,8 @@ fun BottomInputArea(
     messageText: String,
     onMessageChange: (String) -> Unit,
     onSend: () -> Unit,
-    sendAllowed: Boolean = true
+    sendAllowed: Boolean = true,
+    imeVisible: Boolean = false
 ) {
     val hasText = messageText.trim().isNotEmpty()
     val sendEnabled = hasText
@@ -1229,12 +1278,13 @@ fun BottomInputArea(
         "mcp" -> AppIcons.MCPTools
         else -> AppIcons.Globe
     }
+    val bottomPadding = if (imeVisible) 12.dp else 24.dp
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .imePadding()
             .padding(horizontal = 16.dp)
-            .padding(top = 6.dp, bottom = 28.dp)
+            .padding(top = 6.dp, bottom = bottomPadding)
             .background(Background)
     ) {
         Row(
