@@ -91,8 +91,15 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
         else models.filter { it.providerId == pid }
     }
 
-    val filteredModels = remember(providerModels) {
-        providerModels.sortedBy { it.displayName.lowercase() }
+    // 搜索状态
+    var searchQuery by remember { mutableStateOf("") }
+
+    val filteredModels = remember(providerModels, searchQuery) {
+        val query = searchQuery.trim().lowercase()
+        providerModels
+            .filter { query.isEmpty() || it.displayName.lowercase().contains(query) }
+            .sortedWith(compareByDescending<ModelConfig> { it.enabled }
+                .thenBy { it.displayName.lowercase() })
     }
 
     val pullRefreshState = rememberPullRefreshState(
@@ -209,6 +216,54 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    // Search Bar
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .background(GrayLight, RoundedCornerShape(20.dp))
+                            .padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Search,
+                            contentDescription = "Search",
+                            tint = TextSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        androidx.compose.foundation.text.BasicTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            modifier = Modifier.weight(1f),
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                fontSize = 15.sp,
+                                color = TextPrimary
+                            ),
+                            singleLine = true,
+                            decorationBox = { innerTextField ->
+                                if (searchQuery.isEmpty()) {
+                                    Text(
+                                        text = "Search models...",
+                                        fontSize = 15.sp,
+                                        color = TextSecondary
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        )
+                        if (searchQuery.isNotEmpty()) {
+                            Icon(
+                                imageVector = AppIcons.Close,
+                                contentDescription = "Clear",
+                                tint = TextSecondary,
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .clickable { searchQuery = "" }
+                            )
+                        }
+                    }
+
                     filteredModels.forEach { model ->
                         ModelItem(
                             model = model,

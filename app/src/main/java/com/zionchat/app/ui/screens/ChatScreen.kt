@@ -665,11 +665,14 @@ fun StreamingMessageItem(content: String) {
                 onClick = { }
             )
     ) {
-        Text(
-            text = content,
-            fontSize = 16.sp,
-            color = TextPrimary.copy(alpha = alpha),
-            lineHeight = 24.sp
+        // 使用 MarkdownText 支持实时 Markdown 渲染
+        MarkdownText(
+            markdown = content,
+            textStyle = TextStyle(
+                fontSize = 16.sp,
+                lineHeight = 24.sp,
+                color = TextPrimary.copy(alpha = alpha)
+            )
         )
 
         // 脉动光标指示正在流式输出
