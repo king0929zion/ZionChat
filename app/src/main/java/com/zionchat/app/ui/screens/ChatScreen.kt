@@ -128,28 +128,31 @@ fun ChatScreen(navController: NavController) {
         }
     }
 
+    // 流式输出状态
+    var streamingContent by remember { mutableStateOf("") }
+    var isStreaming by remember { mutableStateOf(false) }
+
     fun sendMessage() {
         val trimmed = messageText.trim()
-        if (trimmed.isEmpty() || isLoading) return
+        if (trimmed.isEmpty() || isLoading || isStreaming) return
 
         scope.launch {
-            // Ensure we have a conversation
-            var conversationId = currentConversationId
-            var conversation = currentConversation
+            // 关键修复：从 DataStore 获取最新的 conversationId，而不是依赖可能过期的 compose state
+            var conversationId = repository.currentConversationIdFlow.first()
+            var conversation: Conversation? = null
 
             // If we don't have a valid conversation, create one
-            if (conversation == null) {
+            if (conversationId.isNullOrBlank()) {
                 conversation = repository.createConversation()
                 conversationId = conversation.id
-            } else if (conversationId.isNullOrBlank()) {
-                // We have a conversation but no ID (shouldn't happen, but handle it)
-                conversationId = conversation.id
-            }
-
-            // Ensure current conversation ID is set for UI state
-            if (currentConversationId != conversationId) {
-                repository.setCurrentConversationId(conversationId)
-                kotlinx.coroutines.delay(50)
+            } else {
+                // 获取最新的对话列表来确认这个 conversation 存在
+                val conversations = repository.conversationsFlow.first()
+                conversation = conversations.firstOrNull { it.id == conversationId }
+                if (conversation == null) {
+                    conversation = repository.createConversation()
+                    conversationId = conversation.id
+                }
             }
 
             val userMessage = Message(role = "user", content = trimmed)
@@ -221,23 +224,43 @@ fun ChatScreen(navController: NavController) {
                 if (content.isBlank()) null else Message(role = "system", content = content)
             }
 
+            // 获取最新的消息列表
+            val latestConversations = repository.conversationsFlow.first()
+            val latestConversation = latestConversations.firstOrNull { it.id == conversationId }
+            val currentMessages = latestConversation?.messages.orEmpty()
+
             val requestMessages = buildList {
                 if (systemMessage != null) add(systemMessage)
-                addAll(conversation?.messages.orEmpty())
+                addAll(currentMessages)
                 add(userMessage)
             }
-            isLoading = true
-            val result = chatApiClient.chatCompletions(
-                provider = provider,
-                modelId = extractRemoteModelId(selectedModel.id),
-                messages = requestMessages,
-                extraHeaders = selectedModel.headers
-            )
-            val reply = result.getOrElse { throwable ->
-                "请求失败：${throwable.message ?: throwable.toString()}"
-            }.ifBlank { "（空响应）" }
-            repository.appendMessage(conversationId, Message(role = "assistant", content = reply))
-            isLoading = false
+
+            // 流式输出
+            isStreaming = true
+            streamingContent = ""
+            var fullContent = ""
+
+            try {
+                chatApiClient.chatCompletionsStream(
+                    provider = provider,
+                    modelId = extractRemoteModelId(selectedModel.id),
+                    messages = requestMessages,
+                    extraHeaders = selectedModel.headers
+                ).collect { chunk ->
+                    fullContent += chunk
+                    streamingContent = fullContent
+                }
+                // 流式输出完成后，将完整内容保存到消息列表
+                if (fullContent.isNotBlank()) {
+                    repository.appendMessage(conversationId, Message(role = "assistant", content = fullContent))
+                }
+            } catch (e: Exception) {
+                val errorMsg = "请求失败：${e.message ?: e.toString()}"
+                repository.appendMessage(conversationId, Message(role = "assistant", content = errorMsg))
+            } finally {
+                isStreaming = false
+                streamingContent = ""
+            }
         }
     }
 
@@ -306,8 +329,15 @@ fun ChatScreen(navController: NavController) {
                                 )
                             }
 
-                            // 加载指示器
-                            if (isLoading) {
+                            // 流式输出内容
+                            if (isStreaming && streamingContent.isNotEmpty()) {
+                                item {
+                                    StreamingMessageItem(content = streamingContent)
+                                }
+                            }
+
+                            // 加载指示器（仅在非流式时显示）
+                            if (isLoading && !isStreaming) {
                                 item {
                                     LoadingIndicator()
                                 }
@@ -514,6 +544,38 @@ fun DialogOption(
             color = if (isDestructive) Color(0xFFFF3B30) else TextPrimary,
             fontWeight = FontWeight.Medium
         )
+    }
+}
+
+@Composable
+fun StreamingMessageItem(content: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth(0.85f)
+            .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = { }
+            )
+    ) {
+        Text(
+            text = content,
+            fontSize = 16.sp,
+            color = TextPrimary,
+            lineHeight = 24.sp
+        )
+
+        // 闪烁光标指示正在流式输出
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(top = 8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(TextSecondary.copy(alpha = 0.6f), CircleShape)
+            )
+        }
     }
 }
 

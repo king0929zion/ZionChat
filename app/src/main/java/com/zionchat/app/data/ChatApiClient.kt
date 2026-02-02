@@ -2,6 +2,9 @@ package com.zionchat.app.data
 
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -79,6 +82,64 @@ class ChatApiClient {
             }
         }
     }
+
+    /**
+     * 流式聊天完成 - 返回 Flow，每次发射一个增量内容片段
+     */
+    fun chatCompletionsStream(
+        provider: ProviderConfig,
+        modelId: String,
+        messages: List<Message>,
+        extraHeaders: List<HttpHeader> = emptyList()
+    ): Flow<String> = flow {
+        val url = provider.apiUrl.trimEnd('/') + "/chat/completions"
+        val body = gson.toJson(
+            mapOf(
+                "model" to modelId,
+                "messages" to messages.map { mapOf("role" to it.role, "content" to it.content) },
+                "stream" to true
+            )
+        )
+        val requestBuilder = Request.Builder()
+            .url(url)
+            .addHeader("Content-Type", "application/json")
+            .addHeader("Authorization", "Bearer ${provider.apiKey}")
+            .addHeader("Accept", "text/event-stream")
+        extraHeaders
+            .filter { it.key.isNotBlank() }
+            .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
+        val request = requestBuilder
+            .post(body.toRequestBody(jsonMediaType))
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                val errorBody = response.body?.string().orEmpty()
+                throw IllegalStateException("HTTP ${response.code}: $errorBody")
+            }
+
+            val source = response.body?.source()
+                ?: throw IllegalStateException("Response body is null")
+
+            while (!source.exhausted()) {
+                val line = source.readUtf8Line() ?: continue
+                if (line.startsWith("data: ")) {
+                    val data = line.substring(6)
+                    if (data == "[DONE]") break
+
+                    try {
+                        val chunk = gson.fromJson(data, OpenAIStreamChunk::class.java)
+                        val content = chunk.choices?.firstOrNull()?.delta?.content
+                        if (!content.isNullOrEmpty()) {
+                            emit(content)
+                        }
+                    } catch (_: Exception) {
+                        // 忽略解析错误，继续处理下一行
+                    }
+                }
+            }
+        }
+    }.flowOn(Dispatchers.IO)
 }
 
 data class OpenAIChatCompletionsResponse(
@@ -99,4 +160,17 @@ data class OpenAIModelsResponse(
 
 data class OpenAIModel(
     val id: String?
+)
+
+// 流式响应数据类
+data class OpenAIStreamChunk(
+    val choices: List<OpenAIStreamChoice>?
+)
+
+data class OpenAIStreamChoice(
+    val delta: OpenAIStreamDelta?
+)
+
+data class OpenAIStreamDelta(
+    val content: String?
 )
