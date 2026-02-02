@@ -85,7 +85,13 @@ fun ChatScreen(navController: NavController) {
     val defaultChatModelId by repository.defaultChatModelIdFlow.collectAsState(initial = null)
 
     val currentConversation = remember(conversations, currentConversationId) {
-        conversations.firstOrNull { it.id == currentConversationId } ?: conversations.firstOrNull()
+        // First try to find by currentConversationId, otherwise default to first conversation
+        // This ensures we always show a conversation if one exists
+        if (!currentConversationId.isNullOrBlank()) {
+            conversations.firstOrNull { it.id == currentConversationId }
+        } else {
+            conversations.firstOrNull()
+        } ?: conversations.firstOrNull()
     }
 
     LaunchedEffect(conversations, currentConversationId) {
@@ -131,10 +137,18 @@ fun ChatScreen(navController: NavController) {
             var conversationId = currentConversationId
             var conversation = currentConversation
 
-            if (conversationId.isNullOrBlank() || conversation == null) {
+            // If we don't have a valid conversation, create one
+            if (conversation == null) {
                 conversation = repository.createConversation()
                 conversationId = conversation.id
-                // Wait a moment for the DataStore to update
+            } else if (conversationId.isNullOrBlank()) {
+                // We have a conversation but no ID (shouldn't happen, but handle it)
+                conversationId = conversation.id
+            }
+
+            // Ensure current conversation ID is set for UI state
+            if (currentConversationId != conversationId) {
+                repository.setCurrentConversationId(conversationId)
                 kotlinx.coroutines.delay(50)
             }
 
