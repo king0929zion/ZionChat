@@ -41,6 +41,7 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
     val chatApiClient = LocalChatApiClient.current
     val scope = rememberCoroutineScope()
     var showAddModal by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
 
     val providers by repository.providersFlow.collectAsState(initial = emptyList())
     val models by repository.modelsFlow.collectAsState(initial = emptyList())
@@ -88,11 +89,11 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
         else models.filter { it.providerId == pid }
     }
 
-    val visibleModels = remember(providerModels) {
-        providerModels.sortedBy { it.displayName.lowercase() }
-    }
-    val selectedCount = providerModels.count { it.enabled }
-    val isSelectAll = providerModels.isNotEmpty() && selectedCount == providerModels.size
+    val filteredModels = remember(providerModels, searchQuery) {
+        val query = searchQuery.trim().lowercase()
+        providerModels
+            .filter { query.isEmpty() || it.displayName.lowercase().contains(query) }
+            .sortedBy { it.displayName.lowercase() }
     val pullRefreshState = rememberPullRefreshState(
         refreshing = isFetchingRemote,
         onRefresh = { fetchedSignature = null }
@@ -157,43 +158,11 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                 }
             }
 
-            // Select All Row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .height(56.dp)
-                    .background(GrayLight, RoundedCornerShape(20.dp))
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Select all",
-                    fontSize = 17.sp,
-                    color = TextPrimary
-                )
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "$selectedCount / ${providerModels.size} selected",
-                        fontSize = 15.sp,
-                        color = TextSecondary
-                    )
-
-                    ModelToggleSwitch(
-                        enabled = isSelectAll,
-                        onToggle = {
-                            val target = !isSelectAll
-                            val pid = activeProvider?.id ?: return@ModelToggleSwitch
-                            scope.launch { repository.setAllModelsEnabled(pid, target) }
-                        }
-                    )
-                }
-            }
+            // Fade gradient below title bar
+            TopFadeScrim(
+                color = Background,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             if (isFetchingRemote || remoteError != null) {
                 Row(
@@ -244,7 +213,55 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    visibleModels.forEach { model ->
+                    // Search Bar
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .background(GrayLight, RoundedCornerShape(22.dp))
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Search,
+                            contentDescription = "Search",
+                            tint = TextSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        androidx.compose.foundation.text.BasicTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            modifier = Modifier.weight(1f),
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                fontSize = 16.sp,
+                                color = TextPrimary
+                            ),
+                            singleLine = true,
+                            decorationBox = { innerTextField ->
+                                if (searchQuery.isEmpty()) {
+                                    Text(
+                                        text = "Search models...",
+                                        fontSize = 16.sp,
+                                        color = TextSecondary
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        )
+                        if (searchQuery.isNotEmpty()) {
+                            Icon(
+                                imageVector = AppIcons.Close,
+                                contentDescription = "Clear",
+                                tint = TextSecondary,
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .clickable { searchQuery = "" }
+                            )
+                        }
+                    }
+
+                    filteredModels.forEach { model ->
                         ModelItem(
                             model = model,
                             onToggle = {
@@ -257,11 +274,6 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                 }
-
-                TopFadeScrim(
-                    color = Background,
-                    modifier = Modifier.align(Alignment.TopCenter)
-                )
 
                 PullRefreshIndicator(
                     refreshing = isFetchingRemote,
@@ -331,14 +343,13 @@ private fun ModelToggleSwitch(
 ) {
     Box(
         modifier = modifier
-            .width(52.dp)
-            .height(32.dp)
+            .width(48.dp)
+            .height(28.dp)
             .background(
                 if (enabled) TextPrimary else Color.Transparent,
-                RoundedCornerShape(16.dp)
+                RoundedCornerShape(14.dp)
             )
-            .border(2.dp, if (enabled) TextPrimary else TextSecondary, RoundedCornerShape(16.dp))
-            .padding(2.dp)
+            .border(1.5.dp, if (enabled) TextPrimary else TextSecondary, RoundedCornerShape(14.dp))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
@@ -347,7 +358,8 @@ private fun ModelToggleSwitch(
     ) {
         Box(
             modifier = Modifier
-                .size(24.dp)
+                .padding(2.dp)
+                .size(22.dp)
                 .background(
                     if (enabled) Surface else TextSecondary,
                     CircleShape
