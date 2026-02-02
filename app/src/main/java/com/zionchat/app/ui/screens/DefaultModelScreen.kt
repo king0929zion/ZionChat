@@ -23,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -229,7 +230,7 @@ private fun DefaultModelSection(
             val display = resolveDisplayName(selectedModelId)
             val isEmpty = display.isNullOrBlank()
             Text(
-                text = if (isEmpty) type.emptyLabel else display,
+                text = if (isEmpty) type.emptyLabel else display.orEmpty(),
                 fontSize = 16.sp,
                 color = if (isEmpty) Color(0xFFC7C7CC) else TextPrimary,
                 modifier = Modifier.weight(1f)
