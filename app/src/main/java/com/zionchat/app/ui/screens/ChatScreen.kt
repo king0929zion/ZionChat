@@ -547,6 +547,7 @@ fun DialogOption(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun StreamingMessageItem(content: String) {
     Column(
