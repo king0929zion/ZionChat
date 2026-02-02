@@ -127,15 +127,23 @@ fun ChatScreen(navController: NavController) {
         if (trimmed.isEmpty() || isLoading) return
 
         scope.launch {
-            val conversationId = currentConversation?.id ?: repository.createConversation().id
-            val existingConversations = repository.conversationsFlow.first()
-            val conversation = existingConversations.firstOrNull { it.id == conversationId }
+            // Ensure we have a conversation
+            var conversationId = currentConversationId
+            var conversation = currentConversation
+
+            if (conversationId.isNullOrBlank() || conversation == null) {
+                conversation = repository.createConversation()
+                conversationId = conversation.id
+                // Wait a moment for the DataStore to update
+                kotlinx.coroutines.delay(50)
+            }
 
             val userMessage = Message(role = "user", content = trimmed)
             repository.appendMessage(conversationId, userMessage)
             messageText = ""
 
-            if (conversation?.title == "New chat") {
+            // Update conversation title if it's still "New chat"
+            if (conversation.title == "New chat") {
                 val title = trimmed.lineSequence().firstOrNull().orEmpty().trim().take(24)
                 if (title.isNotBlank()) {
                     repository.updateConversation(conversation.copy(title = title))
@@ -1111,11 +1119,11 @@ fun BottomInputArea(
                 )
             }
 
-            // 输入框容器 - 默认44dp与工具按钮对齐，可多行扩展；发送按钮固定右下角
+            // 输入框容器 - 默认46dp与工具按钮对齐，可多行扩展；发送按钮固定右下角
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = 44.dp)
+                    .heightIn(min = 46.dp)
                     .wrapContentHeight()
                     .background(Surface, RoundedCornerShape(24.dp)),
                 contentAlignment = Alignment.CenterStart
