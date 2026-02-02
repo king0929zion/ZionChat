@@ -1137,25 +1137,24 @@ fun BottomInputArea(
                     if (selectedTool != null) {
                         Row(
                             modifier = Modifier
-                                .offset(x = (-12).dp)
                                 .background(Color(0xFFE8F4FD), RoundedCornerShape(16.dp))
-                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             if (toolIconRes != null) {
                                 Icon(
                                     painter = rememberResourceDrawablePainter(toolIconRes),
                                     contentDescription = null,
                                     tint = Color(0xFF007AFF),
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             } else {
                                 Icon(
                                     imageVector = toolIconVector ?: AppIcons.Globe,
                                     contentDescription = null,
                                     tint = Color(0xFF007AFF),
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                             Text(

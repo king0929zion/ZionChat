@@ -216,23 +216,30 @@ private fun SwipeableConfiguredProviderItem(
             modifier = Modifier
                 .fillMaxHeight()
                 .width(actionWidth)
-                .align(Alignment.CenterEnd)
-                .background(Color(0xFFFF3B30))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) {
-                    onDelete()
-                    itemScope.launch { swipeableState.animateTo(0) }
-                },
+                .align(Alignment.CenterEnd),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = AppIcons.Trash,
-                contentDescription = "Delete",
-                tint = Color.White,
-                modifier = Modifier.size(20.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFFF3B30))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        onDelete()
+                        itemScope.launch { swipeableState.animateTo(0) }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = AppIcons.Trash,
+                    contentDescription = "Delete",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
 
         Row(
