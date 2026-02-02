@@ -28,6 +28,7 @@ import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
+import com.zionchat.app.ui.theme.*
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter

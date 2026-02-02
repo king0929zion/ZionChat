@@ -36,6 +36,7 @@ import com.zionchat.app.data.ProviderConfig
 import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
+import com.zionchat.app.ui.theme.*
 import kotlinx.coroutines.launch
 
 private enum class DefaultModelType(

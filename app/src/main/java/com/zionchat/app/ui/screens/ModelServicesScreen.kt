@@ -42,6 +42,7 @@ import com.zionchat.app.ui.components.AssetIcon
 import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
+import com.zionchat.app.ui.theme.*
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 

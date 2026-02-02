@@ -22,6 +22,7 @@ import com.zionchat.app.data.HttpHeader
 import com.zionchat.app.data.ModelConfig
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
+import com.zionchat.app.ui.theme.*
 import kotlinx.coroutines.launch
 
 @Composable

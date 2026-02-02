@@ -24,6 +24,7 @@ import androidx.navigation.NavController
 import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
+import com.zionchat.app.ui.theme.*
 
 private data class MemoryItemUi(
     val content: String,

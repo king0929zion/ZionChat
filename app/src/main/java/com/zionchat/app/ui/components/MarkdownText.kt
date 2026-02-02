@@ -194,7 +194,7 @@ private fun MarkdownBulletList(
         while (item != null) {
             if (item is ListItem) {
                 Row(modifier = Modifier.fillMaxWidth()) {
-                    Text(text = "•", style = textStyle.copy(color = TextSecondary))
+                    Text(text = "\u2022", style = textStyle.copy(color = TextSecondary))
                     Spacer(modifier = Modifier.width(8.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         renderChildren(item, textStyle, linkColor, spacing = 6.dp)
@@ -234,27 +234,27 @@ private fun MarkdownOrderedList(
 private fun buildInlineAnnotatedString(parent: Node, linkColor: Color): AnnotatedString {
     val builder = AnnotatedString.Builder()
 
-    fun appendChildren(node: Node) {
-        var child = node.firstChild
-        while (child != null) {
-            appendNode(child)
-            child = child.next
-        }
-    }
-
-    fun appendNode(node: Node) {
+    fun appendInline(node: Node) {
         when (node) {
             is MarkdownTextNode -> builder.append(node.literal)
             is SoftLineBreak -> builder.append('\n')
             is HardLineBreak -> builder.append('\n')
             is Emphasis -> {
                 val start = builder.length
-                appendChildren(node)
+                var child = node.firstChild
+                while (child != null) {
+                    appendInline(child)
+                    child = child.next
+                }
                 builder.addStyle(SpanStyle(fontStyle = FontStyle.Italic), start, builder.length)
             }
             is StrongEmphasis -> {
                 val start = builder.length
-                appendChildren(node)
+                var child = node.firstChild
+                while (child != null) {
+                    appendInline(child)
+                    child = child.next
+                }
                 builder.addStyle(SpanStyle(fontWeight = FontWeight.SemiBold), start, builder.length)
             }
             is Code -> {
@@ -271,7 +271,11 @@ private fun buildInlineAnnotatedString(parent: Node, linkColor: Color): Annotate
             }
             is Link -> {
                 val start = builder.length
-                appendChildren(node)
+                var child = node.firstChild
+                while (child != null) {
+                    appendInline(child)
+                    child = child.next
+                }
                 val end = builder.length
                 builder.addStyle(
                     SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline),
@@ -282,10 +286,16 @@ private fun buildInlineAnnotatedString(parent: Node, linkColor: Color): Annotate
                     builder.addStringAnnotation("URL", node.destination, start, end)
                 }
             }
-            else -> appendChildren(node)
+            else -> {
+                var child = node.firstChild
+                while (child != null) {
+                    appendInline(child)
+                    child = child.next
+                }
+            }
         }
     }
 
-    appendChildren(parent)
+    appendInline(parent)
     return builder.toAnnotatedString()
 }

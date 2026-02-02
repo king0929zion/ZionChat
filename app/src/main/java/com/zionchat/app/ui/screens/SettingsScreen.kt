@@ -32,6 +32,7 @@ import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.rememberResourceDrawablePainter
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
+import com.zionchat.app.ui.theme.*
 
 @Composable
 fun SettingsScreen(navController: NavController) {
