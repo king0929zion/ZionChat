@@ -178,7 +178,7 @@ fun ChatScreen(navController: NavController) {
                 } finally {
                     isCreatingConversation = false
                 }
-                conversationId = conversation.id
+                conversationId = conversation!!.id
             } else {
                 // 获取最新的对话列表来确认这个 conversation 存在
                 val conversations = repository.conversationsFlow.first()
@@ -190,7 +190,7 @@ fun ChatScreen(navController: NavController) {
                     } finally {
                         isCreatingConversation = false
                     }
-                    conversationId = conversation.id
+                    conversationId = conversation!!.id
                 }
             }
 
