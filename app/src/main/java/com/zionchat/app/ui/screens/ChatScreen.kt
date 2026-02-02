@@ -51,13 +51,13 @@ import com.zionchat.app.ui.icons.AppIcons
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import androidx.compose.animation.animateFloatAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.animation.core.animateFloat
 
 // 颜色常量 - 完全匹配HTML原型
 val Background = Color(0xFFF5F5F7)
@@ -119,22 +119,6 @@ fun ChatScreen(navController: NavController) {
     val bottomContentPadding = maxOf(80.dp, bottomBarHeightDp + 12.dp)
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
-    // 滚动到底部当新消息添加时
-    LaunchedEffect(localMessages.size, currentConversation?.id) {
-        if (localMessages.isNotEmpty()) {
-            listState.animateScrollToItem(localMessages.size - 1)
-        }
-    }
-
-    fun startNewChat() {
-        scope.launch {
-            repository.createConversation()
-            selectedTool = null
-            messageText = ""
-            drawerState.close()
-        }
-    }
-
     // 流式输出状态
     var streamingContent by remember { mutableStateOf("") }
     var isStreaming by remember { mutableStateOf(false) }
@@ -159,6 +143,22 @@ fun ChatScreen(navController: NavController) {
             }
         } else {
             localMessages = dataStoreMessages
+        }
+    }
+
+    // 滚动到底部当新消息添加时
+    LaunchedEffect(localMessages.size, currentConversation?.id) {
+        if (localMessages.isNotEmpty()) {
+            listState.animateScrollToItem(localMessages.size - 1)
+        }
+    }
+
+    fun startNewChat() {
+        scope.launch {
+            repository.createConversation()
+            selectedTool = null
+            messageText = ""
+            drawerState.close()
         }
     }
 
