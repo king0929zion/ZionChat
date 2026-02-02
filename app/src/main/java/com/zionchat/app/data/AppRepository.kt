@@ -19,6 +19,12 @@ class AppRepository(context: Context) {
     private val modelsKey = stringPreferencesKey("models_json")
     private val conversationsKey = stringPreferencesKey("conversations_json")
     private val currentConversationIdKey = stringPreferencesKey("current_conversation_id")
+    private val nicknameKey = stringPreferencesKey("nickname")
+    private val customInstructionsKey = stringPreferencesKey("custom_instructions")
+    private val defaultChatModelIdKey = stringPreferencesKey("default_chat_model_id")
+    private val defaultVisionModelIdKey = stringPreferencesKey("default_vision_model_id")
+    private val defaultImageModelIdKey = stringPreferencesKey("default_image_model_id")
+    private val defaultTitleModelIdKey = stringPreferencesKey("default_title_model_id")
 
     private val providerListType = object : TypeToken<List<ProviderConfig>>() {}.type
     private val modelListType = object : TypeToken<List<ModelConfig>>() {}.type
@@ -44,6 +50,30 @@ class AppRepository(context: Context) {
         prefs[currentConversationIdKey]
     }
 
+    val nicknameFlow: Flow<String> = dataStore.data.map { prefs ->
+        prefs[nicknameKey].orEmpty()
+    }
+
+    val customInstructionsFlow: Flow<String> = dataStore.data.map { prefs ->
+        prefs[customInstructionsKey].orEmpty()
+    }
+
+    val defaultChatModelIdFlow: Flow<String?> = dataStore.data.map { prefs ->
+        prefs[defaultChatModelIdKey]
+    }
+
+    val defaultVisionModelIdFlow: Flow<String?> = dataStore.data.map { prefs ->
+        prefs[defaultVisionModelIdKey]
+    }
+
+    val defaultImageModelIdFlow: Flow<String?> = dataStore.data.map { prefs ->
+        prefs[defaultImageModelIdKey]
+    }
+
+    val defaultTitleModelIdFlow: Flow<String?> = dataStore.data.map { prefs ->
+        prefs[defaultTitleModelIdKey]
+    }
+
     suspend fun setCurrentConversationId(conversationId: String?) {
         dataStore.edit { prefs ->
             if (conversationId.isNullOrBlank()) {
@@ -51,6 +81,42 @@ class AppRepository(context: Context) {
             } else {
                 prefs[currentConversationIdKey] = conversationId
             }
+        }
+    }
+
+    suspend fun setNickname(value: String) {
+        dataStore.edit { prefs ->
+            prefs[nicknameKey] = value
+        }
+    }
+
+    suspend fun setCustomInstructions(value: String) {
+        dataStore.edit { prefs ->
+            prefs[customInstructionsKey] = value
+        }
+    }
+
+    suspend fun setDefaultChatModelId(modelId: String?) {
+        dataStore.edit { prefs ->
+            if (modelId.isNullOrBlank()) prefs.remove(defaultChatModelIdKey) else prefs[defaultChatModelIdKey] = modelId
+        }
+    }
+
+    suspend fun setDefaultVisionModelId(modelId: String?) {
+        dataStore.edit { prefs ->
+            if (modelId.isNullOrBlank()) prefs.remove(defaultVisionModelIdKey) else prefs[defaultVisionModelIdKey] = modelId
+        }
+    }
+
+    suspend fun setDefaultImageModelId(modelId: String?) {
+        dataStore.edit { prefs ->
+            if (modelId.isNullOrBlank()) prefs.remove(defaultImageModelIdKey) else prefs[defaultImageModelIdKey] = modelId
+        }
+    }
+
+    suspend fun setDefaultTitleModelId(modelId: String?) {
+        dataStore.edit { prefs ->
+            if (modelId.isNullOrBlank()) prefs.remove(defaultTitleModelIdKey) else prefs[defaultTitleModelIdKey] = modelId
         }
     }
 
@@ -84,6 +150,44 @@ class AppRepository(context: Context) {
         }
         dataStore.edit { prefs ->
             prefs[modelsKey] = gson.toJson(models)
+        }
+    }
+
+    suspend fun upsertModels(modelsToUpsert: List<ModelConfig>) {
+        if (modelsToUpsert.isEmpty()) return
+        val models = modelsFlow.first().toMutableList()
+        var changed = false
+
+        modelsToUpsert.forEach { incoming ->
+            val index = models.indexOfFirst { it.id == incoming.id }
+            if (index >= 0) {
+                val existing = models[index]
+                val merged = existing.copy(
+                    displayName = existing.displayName.ifBlank { incoming.displayName },
+                    providerId = existing.providerId ?: incoming.providerId,
+                )
+                if (merged != existing) {
+                    models[index] = merged
+                    changed = true
+                }
+            } else {
+                models.add(0, incoming)
+                changed = true
+            }
+        }
+
+        if (!changed) return
+        dataStore.edit { prefs ->
+            prefs[modelsKey] = gson.toJson(models)
+        }
+    }
+
+    suspend fun setAllModelsEnabled(enabled: Boolean) {
+        val models = modelsFlow.first()
+        if (models.isEmpty()) return
+        val updated = models.map { it.copy(enabled = enabled) }
+        dataStore.edit { prefs ->
+            prefs[modelsKey] = gson.toJson(updated)
         }
     }
 

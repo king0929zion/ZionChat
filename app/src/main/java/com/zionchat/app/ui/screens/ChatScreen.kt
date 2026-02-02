@@ -78,6 +78,9 @@ fun ChatScreen(navController: NavController) {
     val providers by repository.providersFlow.collectAsState(initial = emptyList())
     val models by repository.modelsFlow.collectAsState(initial = emptyList())
     val currentConversationId by repository.currentConversationIdFlow.collectAsState(initial = null)
+    val nickname by repository.nicknameFlow.collectAsState(initial = "")
+    val customInstructions by repository.customInstructionsFlow.collectAsState(initial = "")
+    val defaultChatModelId by repository.defaultChatModelIdFlow.collectAsState(initial = null)
 
     val currentConversation = remember(conversations, currentConversationId) {
         conversations.firstOrNull { it.id == currentConversationId } ?: conversations.firstOrNull()
@@ -137,25 +140,68 @@ fun ChatScreen(navController: NavController) {
                 }
             }
 
-            val provider = repository.providersFlow.first().firstOrNull()
-            val selectedModel = repository.modelsFlow.first().firstOrNull { it.enabled }
-            val modelId = selectedModel?.id ?: "gpt-4o"
-            if (provider == null) {
+            val latestDefaultChatModelId = repository.defaultChatModelIdFlow.first()
+            if (latestDefaultChatModelId.isNullOrBlank()) {
                 repository.appendMessage(
                     conversationId,
                     Message(
                         role = "assistant",
-                        content = "请先在 Settings → Model services 添加供应商，并填写 API URL 与 API Key。"
+                        content = "请先在 Settings → Default model 里配置 Chat Model（必填），配置完成后才能开始对话。"
                     )
                 )
                 return@launch
             }
 
-            val requestMessages = (conversation?.messages.orEmpty()) + userMessage
+            val selectedModel = repository.modelsFlow.first().firstOrNull { it.id == latestDefaultChatModelId }
+            if (selectedModel == null) {
+                repository.appendMessage(
+                    conversationId,
+                    Message(
+                        role = "assistant",
+                        content = "默认对话模型未找到：$latestDefaultChatModelId。请在 Models 中开启/添加该模型，然后在 Settings → Default model 重新选择。"
+                    )
+                )
+                return@launch
+            }
+
+            val providerList = repository.providersFlow.first()
+            val provider = selectedModel.providerId?.let { pid -> providerList.firstOrNull { it.id == pid } } ?: providerList.firstOrNull()
+            if (provider == null || provider.apiUrl.isBlank() || provider.apiKey.isBlank()) {
+                repository.appendMessage(
+                    conversationId,
+                    Message(
+                        role = "assistant",
+                        content = "请先在 Settings → Model services 添加供应商，并填写 API URL 与 API Key，然后再对话。"
+                    )
+                )
+                return@launch
+            }
+
+            val systemMessage = run {
+                val latestNickname = repository.nicknameFlow.first().trim()
+                val latestInstructions = repository.customInstructionsFlow.first().trim()
+                val content = buildString {
+                    if (latestNickname.isNotBlank()) {
+                        append("Nickname: ")
+                        append(latestNickname)
+                    }
+                    if (latestInstructions.isNotBlank()) {
+                        if (isNotEmpty()) append("\n\n")
+                        append(latestInstructions)
+                    }
+                }.trim()
+                if (content.isBlank()) null else Message(role = "system", content = content)
+            }
+
+            val requestMessages = buildList {
+                if (systemMessage != null) add(systemMessage)
+                addAll(conversation?.messages.orEmpty())
+                add(userMessage)
+            }
             isLoading = true
             val result = chatApiClient.chatCompletions(
                 provider = provider,
-                modelId = modelId,
+                modelId = selectedModel.id,
                 messages = requestMessages,
                 extraHeaders = selectedModel?.headers.orEmpty()
             )
@@ -269,7 +315,8 @@ fun ChatScreen(navController: NavController) {
                     onClearTool = { selectedTool = null },
                     messageText = messageText,
                     onMessageChange = { messageText = it },
-                    onSend = ::sendMessage
+                    onSend = ::sendMessage,
+                    sendAllowed = !defaultChatModelId.isNullOrBlank()
                 )
             }
 
@@ -993,12 +1040,13 @@ fun BottomInputArea(
     onClearTool: () -> Unit,
     messageText: String,
     onMessageChange: (String) -> Unit,
-    onSend: () -> Unit
+    onSend: () -> Unit,
+    sendAllowed: Boolean = true
 ) {
-    val canSend = messageText.trim().isNotEmpty()
+    val canSend = sendAllowed && messageText.trim().isNotEmpty()
     val sendAlpha = if (canSend) 1f else 0.4f
     val sendBackground = TextPrimary.copy(alpha = sendAlpha)
-    val inputMinHeight = if (selectedTool != null) 68.dp else 44.dp
+    val inputMinHeight = 44.dp
     val toolLabel = when (selectedTool) {
         "camera" -> "Camera"
         "photos" -> "Photos"

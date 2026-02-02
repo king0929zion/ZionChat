@@ -53,6 +53,9 @@ class MainActivity : ComponentActivity() {
                         ) {
                             composable("chat") { ChatScreen(navController) }
                             composable("settings") { SettingsScreen(navController) }
+                            composable("personalization") { PersonalizationScreen(navController) }
+                            composable("memories") { MemoriesScreen(navController) }
+                            composable("default_model") { DefaultModelScreen(navController) }
                             composable("model_services") { ModelServicesScreen(navController) }
                             composable(
                                 route = "add_provider?preset={preset}&providerId={providerId}",
@@ -65,7 +68,13 @@ class MainActivity : ComponentActivity() {
                                 val providerId = backStackEntry.arguments?.getString("providerId")
                                 AddProviderScreen(navController, preset, providerId)
                             }
-                            composable("models") { ModelsScreen(navController) }
+                            composable(
+                                route = "models?providerId={providerId}",
+                                arguments = listOf(navArgument("providerId") { defaultValue = "" })
+                            ) { backStackEntry ->
+                                val providerId = backStackEntry.arguments?.getString("providerId")
+                                ModelsScreen(navController, providerId)
+                            }
                             composable(
                                 route = "model_config?id={id}",
                                 arguments = listOf(navArgument("id") { defaultValue = "" })

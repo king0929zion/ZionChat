@@ -13,6 +13,34 @@ class ChatApiClient {
     private val gson = Gson()
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
+    suspend fun listModels(
+        provider: ProviderConfig,
+        extraHeaders: List<HttpHeader> = emptyList()
+    ): Result<List<String>> {
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val url = provider.apiUrl.trimEnd('/') + "/models"
+                val requestBuilder = Request.Builder()
+                    .url(url)
+                    .get()
+                    .addHeader("Accept", "application/json")
+                    .addHeader("Authorization", "Bearer ${provider.apiKey}")
+                extraHeaders
+                    .filter { it.key.isNotBlank() }
+                    .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
+
+                client.newCall(requestBuilder.build()).execute().use { response ->
+                    val raw = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        error("HTTP ${response.code}: $raw")
+                    }
+                    val parsed = gson.fromJson(raw, OpenAIModelsResponse::class.java)
+                    parsed.data?.mapNotNull { it.id?.trim()?.takeIf { id -> id.isNotBlank() } }.orEmpty()
+                }
+            }
+        }
+    }
+
     suspend fun chatCompletions(
         provider: ProviderConfig,
         modelId: String,
@@ -63,4 +91,12 @@ data class OpenAIChoice(
 
 data class OpenAIMessage(
     val content: String?
+)
+
+data class OpenAIModelsResponse(
+    val data: List<OpenAIModel>?
+)
+
+data class OpenAIModel(
+    val id: String?
 )

@@ -26,7 +26,11 @@ import com.zionchat.app.data.resolveProviderIconAsset
 import com.zionchat.app.ui.components.AssetIcon
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 @Composable
 fun AddProviderScreen(
@@ -49,6 +53,7 @@ fun AddProviderScreen(
     val existingProvider = remember(providers, activeProviderId) {
         activeProviderId?.let { id -> providers.firstOrNull { it.id == id } }
     }
+    val editingProviderId = remember(activeProviderId) { activeProviderId ?: UUID.randomUUID().toString() }
 
     val presetData = remember(preset) { findProviderPreset(preset) }
 
@@ -70,6 +75,33 @@ fun AddProviderScreen(
             selectedType = it.type
             selectedIconAsset = it.iconAsset.orEmpty()
         }
+    }
+
+    LaunchedEffect(editingProviderId, existingProvider?.presetId, presetData?.id) {
+        snapshotFlow { listOf(providerName, apiKey, apiUrl, selectedType, selectedIconAsset) }
+            .debounce(350)
+            .distinctUntilChanged()
+            .collect {
+                val shouldSave =
+                    providerName.isNotBlank() ||
+                        apiUrl.isNotBlank() ||
+                        apiKey.isNotBlank() ||
+                        presetData != null ||
+                        existingProvider != null
+                if (!shouldSave) return@collect
+
+                repository.upsertProvider(
+                    ProviderConfig(
+                        id = editingProviderId,
+                        presetId = existingProvider?.presetId ?: presetData?.id,
+                        iconAsset = selectedIconAsset.ifBlank { existingProvider?.iconAsset ?: presetData?.iconAsset },
+                        name = providerName,
+                        type = selectedType,
+                        apiUrl = apiUrl,
+                        apiKey = apiKey
+                    )
+                )
+            }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -279,7 +311,22 @@ fun AddProviderScreen(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(20.dp))
                             .background(Surface, RoundedCornerShape(20.dp))
-                            .pressableScale(pressedScale = 0.98f) { navController.navigate("models") }
+                            .pressableScale(pressedScale = 0.98f) {
+                                scope.launch {
+                                    repository.upsertProvider(
+                                        ProviderConfig(
+                                            id = editingProviderId,
+                                            presetId = existingProvider?.presetId ?: presetData?.id,
+                                            iconAsset = selectedIconAsset.ifBlank { existingProvider?.iconAsset ?: presetData?.iconAsset },
+                                            name = providerName,
+                                            type = selectedType,
+                                            apiUrl = apiUrl,
+                                            apiKey = apiKey
+                                        )
+                                    )
+                                    navController.navigate("models?providerId=$editingProviderId")
+                                }
+                            }
                             .padding(horizontal = 16.dp, vertical = 14.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically

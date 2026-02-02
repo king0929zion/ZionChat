@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -25,12 +26,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.zionchat.app.R
+import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.ui.components.rememberResourceDrawablePainter
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 
 @Composable
 fun SettingsScreen(navController: NavController) {
+    val repository = LocalAppRepository.current
+    val models by repository.modelsFlow.collectAsState(initial = emptyList())
+    val defaultChatModelId by repository.defaultChatModelIdFlow.collectAsState(initial = null)
+    val defaultChatModelName = remember(models, defaultChatModelId) {
+        models.firstOrNull { it.id == defaultChatModelId }?.displayName
+    }
+
     Scaffold(
         topBar = { SettingsTopBar(navController) },
         containerColor = Background
@@ -50,7 +59,7 @@ fun SettingsScreen(navController: NavController) {
                     icon = { Icon(AppIcons.Personalization, null, Modifier.size(22.dp), tint = Color.Unspecified) },
                     label = "Personalization",
                     showDivider = true,
-                    onClick = { }
+                    onClick = { navController.navigate("personalization") }
                 )
                 SettingsItem(
                     icon = {
@@ -115,10 +124,10 @@ fun SettingsScreen(navController: NavController) {
                         )
                     },
                     label = "Default model",
-                    value = "GPT-4o",
+                    value = defaultChatModelName ?: "Not set",
                     showChevron = true,
                     showDivider = true,
-                    onClick = { }
+                    onClick = { navController.navigate("default_model") }
                 )
                 SettingsItem(
                     icon = {

@@ -20,20 +20,62 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.zionchat.app.LocalChatApiClient
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.data.ModelConfig
+import com.zionchat.app.data.ProviderConfig
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import kotlinx.coroutines.launch
 
 @Composable
-fun ModelsScreen(navController: NavController) {
+fun ModelsScreen(navController: NavController, providerId: String? = null) {
     val repository = LocalAppRepository.current
+    val chatApiClient = LocalChatApiClient.current
     val scope = rememberCoroutineScope()
     var searchQuery by remember { mutableStateOf("") }
     var showAddModal by remember { mutableStateOf(false) }
 
+    val providers by repository.providersFlow.collectAsState(initial = emptyList())
     val models by repository.modelsFlow.collectAsState(initial = emptyList())
+    val activeProvider = remember(providers, providerId) {
+        val id = providerId?.trim().orEmpty()
+        if (id.isNotBlank()) providers.firstOrNull { it.id == id } else providers.firstOrNull()
+    }
+
+    var isFetchingRemote by remember { mutableStateOf(false) }
+    var remoteError by remember { mutableStateOf<String?>(null) }
+    var fetchedSignature by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(activeProvider?.id, activeProvider?.apiUrl, activeProvider?.apiKey, fetchedSignature) {
+        val provider = activeProvider ?: return@LaunchedEffect
+        if (provider.apiUrl.isBlank() || provider.apiKey.isBlank()) return@LaunchedEffect
+
+        val signature = "${provider.id}|${provider.apiUrl}|${provider.apiKey}"
+        if (signature == fetchedSignature) return@LaunchedEffect
+
+        isFetchingRemote = true
+        remoteError = null
+        val result = chatApiClient.listModels(provider)
+        val modelIds = result.getOrElse { throwable ->
+            remoteError = "Failed to load models: ${throwable.message ?: throwable.toString()}"
+            emptyList()
+        }
+        if (modelIds.isNotEmpty()) {
+            repository.upsertModels(
+                modelIds.map { idValue ->
+                    ModelConfig(
+                        id = idValue,
+                        displayName = idValue,
+                        enabled = false,
+                        providerId = provider.id
+                    )
+                }
+            )
+        }
+        fetchedSignature = signature
+        isFetchingRemote = false
+    }
     val filteredModels = remember(models, searchQuery) {
         if (searchQuery.isBlank()) models
         else models.filter {
@@ -120,11 +162,29 @@ fun ModelsScreen(navController: NavController) {
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = "Name or ID",
-                    fontSize = 17.sp,
-                    color = TextSecondary,
-                    modifier = Modifier.weight(1f)
+                TextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = {
+                        Text(
+                            text = "Name or ID",
+                            fontSize = 17.sp,
+                            color = TextSecondary
+                        )
+                    },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        cursorColor = TextPrimary
+                    ),
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        fontSize = 17.sp,
+                        color = TextPrimary
+                    ),
+                    singleLine = true
                 )
             }
 
@@ -155,31 +215,46 @@ fun ModelsScreen(navController: NavController) {
                         color = TextSecondary
                     )
 
-                    // Toggle Switch
-                    Box(
-                        modifier = Modifier
-                            .width(52.dp)
-                            .height(32.dp)
-                            .background(
-                                if (isSelectAll) Color(0xFF34C759) else GrayLight,
-                                RoundedCornerShape(16.dp)
-                            )
-                            .padding(2.dp)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) {
-                                val target = !isSelectAll
-                                scope.launch {
-                                    models.forEach { repository.upsertModel(it.copy(enabled = target)) }
-                                }
-                            },
-                        contentAlignment = if (isSelectAll) Alignment.CenterEnd else Alignment.CenterStart
-                    ) {
-                        Box(
+                    ModelToggleSwitch(
+                        enabled = isSelectAll,
+                        onToggle = {
+                            val target = !isSelectAll
+                            scope.launch { repository.setAllModelsEnabled(target) }
+                        }
+                    )
+                }
+            }
+
+            if (isFetchingRemote || remoteError != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = when {
+                            isFetchingRemote -> "Loading models from provider..."
+                            remoteError != null -> remoteError.orEmpty()
+                            else -> ""
+                        },
+                        fontSize = 13.sp,
+                        color = if (remoteError != null) Color(0xFFFF3B30) else TextSecondary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (remoteError != null) {
+                        Text(
+                            text = "Retry",
+                            fontSize = 13.sp,
+                            color = TextPrimary,
                             modifier = Modifier
-                                .size(28.dp)
-                                .background(Surface, CircleShape)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) { fetchedSignature = null }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
                         )
                     }
                 }
@@ -218,7 +293,8 @@ fun ModelsScreen(navController: NavController) {
                         ModelConfig(
                             id = id.trim(),
                             displayName = name.trim(),
-                            enabled = false
+                            enabled = false,
+                            providerId = activeProvider?.id
                         )
                     )
                     showAddModal = false
@@ -252,32 +328,40 @@ fun ModelItem(
             color = TextPrimary
         )
 
-        // Toggle Switch
+        ModelToggleSwitch(enabled = model.enabled, onToggle = onToggle)
+    }
+}
+
+@Composable
+private fun ModelToggleSwitch(
+    enabled: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .width(52.dp)
+            .height(32.dp)
+            .background(
+                if (enabled) TextPrimary else Color.Transparent,
+                RoundedCornerShape(16.dp)
+            )
+            .border(2.dp, if (enabled) TextPrimary else TextSecondary, RoundedCornerShape(16.dp))
+            .padding(2.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onToggle() },
+        contentAlignment = if (enabled) Alignment.CenterEnd else Alignment.CenterStart
+    ) {
         Box(
             modifier = Modifier
-                .width(52.dp)
-                .height(32.dp)
+                .size(24.dp)
                 .background(
-                    if (model.enabled) TextPrimary else Color.Transparent,
-                    RoundedCornerShape(16.dp)
+                    if (enabled) Surface else TextSecondary,
+                    CircleShape
                 )
-                .border(2.dp, if (model.enabled) TextPrimary else TextSecondary, RoundedCornerShape(16.dp))
-                .padding(2.dp)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { onToggle() },
-            contentAlignment = if (model.enabled) Alignment.CenterEnd else Alignment.CenterStart
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .background(
-                        if (model.enabled) Surface else TextSecondary,
-                        CircleShape
-                    )
-            )
-        }
+        )
     }
 }
 
