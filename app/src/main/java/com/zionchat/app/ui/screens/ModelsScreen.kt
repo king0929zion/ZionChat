@@ -94,6 +94,8 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
         providerModels
             .filter { query.isEmpty() || it.displayName.lowercase().contains(query) }
             .sortedBy { it.displayName.lowercase() }
+    }
+
     val pullRefreshState = rememberPullRefreshState(
         refreshing = isFetchingRemote,
         onRefresh = { fetchedSignature = null }

@@ -358,7 +358,7 @@ object AppIcons {
         }
     }.build()
 
-    // Trash/Delete 图标
+    // Trash/Delete 图标 - 使用填充样式
     val Trash = ImageVector.Builder(
         name = "trash",
         defaultWidth = 24.dp,
@@ -367,14 +367,54 @@ object AppIcons {
         viewportHeight = 24f
     ).apply {
         path(
-            fill = SolidColor(Color.Transparent),
-            stroke = SolidColor(Color(0xFF000000)),
-            strokeLineWidth = 1.5f,
-            strokeLineCap = StrokeCap.Round,
-            strokeLineJoin = StrokeJoin.Round,
+            fill = SolidColor(Color(0xFFFFFFFF)),
+            stroke = null,
             pathFillType = PathFillType.NonZero
         ) {
-            addPathNodes("M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14zM10 11v6M14 11v6")
+            // Trash can body
+            moveTo(6f, 7f)
+            lineTo(5f, 20f)
+            curveTo(5f, 21.105f, 5.895f, 22f, 7f, 22f)
+            lineTo(17f, 22f)
+            curveTo(18.105f, 22f, 19f, 21.105f, 19f, 20f)
+            lineTo(18f, 7f)
+            lineTo(6f, 7f)
+            close()
+
+            // Trash can lid
+            moveTo(9f, 3f)
+            lineTo(15f, 3f)
+            curveTo(15f, 2.448f, 14.552f, 2f, 14f, 2f)
+            lineTo(10f, 2f)
+            curveTo(9.448f, 2f, 9f, 2.448f, 9f, 3f)
+            close()
+
+            // Top line
+            moveTo(3f, 6f)
+            lineTo(21f, 6f)
+            lineTo(21f, 7f)
+            lineTo(3f, 7f)
+            close()
+
+            // Left vertical line inside
+            moveTo(10f, 11f)
+            lineTo(10f, 17f)
+            curveTo(10f, 17.552f, 10.448f, 18f, 11f, 18f)
+            curveTo(11.552f, 18f, 12f, 17.552f, 12f, 17f)
+            lineTo(12f, 11f)
+            curveTo(12f, 10.448f, 11.552f, 10f, 11f, 10f)
+            curveTo(10.448f, 10f, 10f, 10.448f, 10f, 11f)
+            close()
+
+            // Right vertical line inside
+            moveTo(14f, 11f)
+            lineTo(14f, 17f)
+            curveTo(14f, 17.552f, 14.448f, 18f, 15f, 18f)
+            curveTo(15.552f, 18f, 16f, 17.552f, 16f, 17f)
+            lineTo(16f, 11f)
+            curveTo(16f, 10.448f, 15.552f, 10f, 15f, 10f)
+            curveTo(14.448f, 10f, 14f, 10.448f, 14f, 11f)
+            close()
         }
     }.build()
 

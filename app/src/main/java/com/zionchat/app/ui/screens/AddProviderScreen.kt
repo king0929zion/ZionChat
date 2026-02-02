@@ -77,24 +77,22 @@ fun AddProviderScreen(
         }
     }
 
+    // Auto-save only when editing existing provider, not when creating new
     LaunchedEffect(editingProviderId, existingProvider?.presetId, presetData?.id) {
+        if (existingProvider == null) return@LaunchedEffect // Don't auto-save for new providers
+
         snapshotFlow { listOf(providerName, apiKey, apiUrl, selectedType, selectedIconAsset) }
-            .debounce(350)
+            .debounce(500)
             .distinctUntilChanged()
             .collect {
-                val shouldSave =
-                    providerName.isNotBlank() ||
-                        apiUrl.isNotBlank() ||
-                        apiKey.isNotBlank() ||
-                        presetData != null ||
-                        existingProvider != null
+                val shouldSave = providerName.isNotBlank() || apiUrl.isNotBlank() || apiKey.isNotBlank()
                 if (!shouldSave) return@collect
 
                 repository.upsertProvider(
                     ProviderConfig(
                         id = editingProviderId,
-                        presetId = existingProvider?.presetId ?: presetData?.id,
-                        iconAsset = selectedIconAsset.ifBlank { existingProvider?.iconAsset ?: presetData?.iconAsset },
+                        presetId = existingProvider.presetId ?: presetData?.id,
+                        iconAsset = selectedIconAsset.ifBlank { existingProvider.iconAsset ?: presetData?.iconAsset },
                         name = providerName,
                         type = selectedType,
                         apiUrl = apiUrl,

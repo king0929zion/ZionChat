@@ -142,11 +142,12 @@ fun ChatScreen(navController: NavController) {
             repository.appendMessage(conversationId, userMessage)
             messageText = ""
 
-            // Update conversation title if it's still "New chat"
-            if (conversation.title == "New chat") {
+            // Update conversation title if it's still "New chat" or empty
+            val conversationToCheck = conversation ?: repository.conversationsFlow.first().firstOrNull { it.id == conversationId }
+            if (conversationToCheck?.title.isNullOrBlank() || conversationToCheck?.title == "New chat") {
                 val title = trimmed.lineSequence().firstOrNull().orEmpty().trim().take(24)
                 if (title.isNotBlank()) {
-                    repository.updateConversation(conversation.copy(title = title))
+                    repository.updateConversation(conversationToCheck!!.copy(title = title))
                 }
             }
 
@@ -1102,10 +1103,10 @@ fun BottomInputArea(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.Bottom
         ) {
-            // 工具图标按钮 - 46dp，与输入框等高
+            // 工具图标按钮 - 52dp，与输入框等高
             Box(
                 modifier = Modifier
-                    .size(46.dp)
+                    .size(52.dp)
                     .clip(CircleShape)
                     .background(Surface, CircleShape)
                     .pressableScale(pressedScale = 0.95f, onClick = onToolToggle),
@@ -1119,24 +1120,25 @@ fun BottomInputArea(
                 )
             }
 
-            // 输入框容器 - 默认46dp与工具按钮对齐，可多行扩展；发送按钮固定右下角
+            // 输入框容器 - 默认52dp与工具按钮对齐，可多行扩展；发送按钮固定右下角
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = 46.dp)
+                    .heightIn(min = 52.dp)
                     .wrapContentHeight()
-                    .background(Surface, RoundedCornerShape(24.dp)),
+                    .background(Surface, RoundedCornerShape(26.dp)),
                 contentAlignment = Alignment.CenterStart
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 16.dp, end = 48.dp, top = 8.dp, bottom = 8.dp)
+                        .padding(start = 12.dp, end = 48.dp, top = 8.dp, bottom = 8.dp)
                 ) {
                     // 选中的工具标签 - 位于输入框内部，出现时顶起输入框高度
                     if (selectedTool != null) {
                         Row(
                             modifier = Modifier
+                                .offset(x = (-4).dp)
                                 .background(Color(0xFFE8F4FD), RoundedCornerShape(16.dp))
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
