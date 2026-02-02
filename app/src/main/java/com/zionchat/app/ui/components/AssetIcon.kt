@@ -5,7 +5,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 
 @Composable
@@ -13,7 +13,8 @@ fun AssetIcon(
     assetFileName: String,
     contentDescription: String?,
     modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Fit
+    contentScale: ContentScale = ContentScale.Fit,
+    error: @Composable (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val model = remember(assetFileName, context) {
@@ -22,11 +23,11 @@ fun AssetIcon(
             .crossfade(false)
             .build()
     }
-    AsyncImage(
+    SubcomposeAsyncImage(
         model = model,
         contentDescription = contentDescription,
         modifier = modifier,
-        contentScale = contentScale
+        contentScale = contentScale,
+        error = { error?.invoke() ?: Unit }
     )
 }
-

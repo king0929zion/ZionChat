@@ -280,7 +280,22 @@ private fun ProviderIcon(
             assetFileName = iconAsset,
             contentDescription = contentDescription,
             modifier = modifier.clip(RoundedCornerShape(8.dp)),
-            contentScale = ContentScale.Fit
+            contentScale = ContentScale.Fit,
+            error = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Surface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppIcons.ChatGPTLogo,
+                        contentDescription = null,
+                        tint = TextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
         )
         return
     }

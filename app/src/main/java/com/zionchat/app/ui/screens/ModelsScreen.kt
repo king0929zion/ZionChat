@@ -311,30 +311,35 @@ fun AddModelModal(
                     indication = null
                 ) { onDismiss() }
         ) {
-            Surface(
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .animateEnterExit(
-                        enter = slideInVertically(initialOffsetY = { it }),
-                        exit = slideOutVertically(targetOffsetY = { it })
-                    )
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { }
-                    ),
-                color = Surface,
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                    .fillMaxSize()
+                    .imePadding()
             ) {
-                Column(
-                    modifier = Modifier.padding(24.dp)
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .animateEnterExit(
+                            enter = slideInVertically(initialOffsetY = { it }),
+                            exit = slideOutVertically(targetOffsetY = { it })
+                        )
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { }
+                        ),
+                    color = Surface,
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
                 ) {
-                // Drag handle
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp)
+                    ) {
+                    // Drag handle
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
                     Box(
                         modifier = Modifier
                             .width(40.dp)

@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -45,6 +46,7 @@ import com.zionchat.app.data.Message
 import com.zionchat.app.ui.components.rememberResourceDrawablePainter
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -66,6 +68,7 @@ fun ChatScreen(navController: NavController) {
     val chatApiClient = LocalChatApiClient.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val keyboardController = LocalSoftwareKeyboardController.current
     var showToolMenu by remember { mutableStateOf(false) }
     var selectedTool by remember { mutableStateOf<String?>(null) }
     var messageText by remember { mutableStateOf("") }
@@ -96,6 +99,7 @@ fun ChatScreen(navController: NavController) {
     var bottomBarHeightPx by remember { mutableIntStateOf(0) }
     val bottomBarHeightDp = with(LocalDensity.current) { bottomBarHeightPx.toDp() }
     val bottomContentPadding = maxOf(80.dp, bottomBarHeightDp + 12.dp)
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
     // 滚动到底部当新消息添加时
     LaunchedEffect(messages.size, currentConversation?.id) {
@@ -247,7 +251,21 @@ fun ChatScreen(navController: NavController) {
             ) {
                 BottomInputArea(
                     selectedTool = selectedTool,
-                    onToolToggle = { showToolMenu = !showToolMenu },
+                    onToolToggle = {
+                        if (showToolMenu) {
+                            showToolMenu = false
+                            return@BottomInputArea
+                        }
+                        if (imeVisible) {
+                            keyboardController?.hide()
+                            scope.launch {
+                                delay(180)
+                                showToolMenu = true
+                            }
+                        } else {
+                            showToolMenu = true
+                        }
+                    },
                     onClearTool = { selectedTool = null },
                     messageText = messageText,
                     onMessageChange = { messageText = it },
@@ -480,6 +498,8 @@ fun SidebarContent(
             .fillMaxHeight()
             .width(280.dp)
             .background(Surface)
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .windowInsetsPadding(WindowInsets.navigationBars)
     ) {
         // 顶部搜索区域
         Row(
@@ -793,25 +813,30 @@ fun ToolMenuPanel(
                     onClick = onDismiss
                 )
         ) {
-            Card(
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .animateEnterExit(
-                        enter = slideInVertically(initialOffsetY = { it }),
-                        exit = slideOutVertically(targetOffsetY = { it })
-                    )
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { }
-                    ),
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                colors = CardDefaults.cardColors(containerColor = Surface)
+                    .fillMaxSize()
+                    .imePadding()
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .animateEnterExit(
+                            enter = slideInVertically(initialOffsetY = { it }),
+                            exit = slideOutVertically(targetOffsetY = { it })
+                        )
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { }
+                        ),
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Surface)
                 ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
                     // 拖动条
                     Box(
                         modifier = Modifier.fillMaxWidth(),
@@ -993,13 +1018,15 @@ fun BottomInputArea(
         "mcp" -> AppIcons.MCPTools
         else -> AppIcons.Globe
     }
+    val isSingleLineLike = messageText.isEmpty() || (!messageText.contains('\n') && messageText.length < 60)
+    val inputAlignment = if (isSingleLineLike) Alignment.CenterStart else Alignment.TopStart
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .imePadding()
             .padding(horizontal = 16.dp)
-            .padding(top = 6.dp, bottom = 12.dp)
+            .padding(top = 6.dp, bottom = 20.dp)
             .background(Background)
     ) {
         Row(
@@ -1109,7 +1136,10 @@ fun BottomInputArea(
                         minLines = 1,
                         maxLines = 5,
                         decorationBox = { innerTextField ->
-                            Box(modifier = Modifier.fillMaxWidth()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = inputAlignment
+                            ) {
                                 if (messageText.isEmpty()) {
                                     Text(
                                         text = "Message...",

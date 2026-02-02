@@ -121,17 +121,19 @@ fun AddProviderScreen(
                         .pressableScale(pressedScale = 0.95f) {
                             if (providerName.isBlank() || apiUrl.isBlank()) return@pressableScale
                             scope.launch {
+                                val normalizedIconAsset = selectedIconAsset.trim().takeIf { it.isNotBlank() }
                                 repository.upsertProvider(
-                                    existingProvider?.copy(
-                                        name = providerName.trim(),
-                                        type = selectedType.trim(),
-                                        apiUrl = apiUrl.trim(),
-                                        apiKey = apiKey.trim(),
-                                        iconAsset = selectedIconAsset.trim().takeIf { it.isNotBlank() }
-                                            ?: existingProvider.iconAsset
-                                    ) ?: ProviderConfig(
+                                    existingProvider?.let { existing ->
+                                        existing.copy(
+                                            name = providerName.trim(),
+                                            type = selectedType.trim(),
+                                            apiUrl = apiUrl.trim(),
+                                            apiKey = apiKey.trim(),
+                                            iconAsset = normalizedIconAsset ?: existing.iconAsset
+                                        )
+                                    } ?: ProviderConfig(
                                         presetId = preset?.takeIf { it.isNotBlank() },
-                                        iconAsset = selectedIconAsset.trim().takeIf { it.isNotBlank() },
+                                        iconAsset = normalizedIconAsset,
                                         name = providerName.trim(),
                                         type = selectedType.trim(),
                                         apiUrl = apiUrl.trim(),
@@ -179,7 +181,15 @@ fun AddProviderScreen(
                                 assetFileName = selectedIconAsset,
                                 contentDescription = providerName.ifBlank { "Provider" },
                                 modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
+                                contentScale = ContentScale.Crop,
+                                error = {
+                                    Icon(
+                                        imageVector = AppIcons.ChatGPTLogo,
+                                        contentDescription = "Select Avatar",
+                                        tint = TextSecondary,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
                             )
                         } else {
                             Icon(
@@ -329,21 +339,26 @@ fun AvatarSelectionModal(
                 .background(Color.Black.copy(alpha = 0.5f))
                 .pressableScale(pressedScale = 1f, onClick = onDismiss)
         ) {
-            Surface(
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .animateEnterExit(
-                        enter = slideInVertically(initialOffsetY = { it }),
-                        exit = slideOutVertically(targetOffsetY = { it })
-                    )
-                    .pressableScale(pressedScale = 1f, onClick = { }),
-                color = Surface,
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                    .fillMaxSize()
+                    .imePadding()
             ) {
-                Column(
-                    modifier = Modifier.padding(24.dp)
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .animateEnterExit(
+                            enter = slideInVertically(initialOffsetY = { it }),
+                            exit = slideOutVertically(targetOffsetY = { it })
+                        )
+                        .pressableScale(pressedScale = 1f, onClick = { }),
+                    color = Surface,
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
                 ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp)
+                    ) {
                     // Drag handle
                     Box(
                         modifier = Modifier.fillMaxWidth(),

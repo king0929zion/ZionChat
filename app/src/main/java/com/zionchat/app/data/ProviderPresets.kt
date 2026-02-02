@@ -17,6 +17,13 @@ val DEFAULT_PROVIDER_PRESETS: List<ProviderPreset> = listOf(
         iconAsset = "rikkahub.svg"
     ),
     ProviderPreset(
+        id = "kimi",
+        name = "Kimi",
+        type = "openai",
+        apiUrl = "https://api.moonshot.cn/v1",
+        iconAsset = "kimi-color.svg"
+    ),
+    ProviderPreset(
         id = "openai",
         name = "OpenAI",
         type = "openai",
@@ -24,11 +31,25 @@ val DEFAULT_PROVIDER_PRESETS: List<ProviderPreset> = listOf(
         iconAsset = "openai.svg"
     ),
     ProviderPreset(
+        id = "anthropic",
+        name = "Anthropic",
+        type = "anthropic",
+        apiUrl = "https://api.anthropic.com/v1",
+        iconAsset = "anthropic.svg"
+    ),
+    ProviderPreset(
         id = "gemini",
         name = "Gemini",
         type = "google",
         apiUrl = "https://generativelanguage.googleapis.com/v1beta",
         iconAsset = "gemini-color.svg"
+    ),
+    ProviderPreset(
+        id = "minimax",
+        name = "MiniMax",
+        type = "openai",
+        apiUrl = "https://api.minimax.chat/v1",
+        iconAsset = "minimax-color.svg"
     ),
     ProviderPreset(
         id = "aihubmix",
@@ -67,17 +88,59 @@ val DEFAULT_PROVIDER_PRESETS: List<ProviderPreset> = listOf(
     ),
     ProviderPreset(
         id = "alibabacloud",
-        name = "阿里云百炼",
+        name = "阿里云百炼（Qwen）",
         type = "openai",
         apiUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        iconAsset = "alibabacloud-color.svg"
+        iconAsset = "qwen-color.svg"
     ),
     ProviderPreset(
         id = "bytedance",
-        name = "火山引擎",
+        name = "豆包",
         type = "openai",
         apiUrl = "https://ark.cn-beijing.volces.com/api/v3",
-        iconAsset = "bytedance-color.svg"
+        iconAsset = "doubao-color.svg"
+    ),
+    ProviderPreset(
+        id = "doubao",
+        name = "豆包",
+        type = "openai",
+        apiUrl = "https://ark.cn-beijing.volces.com/api/v3",
+        iconAsset = "doubao-color.svg"
+    ),
+    ProviderPreset(
+        id = "nvidia",
+        name = "NVIDIA",
+        type = "openai",
+        apiUrl = "https://integrate.api.nvidia.com/v1",
+        iconAsset = "nvidia-color.svg"
+    ),
+    ProviderPreset(
+        id = "modelscope",
+        name = "ModelScope",
+        type = "openai",
+        apiUrl = "https://api-inference.modelscope.cn/v1",
+        iconAsset = "modelscope.svg"
+    ),
+    ProviderPreset(
+        id = "iflow",
+        name = "iFlow",
+        type = "openai",
+        apiUrl = "https://apis.iflow.cn/v1",
+        iconAsset = "iflow.svg"
+    ),
+    ProviderPreset(
+        id = "longcat",
+        name = "LongCat",
+        type = "openai",
+        apiUrl = "https://api.longcat.chat/openai/v1",
+        iconAsset = "longcat.svg"
+    ),
+    ProviderPreset(
+        id = "gmi",
+        name = "GMI",
+        type = "openai",
+        apiUrl = "https://api.gmi-serving.com/v1",
+        iconAsset = "gmi.svg"
     ),
     ProviderPreset(
         id = "moonshot",
@@ -155,13 +218,21 @@ private fun computeAIIconAssetByName(name: String): String? {
     val lowerName = name.lowercase()
     return when {
         PATTERN_RIKKAHUB.containsMatchIn(lowerName) -> "rikkahub.svg"
+        PATTERN_LONGCAT.containsMatchIn(lowerName) -> "longcat.svg"
+        PATTERN_IFLOW.containsMatchIn(lowerName) -> "iflow.svg"
+        PATTERN_MODELSCOPE.containsMatchIn(lowerName) -> "modelscope.svg"
+        PATTERN_GMI.containsMatchIn(lowerName) -> "gmi.svg"
+        PATTERN_NVIDIA.containsMatchIn(lowerName) -> "nvidia-color.svg"
+        PATTERN_KIMI.containsMatchIn(lowerName) -> "kimi-color.svg"
         PATTERN_OPENAI.containsMatchIn(lowerName) -> "openai.svg"
+        PATTERN_ANTHROPIC.containsMatchIn(lowerName) -> "anthropic.svg"
         PATTERN_GEMINI.containsMatchIn(lowerName) -> "gemini-color.svg"
+        PATTERN_MINIMAX.containsMatchIn(lowerName) -> "minimax-color.svg"
         PATTERN_DEEPSEEK.containsMatchIn(lowerName) -> "deepseek-color.svg"
         PATTERN_OPENROUTER.containsMatchIn(lowerName) -> "openrouter.svg"
         PATTERN_TOKENPONY.containsMatchIn(lowerName) -> "tokenpony.svg"
-        PATTERN_ALIYUN.containsMatchIn(lowerName) -> "alibabacloud-color.svg"
-        PATTERN_BYTEDANCE.containsMatchIn(lowerName) -> "bytedance-color.svg"
+        PATTERN_QWEN.containsMatchIn(lowerName) -> "qwen-color.svg"
+        PATTERN_DOUBAO.containsMatchIn(lowerName) -> "doubao-color.svg"
         PATTERN_SILLICON_CLOUD.containsMatchIn(lowerName) -> "siliconflow.svg"
         PATTERN_AIHUBMIX.containsMatchIn(lowerName) -> "aihubmix-color.svg"
         PATTERN_ZHIPU.containsMatchIn(lowerName) -> "zhipu-color.svg"
@@ -176,13 +247,21 @@ private fun computeAIIconAssetByName(name: String): String? {
 }
 
 private val PATTERN_RIKKAHUB = Regex("rikka|auto")
+private val PATTERN_LONGCAT = Regex("longcat")
+private val PATTERN_IFLOW = Regex("iflow")
+private val PATTERN_MODELSCOPE = Regex("modelscope")
+private val PATTERN_GMI = Regex("\\bgmi\\b|gmi-serving")
+private val PATTERN_NVIDIA = Regex("nvidia")
+private val PATTERN_KIMI = Regex("\\bkimi\\b")
 private val PATTERN_OPENAI = Regex("(gpt|openai|o\\d)")
+private val PATTERN_ANTHROPIC = Regex("anthropic|claude")
 private val PATTERN_GEMINI = Regex("(gemini|nano-banana)")
+private val PATTERN_MINIMAX = Regex("minimax")
 private val PATTERN_DEEPSEEK = Regex("deepseek")
 private val PATTERN_OPENROUTER = Regex("openrouter")
 private val PATTERN_ZHIPU = Regex("zhipu|智谱|glm")
-private val PATTERN_BYTEDANCE = Regex("bytedance|火山")
-private val PATTERN_ALIYUN = Regex("aliyun|阿里云|百炼")
+private val PATTERN_DOUBAO = Regex("doubao|豆包|bytedance|火山")
+private val PATTERN_QWEN = Regex("qwen|aliyun|阿里云|百炼")
 private val PATTERN_SILLICON_CLOUD = Regex("silicon|硅基")
 private val PATTERN_AIHUBMIX = Regex("aihubmix")
 private val PATTERN_HUNYUAN = Regex("hunyuan|tencent")
@@ -192,4 +271,3 @@ private val PATTERN_MOONSHOT = Regex("moonshot|月之暗面")
 private val PATTERN_302 = Regex("302")
 private val PATTERN_STEP = Regex("step|阶跃")
 private val PATTERN_TOKENPONY = Regex("tokenpony|小马算力")
-
