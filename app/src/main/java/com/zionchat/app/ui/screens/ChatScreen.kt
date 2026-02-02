@@ -1103,10 +1103,10 @@ fun BottomInputArea(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.Bottom
         ) {
-            // 工具图标按钮 - 52dp，与输入框等高
+            // 工具图标按钮 - 46dp，与输入框等高
             Box(
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(46.dp)
                     .clip(CircleShape)
                     .background(Surface, CircleShape)
                     .pressableScale(pressedScale = 0.95f, onClick = onToolToggle),
@@ -1120,12 +1120,12 @@ fun BottomInputArea(
                 )
             }
 
-            // 输入框容器 - 默认52dp与工具按钮对齐，可多行扩展；发送按钮固定右下角
+            // 输入框容器 - 默认46dp与工具按钮对齐，可多行扩展；发送按钮固定右下角
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = 52.dp)
-                    .background(Surface, RoundedCornerShape(26.dp)),
+                    .heightIn(min = 46.dp)
+                    .background(Surface, RoundedCornerShape(23.dp)),
                 contentAlignment = Alignment.CenterStart
             ) {
                 Column(
