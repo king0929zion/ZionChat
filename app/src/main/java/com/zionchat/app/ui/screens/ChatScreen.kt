@@ -467,7 +467,6 @@ fun ChatScreen(navController: NavController) {
                 modifier = Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .zIndex(3f)
             ) {
                 // 顶部导航栏
                 TopNavBar(
