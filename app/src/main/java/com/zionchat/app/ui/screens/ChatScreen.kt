@@ -542,7 +542,7 @@ fun ChatScreen(navController: NavController) {
                     .fillMaxWidth()
                     .height(bottomMaskHeight)
                     .background(ChatBackground)
-                    .zIndex(1f)
+                    .zIndex(0.5f)
             )
             BottomFadeScrim(
                 color = ChatBackground,
@@ -550,7 +550,7 @@ fun ChatScreen(navController: NavController) {
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = bottomMaskHeight)
-                    .zIndex(1f)
+                    .zIndex(0.5f)
             )
 
             Column(
@@ -573,10 +573,10 @@ fun ChatScreen(navController: NavController) {
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .imePadding()
+                    .zIndex(5f)
             ) {
                 Box(
                     modifier = Modifier
-                        .zIndex(3f)
                         .onSizeChanged { bottomBarHeightPx = it.height }
                 ) {
                     BottomInputArea(
