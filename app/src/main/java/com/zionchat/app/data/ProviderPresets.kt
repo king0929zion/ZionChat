@@ -48,7 +48,7 @@ val DEFAULT_PROVIDER_PRESETS: List<ProviderPreset> = listOf(
         id = "antigravity",
         name = "Antigravity",
         type = "antigravity",
-        apiUrl = "https://cloudcode-pa.googleapis.com",
+        apiUrl = "https://daily-cloudcode-pa.googleapis.com",
         iconAsset = "gemini-color.svg"
     ),
     ProviderPreset(

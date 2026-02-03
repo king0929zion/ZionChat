@@ -11,7 +11,11 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.nio.ByteBuffer
+import java.security.MessageDigest
 import java.util.UUID
+import kotlin.math.abs
+import kotlin.random.Random
 
 class ChatApiClient {
     private val client = OkHttpClient()
@@ -35,6 +39,9 @@ class ChatApiClient {
                                 .get()
                                 .addHeader("Accept", "application/json")
                                 .addHeader("Authorization", "Bearer ${provider.apiKey}")
+                        if (isIFlow(provider)) {
+                            requestBuilder.addHeader("User-Agent", IFLOW_USER_AGENT)
+                        }
                         extraHeaders
                             .filter { it.key.isNotBlank() }
                             .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
@@ -70,7 +77,7 @@ class ChatApiClient {
                     .addHeader("Openai-Beta", "responses=experimental")
                     .addHeader("Version", "0.21.0")
                     .addHeader("Session_id", UUID.randomUUID().toString())
-                    .addHeader("User-Agent", "codex_cli_rs/0.50.0 (Android; ZionChat)")
+                    .addHeader("User-Agent", CODEX_USER_AGENT)
                     .addHeader("Connection", "Keep-Alive")
 
             val isOAuthToken =
@@ -163,6 +170,9 @@ class ChatApiClient {
                     .url(url)
                     .addHeader("Content-Type", "application/json")
                     .addHeader("Authorization", "Bearer ${provider.apiKey}")
+                if (isIFlow(provider)) {
+                    requestBuilder.addHeader("User-Agent", IFLOW_USER_AGENT)
+                }
                 extraHeaders
                     .filter { it.key.isNotBlank() }
                     .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
@@ -218,6 +228,9 @@ class ChatApiClient {
             .addHeader("Content-Type", "application/json")
             .addHeader("Authorization", "Bearer ${provider.apiKey}")
             .addHeader("Accept", "text/event-stream")
+        if (isIFlow(provider)) {
+            requestBuilder.addHeader("User-Agent", IFLOW_USER_AGENT)
+        }
         extraHeaders
             .filter { it.key.isNotBlank() }
             .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
@@ -236,8 +249,8 @@ class ChatApiClient {
 
             while (!source.exhausted()) {
                 val line = source.readUtf8Line() ?: continue
-                if (line.startsWith("data: ")) {
-                    val data = line.substring(6)
+                if (line.startsWith("data:")) {
+                    val data = line.removePrefix("data:").trimStart()
                     if (data == "[DONE]") break
 
                     try {
@@ -298,7 +311,7 @@ class ChatApiClient {
                 .addHeader("Openai-Beta", "responses=experimental")
                 .addHeader("Version", "0.21.0")
                 .addHeader("Session_id", UUID.randomUUID().toString())
-                .addHeader("User-Agent", "codex_cli_rs/0.50.0 (Android; ZionChat)")
+                .addHeader("User-Agent", CODEX_USER_AGENT)
                 .addHeader("Connection", "Keep-Alive")
 
         val isOAuthToken =
@@ -355,8 +368,7 @@ class ChatApiClient {
         messages: List<Message>,
         extraHeaders: List<HttpHeader>
     ): Flow<ChatStreamDelta> = flow {
-        val url = provider.apiUrl.trimEnd('/') + "/v1internal:streamGenerateContent?alt=sse"
-        val project = provider.oauthProjectId?.trim().orEmpty()
+        val project = provider.oauthProjectId?.trim().takeIf { !it.isNullOrBlank() } ?: generateAntigravityProjectId()
 
         val systemText =
             messages.filter { it.role == "system" || it.role == "developer" }
@@ -378,7 +390,7 @@ class ChatApiClient {
         val requestPayload =
             mutableMapOf<String, Any>(
                 "contents" to contents,
-                "sessionId" to "-${UUID.randomUUID()}"
+                "sessionId" to generateAntigravitySessionId(messages)
             )
 
         if (systemText.isNotBlank()) {
@@ -397,73 +409,97 @@ class ChatApiClient {
                 )
             )
 
-        val requestBuilder =
-            Request.Builder()
-                .url(url)
-                .addHeader("Content-Type", "application/json")
-                .addHeader("Authorization", "Bearer ${provider.apiKey}")
-                .addHeader("Accept", "text/event-stream")
-                .addHeader("User-Agent", "antigravity/1.104.0 (Android; ZionChat)")
+        val baseUrls = antigravityBaseUrlFallbackOrder(provider)
+        var lastError: String? = null
 
-        extraHeaders
-            .filter { it.key.isNotBlank() }
-            .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
+        for ((index, baseUrl) in baseUrls.withIndex()) {
+            var completed = false
+            val url = baseUrl.trimEnd('/') + "/v1internal:streamGenerateContent?alt=sse"
+            val requestBuilder =
+                Request.Builder()
+                    .url(url)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Authorization", "Bearer ${provider.apiKey}")
+                    .addHeader("Accept", "text/event-stream")
+                    .addHeader("User-Agent", ANTIGRAVITY_USER_AGENT)
 
-        val request = requestBuilder.post(body.toRequestBody(jsonMediaType)).build()
+            extraHeaders
+                .filter { it.key.isNotBlank() }
+                .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
 
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                val errorBody = response.body?.string().orEmpty()
-                throw IllegalStateException("HTTP ${response.code}: $errorBody")
-            }
+            val request = requestBuilder.post(body.toRequestBody(jsonMediaType)).build()
 
-            val source = response.body?.source() ?: throw IllegalStateException("Response body is null")
-            while (!source.exhausted()) {
-                val line = source.readUtf8Line() ?: continue
-                if (!line.startsWith("data:")) continue
-                val data = line.removePrefix("data:").trim()
-                if (data == "[DONE]") break
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val errorBody = response.body?.string().orEmpty()
+                    lastError = "HTTP ${response.code}: $errorBody"
+                    if (index + 1 < baseUrls.size) return@use
+                    throw IllegalStateException(lastError ?: "HTTP ${response.code}")
+                }
 
-                val json = runCatching { JsonParser.parseString(data).asJsonObject }.getOrNull() ?: continue
-                val responseObj = json.getAsJsonObject("response") ?: json
-                val candidates = responseObj.getAsJsonArray("candidates") ?: continue
-                if (candidates.size() == 0) continue
-                val first = candidates[0].asJsonObject
-                val contentObj = first.getAsJsonObject("content") ?: continue
-                val parts = contentObj.getAsJsonArray("parts") ?: continue
-                parts.forEach { partEl ->
-                    val part = runCatching { partEl.asJsonObject }.getOrNull() ?: return@forEach
-                    val text = part.get("text")?.asString ?: return@forEach
-                    if (text.isEmpty()) return@forEach
-                    val isThought = part.get("thought")?.asBoolean ?: false
-                    if (isThought) emit(ChatStreamDelta(reasoning = text)) else emit(ChatStreamDelta(content = text))
+                completed = true
+                val source = response.body?.source() ?: throw IllegalStateException("Response body is null")
+                while (!source.exhausted()) {
+                    val line = source.readUtf8Line() ?: continue
+                    if (!line.startsWith("data:")) continue
+                    val data = line.removePrefix("data:").trim()
+                    if (data == "[DONE]") break
+
+                    val json = runCatching { JsonParser.parseString(data).asJsonObject }.getOrNull() ?: continue
+                    val responseObj = json.getAsJsonObject("response") ?: json
+                    val candidates = responseObj.getAsJsonArray("candidates") ?: continue
+                    if (candidates.size() == 0) continue
+                    val first = candidates[0].asJsonObject
+                    val contentObj = first.getAsJsonObject("content") ?: continue
+                    val parts = contentObj.getAsJsonArray("parts") ?: continue
+                    parts.forEach { partEl ->
+                        val part = runCatching { partEl.asJsonObject }.getOrNull() ?: return@forEach
+                        val text = part.get("text")?.asString ?: return@forEach
+                        if (text.isEmpty()) return@forEach
+                        val isThought = part.get("thought")?.asBoolean ?: false
+                        if (isThought) emit(ChatStreamDelta(reasoning = text)) else emit(ChatStreamDelta(content = text))
+                    }
                 }
             }
+
+            if (completed) return@flow
         }
     }.flowOn(Dispatchers.IO)
 
     private fun listAntigravityModels(provider: ProviderConfig): List<String> {
-        val url = provider.apiUrl.trimEnd('/') + "/v1internal:fetchAvailableModels"
-        val request =
-            Request.Builder()
-                .url(url)
-                .post("{}".toRequestBody(jsonMediaType))
-                .addHeader("Content-Type", "application/json")
-                .addHeader("Authorization", "Bearer ${provider.apiKey}")
-                .addHeader("Accept", "application/json")
-                .addHeader("User-Agent", "antigravity/1.104.0 (Android; ZionChat)")
-                .build()
+        val baseUrls = antigravityBaseUrlFallbackOrder(provider)
+        var lastError: String? = null
 
-        client.newCall(request).execute().use { response ->
-            val raw = response.body?.string().orEmpty()
-            if (!response.isSuccessful) error("HTTP ${response.code}: $raw")
+        baseUrls.forEachIndexed { index, baseUrl ->
+            val url = baseUrl.trimEnd('/') + "/v1internal:fetchAvailableModels"
+            val request =
+                Request.Builder()
+                    .url(url)
+                    .post("{}".toRequestBody(jsonMediaType))
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Authorization", "Bearer ${provider.apiKey}")
+                    .addHeader("Accept", "application/json")
+                    .addHeader("User-Agent", ANTIGRAVITY_USER_AGENT)
+                    .build()
 
-            val json = runCatching { JsonParser.parseString(raw).asJsonObject }.getOrNull() ?: return emptyList()
-            val models = json.getAsJsonObject("models") ?: return emptyList()
-            return models.entrySet().mapNotNull { entry ->
-                entry.key?.trim()?.takeIf { it.isNotBlank() }
-            }.sorted()
+            client.newCall(request).execute().use { response ->
+                val raw = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    lastError = "HTTP ${response.code}: $raw"
+                    if (index + 1 < baseUrls.size) return@use
+                    error(lastError ?: "HTTP ${response.code}")
+                }
+
+                val json = runCatching { JsonParser.parseString(raw).asJsonObject }.getOrNull() ?: return emptyList()
+                val models = json.getAsJsonObject("models") ?: return emptyList()
+                return models.entrySet().mapNotNull { entry ->
+                    entry.key?.trim()?.takeIf { it.isNotBlank() }
+                }.sorted()
+            }
         }
+
+        if (!lastError.isNullOrBlank()) error(lastError!!)
+        return emptyList()
     }
 
     /**
@@ -522,6 +558,12 @@ class ChatApiClient {
     }
 
     companion object {
+        private const val CODEX_USER_AGENT = "codex_cli_rs/0.50.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464"
+        private const val ANTIGRAVITY_USER_AGENT = "antigravity/1.104.0 darwin/arm64"
+        private const val ANTIGRAVITY_BASE_DAILY = "https://daily-cloudcode-pa.googleapis.com"
+        private const val ANTIGRAVITY_BASE_SANDBOX = "https://daily-cloudcode-pa.sandbox.googleapis.com"
+        private const val IFLOW_USER_AGENT = "iFlow-Cli"
+
         private val CODEX_DEFAULT_MODELS =
             listOf(
                 "gpt-5.1-codex",
@@ -531,6 +573,53 @@ class ChatApiClient {
                 "gpt-5-codex-mini",
                 "gpt-5.2-codex"
             )
+    }
+
+    private fun isIFlow(provider: ProviderConfig): Boolean {
+        if (provider.oauthProvider?.trim()?.equals("iflow", ignoreCase = true) == true) return true
+        if (provider.presetId?.trim()?.equals("iflow", ignoreCase = true) == true) return true
+        return provider.apiUrl.contains("iflow", ignoreCase = true)
+    }
+
+    private fun generateAntigravityProjectId(): String {
+        val adjectives = listOf("useful", "bright", "swift", "calm", "bold")
+        val nouns = listOf("fuze", "wave", "spark", "flow", "core")
+        val adj = adjectives.random()
+        val noun = nouns.random()
+        val randomPart = UUID.randomUUID().toString().lowercase().take(5)
+        return "$adj-$noun-$randomPart"
+    }
+
+    private fun generateAntigravitySessionId(messages: List<Message>): String {
+        val firstUserText = messages.firstOrNull { it.role == "user" }?.content?.trim().orEmpty()
+        if (firstUserText.isNotBlank()) {
+            val digest = MessageDigest.getInstance("SHA-256").digest(firstUserText.toByteArray(Charsets.UTF_8))
+            val n = abs(ByteBuffer.wrap(digest.copyOfRange(0, 8)).long)
+            return "-$n"
+        }
+        val n = Random.nextLong(0, 9_000_000_000_000_000_000L)
+        return "-$n"
+    }
+
+    private fun antigravityBaseUrlFallbackOrder(provider: ProviderConfig): List<String> {
+        val custom = provider.apiUrl.trim().trimEnd('/')
+        val isProd = custom.contains("cloudcode-pa.googleapis.com", ignoreCase = true) &&
+            !custom.contains("daily-cloudcode-pa.googleapis.com", ignoreCase = true)
+
+        val candidates =
+            when {
+                isProd -> listOf(ANTIGRAVITY_BASE_DAILY, ANTIGRAVITY_BASE_SANDBOX, custom)
+                custom.contains("daily-cloudcode-pa.googleapis.com", ignoreCase = true) ->
+                    listOf(custom, ANTIGRAVITY_BASE_SANDBOX)
+                custom.contains("daily-cloudcode-pa.sandbox.googleapis.com", ignoreCase = true) ->
+                    listOf(custom, ANTIGRAVITY_BASE_DAILY)
+                else -> listOf(custom)
+            }
+
+        return candidates
+            .map { it.trim().trimEnd('/') }
+            .filter { it.isNotBlank() }
+            .distinct()
     }
 }
 

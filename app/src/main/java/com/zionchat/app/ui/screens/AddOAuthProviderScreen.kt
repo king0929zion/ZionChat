@@ -314,7 +314,7 @@ fun AddOAuthProviderScreen(
                                                 iconAsset = "google-color.svg",
                                                 name = providerName.trim().ifBlank { "Antigravity" },
                                                 type = "antigravity",
-                                                apiUrl = "https://cloudcode-pa.googleapis.com",
+                                                apiUrl = "https://daily-cloudcode-pa.googleapis.com",
                                                 apiKey = token.accessToken,
                                                 oauthProvider = "antigravity",
                                                 oauthAccessToken = token.accessToken,
