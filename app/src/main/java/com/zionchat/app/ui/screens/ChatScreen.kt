@@ -143,10 +143,15 @@ fun ChatScreen(navController: NavController) {
     val messages = currentConversation?.messages.orEmpty()
 
     val listState = rememberLazyListState()
+    val density = LocalDensity.current
+    var topBarHeightPx by remember { mutableIntStateOf(0) }
     var bottomBarHeightPx by remember { mutableIntStateOf(0) }
-    val bottomBarHeightDp = with(LocalDensity.current) { bottomBarHeightPx.toDp() }
+    val topBarHeightDp = with(density) { if (topBarHeightPx == 0) 66.dp else topBarHeightPx.toDp() }
+    val statusBarTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val listTopPadding = statusBarTopPadding + topBarHeightDp + 8.dp
+    val bottomBarHeightDp = with(density) { bottomBarHeightPx.toDp() }
     val bottomContentPadding = maxOf(80.dp, bottomBarHeightDp + 12.dp)
-    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val imeVisible = WindowInsets.ime.getBottom(density) > 0
 
     // Pending 消息：在 DataStore 落盘前立即显示，彻底修复“首条消息消失”
     var pendingMessages by remember { mutableStateOf<List<PendingMessage>>(emptyList()) }
@@ -461,71 +466,92 @@ fun ChatScreen(navController: NavController) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Background)
+                .background(ChatBackground)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.statusBars)
-            ) {
-                // 顶部导航栏
-                TopNavBar(
-                    onMenuClick = { scope.launch { drawerState.open() } },
-                    onNewChatClick = ::startNewChat
-                )
-
-                // 聊天内容区域
+            // Chat content (behind the top bar), so messages can scroll into the fade region.
+            if (localMessages.isEmpty()) {
                 Box(
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(bottom = bottomContentPadding)
+                        .fillMaxSize()
+                        .padding(top = listTopPadding, bottom = bottomContentPadding),
+                    contentAlignment = Alignment.Center
                 ) {
-                    if (localMessages.isEmpty()) {
-                        // 空状态
-                        EmptyChatState()
-                    } else {
-                        LazyColumn(
-                            state = listState,
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            itemsIndexed(localMessages, key = { _, item -> item.id }) { index, message ->
-                                // 只显示最近3条AI消息的工具栏
-                                val showToolbar = !isStreaming || (streamingMessageId == null) ||
-                                    (index >= localMessages.size - 3)
-                                MessageItem(
-                                    message = message,
-                                    conversationId = effectiveConversationId,
-                                    isStreaming = isStreaming
-                                        && streamingConversationId == effectiveConversationId
-                                        && message.id == streamingMessageId,
-                                    showToolbar = showToolbar,
-                                    onEdit = { /* TODO: 编辑消息 */ },
-                                    onDelete = { convoId, messageId ->
-                                        scope.launch { repository.deleteMessage(convoId, messageId) }
-                                    }
-                                )
+                    EmptyChatState()
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = listTopPadding,
+                        bottom = bottomContentPadding + 8.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    itemsIndexed(localMessages, key = { _, item -> item.id }) { index, message ->
+                        val showToolbar = !isStreaming || (streamingMessageId == null) ||
+                            (index >= localMessages.size - 3)
+                        MessageItem(
+                            message = message,
+                            conversationId = effectiveConversationId,
+                            isStreaming = isStreaming
+                                && streamingConversationId == effectiveConversationId
+                                && message.id == streamingMessageId,
+                            showToolbar = showToolbar,
+                            onEdit = { /* TODO */ },
+                            onDelete = { convoId, messageId ->
+                                scope.launch { repository.deleteMessage(convoId, messageId) }
                             }
-                        }
+                        )
                     }
+                }
+            }
 
-                    // 顶部渐变遮罩 - 在消息列表区域内
-                    // 消息向上滚动到按钮附近时渐变消失
-                    TopFadeScrim(
-                        color = Background,
-                        height = 80.dp,
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .zIndex(1f)
-                    )
+            // Top fade: start at the bottom of TopNavBar (blue line), fully hidden above (orange line).
+            val topFadeHeight = 36.dp
+            val topFadeTopPadding = maxOf(
+                statusBarTopPadding,
+                statusBarTopPadding + topBarHeightDp - topFadeHeight
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .height(topFadeTopPadding)
+                    .background(ChatBackground)
+                    .zIndex(1f)
+            )
+            TopFadeScrim(
+                color = ChatBackground,
+                height = topFadeHeight,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = topFadeTopPadding)
+                    .zIndex(1f)
+            )
 
-                    BottomFadeScrim(
-                        color = Background,
-                        height = 52.dp,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .zIndex(1f)
+            BottomFadeScrim(
+                color = ChatBackground,
+                height = 52.dp,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = bottomContentPadding)
+                    .zIndex(1f)
+            )
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .zIndex(2f)
+            ) {
+                Box(modifier = Modifier.onSizeChanged { topBarHeightPx = it.height }) {
+                    TopNavBar(
+                        onMenuClick = { scope.launch { drawerState.open() } },
+                        onNewChatClick = ::startNewChat
                     )
                 }
             }
@@ -1446,7 +1472,7 @@ fun BottomInputArea(
             .imePadding()
             .padding(horizontal = 16.dp)
             .padding(top = 6.dp, bottom = bottomPadding)
-            .background(Background)
+            .background(ChatBackground)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
