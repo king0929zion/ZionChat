@@ -115,10 +115,11 @@ class ChatApiClient {
         extraHeaders: List<HttpHeader> = emptyList()
     ): Result<List<String>> {
         return withContext(Dispatchers.IO) {
-            when (provider.type.trim().lowercase()) {
-                "codex" -> runCatching { listCodexModels(provider, extraHeaders) }
-                "antigravity" -> runCatching { listAntigravityModels(provider, extraHeaders) }
-                "gemini-cli" -> runCatching { listGeminiCliModels(provider, extraHeaders) }
+            val type = provider.type.trim().lowercase()
+            when {
+                isCodex(provider) -> runCatching { listCodexModels(provider, extraHeaders) }
+                type == "antigravity" -> runCatching { listAntigravityModels(provider, extraHeaders) }
+                type == "gemini-cli" -> runCatching { listGeminiCliModels(provider, extraHeaders) }
                 else ->
                     runCatching {
                         val url = provider.apiUrl.trimEnd('/') + "/models"
@@ -359,10 +360,11 @@ class ChatApiClient {
         reasoningEffort: String? = null,
         conversationId: String? = null
     ): Flow<ChatStreamDelta> {
-        return when (provider.type.trim().lowercase()) {
-            "codex" -> codexResponsesStream(provider, modelId, messages, extraHeaders, reasoningEffort, conversationId)
-            "antigravity" -> antigravityStream(provider, modelId, messages, extraHeaders)
-            "gemini-cli" -> geminiCliStream(provider, modelId, messages, extraHeaders)
+        val type = provider.type.trim().lowercase()
+        return when {
+            isCodex(provider) -> codexResponsesStream(provider, modelId, messages, extraHeaders, reasoningEffort, conversationId)
+            type == "antigravity" -> antigravityStream(provider, modelId, messages, extraHeaders)
+            type == "gemini-cli" -> geminiCliStream(provider, modelId, messages, extraHeaders)
             else -> openAIChatCompletionsStream(provider, modelId, messages, extraHeaders)
         }
     }
@@ -975,6 +977,14 @@ class ChatApiClient {
         val supportsParallelToolCalls: Boolean,
         val inputModalities: List<String>
     )
+
+    private fun isCodex(provider: ProviderConfig): Boolean {
+        if (provider.type.trim().equals("codex", ignoreCase = true)) return true
+        if (provider.presetId?.trim()?.equals("codex", ignoreCase = true) == true) return true
+        if (provider.oauthProvider?.trim()?.equals("codex", ignoreCase = true) == true) return true
+        if (provider.apiUrl.contains("/backend-api/codex", ignoreCase = true)) return true
+        return false
+    }
 
     private fun isIFlow(provider: ProviderConfig): Boolean {
         if (provider.oauthProvider?.trim()?.equals("iflow", ignoreCase = true) == true) return true
