@@ -60,7 +60,6 @@ fun SettingsScreen(navController: NavController) {
     val models by repository.modelsFlow.collectAsState(initial = emptyList())
     val defaultChatModelId by repository.defaultChatModelIdFlow.collectAsState(initial = null)
     val nickname by repository.nicknameFlow.collectAsState(initial = "")
-    val handle by repository.handleFlow.collectAsState(initial = "")
     val avatarIndex by repository.avatarIndexFlow.collectAsState(initial = 0)
 
     var showEditProfile by remember { mutableStateOf(false) }
@@ -73,7 +72,6 @@ fun SettingsScreen(navController: NavController) {
     }
 
     val displayName = nickname.takeIf { it.isNotBlank() } ?: "Kendall Williamson"
-    val displayHandle = handle.takeIf { it.isNotBlank() } ?: "zizipz"
 
     Scaffold(
         topBar = { SettingsTopBar(navController) },
@@ -92,7 +90,6 @@ fun SettingsScreen(navController: NavController) {
                 // User Profile Section
                 UserProfileSection(
                     nickname = displayName,
-                    handle = displayHandle,
                     avatarIndex = avatarIndex,
                     onEditClick = { showEditProfile = true }
                 )
@@ -210,12 +207,10 @@ fun SettingsScreen(navController: NavController) {
         visible = showEditProfile,
         onDismiss = { showEditProfile = false },
         currentNickname = displayName,
-        currentHandle = displayHandle,
         currentAvatarIndex = avatarIndex,
-        onSave = { newNickname, newHandle, newAvatarIndex ->
+        onSave = { newNickname, newAvatarIndex ->
             scope.launch {
                 repository.setNickname(newNickname)
-                repository.setHandle(newHandle)
                 repository.setAvatarIndex(newAvatarIndex)
                 showEditProfile = false
             }
@@ -299,14 +294,13 @@ fun UserAvatar(
 @Composable
 fun UserProfileSection(
     nickname: String,
-    handle: String,
     avatarIndex: Int,
     onEditClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 16.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // 用户头像
@@ -315,7 +309,7 @@ fun UserProfileSection(
             size = 80.dp
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // 用户名
         Text(
@@ -325,15 +319,7 @@ fun UserProfileSection(
             color = TextPrimary
         )
 
-        // Handle
-        Text(
-            text = handle,
-            fontSize = 15.sp,
-            color = TextSecondary,
-            modifier = Modifier.padding(top = 4.dp)
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // 编辑资料按钮
         Button(
@@ -361,9 +347,8 @@ fun EditProfileModal(
     visible: Boolean,
     onDismiss: () -> Unit,
     currentNickname: String,
-    currentHandle: String,
     currentAvatarIndex: Int,
-    onSave: (String, String, Int) -> Unit
+    onSave: (String, Int) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -371,13 +356,11 @@ fun EditProfileModal(
     val dismissThresholdPx = remember(density) { with(density) { 120.dp.toPx() } }
 
     var nickname by remember { mutableStateOf("") }
-    var handle by remember { mutableStateOf("") }
     var selectedAvatarIndex by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(visible) {
         if (visible) {
             nickname = currentNickname
-            handle = currentHandle
             selectedAvatarIndex = currentAvatarIndex
             dragOffsetPx = 0f
         }
@@ -541,35 +524,6 @@ fun EditProfileModal(
                             }
                         }
 
-                        // Handle 输入框
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(
-                                text = "Handle",
-                                fontSize = 13.sp,
-                                fontFamily = SourceSans3,
-                                color = TextSecondary
-                            )
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = GrayLighter,
-                                shape = RoundedCornerShape(14.dp)
-                            ) {
-                                BasicTextField(
-                                    value = handle,
-                                    onValueChange = { handle = it },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                                    textStyle = TextStyle(
-                                        fontSize = 17.sp,
-                                        color = TextPrimary
-                                    ),
-                                    cursorBrush = SolidColor(TextPrimary),
-                                    singleLine = true
-                                )
-                            }
-                        }
-
                         Spacer(modifier = Modifier.height(8.dp))
 
                         // 按钮
@@ -590,7 +544,7 @@ fun EditProfileModal(
 
                             Button(
                                 onClick = {
-                                    onSave(nickname.trim(), handle.trim(), selectedAvatarIndex)
+                                    onSave(nickname.trim(), selectedAvatarIndex)
                                 },
                                 modifier = Modifier
                                     .weight(1f)
