@@ -712,7 +712,6 @@ fun ChatScreen(navController: NavController) {
                     sheetState = thinkingSheetState,
                     containerColor = ThinkingBackground,
                     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                    contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
                     dragHandle = {
                         Box(
                             modifier = Modifier
@@ -1192,7 +1191,7 @@ fun SidebarMenuItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .pressableScale(onClick: onClick)
+            .pressableScale(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
