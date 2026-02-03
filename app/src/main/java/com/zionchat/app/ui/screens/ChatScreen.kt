@@ -703,19 +703,20 @@ fun ChatScreen(navController: NavController) {
                         thinkingSheetText = null
                     },
                     sheetState = thinkingSheetState,
-                    containerColor = ChatBackground,
+                    containerColor = Surface,
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
                     dragHandle = {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 10.dp, bottom = 8.dp),
+                                .padding(top = 12.dp, bottom = 16.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .width(52.dp)
-                                    .height(5.dp)
-                                    .background(TextPrimary.copy(alpha = 0.55f), RoundedCornerShape(3.dp))
+                                    .width(40.dp)
+                                    .height(4.dp)
+                                    .background(GrayLight, RoundedCornerShape(2.dp))
                             )
                         }
                     }
@@ -723,25 +724,41 @@ fun ChatScreen(navController: NavController) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 22.dp)
-                            .padding(bottom = 28.dp)
+                            .padding(horizontal = 20.dp)
+                            .padding(bottom = 32.dp)
                             .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
+                        // 大标题 Thinking
                         Text(
                             text = "Thinking",
-                            fontSize = 30.sp,
+                            fontSize = 28.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = TextPrimary
                         )
-                        MarkdownText(
-                            markdown = thinkingSheetText.orEmpty(),
-                            textStyle = TextStyle(
-                                fontSize = 17.sp,
-                                lineHeight = 26.sp,
-                                color = TextPrimary
-                            )
-                        )
+
+                        // 内容区域 - 使用卡片样式
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = ChatBackground),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp)
+                            ) {
+                                MarkdownText(
+                                    markdown = thinkingSheetText.orEmpty(),
+                                    textStyle = TextStyle(
+                                        fontSize = 16.sp,
+                                        lineHeight = 24.sp,
+                                        color = TextPrimary
+                                    )
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -805,17 +822,23 @@ fun MessageItem(
             if (reasoningText.isNotBlank()) {
                 Row(
                     modifier = Modifier
-                        .padding(bottom = 6.dp)
+                        .padding(bottom = 8.dp)
                         .pressableScale(
                             pressedScale = 0.98f,
                             onClick = { onShowReasoning(reasoningText) }
                         ),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    Icon(
+                        imageVector = AppIcons.Think,
+                        contentDescription = null,
+                        tint = TextSecondary,
+                        modifier = Modifier.size(18.dp)
+                    )
                     Text(
                         text = "Thinking",
-                        fontSize = 13.sp,
+                        fontSize = 15.sp,
                         fontFamily = SourceSans3,
                         fontWeight = FontWeight.Medium,
                         color = TextSecondary
@@ -824,7 +847,7 @@ fun MessageItem(
                         imageVector = AppIcons.ChevronRight,
                         contentDescription = null,
                         tint = TextSecondary,
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(14.dp)
                     )
                 }
             }

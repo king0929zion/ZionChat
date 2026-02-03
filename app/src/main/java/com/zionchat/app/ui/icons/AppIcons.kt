@@ -1557,4 +1557,55 @@ object AppIcons {
             lineTo(19f, 12f)
         }
     }.build()
+
+    // Think/Thinking 图标 - 大脑/思考图标
+    val Think = ImageVector.Builder(
+        name = "think",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(
+            fill = SolidColor(Color(0xFF8E8E93)),
+            stroke = null
+        ) {
+            // 灯泡形状
+            moveTo(12f, 2f)
+            curveTo(8.134f, 2f, 5f, 5.134f, 5f, 9f)
+            curveTo(5f, 11.422f, 6.154f, 13.576f, 8f, 14.915f)
+            verticalLineTo(17f)
+            curveTo(8f, 17.552f, 8.448f, 18f, 9f, 18f)
+            horizontalLineTo(10f)
+            verticalLineTo(19f)
+            curveTo(10f, 19.552f, 10.448f, 20f, 11f, 20f)
+            horizontalLineTo(13f)
+            curveTo(13.552f, 20f, 14f, 19.552f, 14f, 19f)
+            verticalLineTo(18f)
+            horizontalLineTo(15f)
+            curveTo(15.552f, 18f, 16f, 17.552f, 16f, 17f)
+            verticalLineTo(14.915f)
+            curveTo(17.846f, 13.576f, 19f, 11.422f, 19f, 9f)
+            curveTo(19f, 5.134f, 15.866f, 2f, 12f, 2f)
+            close()
+            moveTo(12f, 4f)
+            curveTo(14.761f, 4f, 17f, 6.239f, 17f, 9f)
+            curveTo(17f, 10.797f, 16.062f, 12.373f, 14.583f, 13.238f)
+            curveTo(14.237f, 13.439f, 14f, 13.804f, 14f, 14.207f)
+            verticalLineTo(16f)
+            horizontalLineTo(10f)
+            verticalLineTo(14.207f)
+            curveTo(10f, 13.804f, 9.763f, 13.439f, 9.417f, 13.238f)
+            curveTo(7.938f, 12.373f, 7f, 10.797f, 7f, 9f)
+            curveTo(7f, 6.239f, 9.239f, 4f, 12f, 4f)
+            close()
+            // 灯泡内的光线/思考线条
+            moveTo(12f, 6.5f)
+            curveTo(11.172f, 6.5f, 10.5f, 7.172f, 10.5f, 8f)
+            curveTo(10.5f, 8.828f, 11.172f, 9.5f, 12f, 9.5f)
+            curveTo(12.828f, 9.5f, 13.5f, 8.828f, 13.5f, 8f)
+            curveTo(13.5f, 7.172f, 12.828f, 6.5f, 12f, 6.5f)
+            close()
+        }
+    }.build()
 }
