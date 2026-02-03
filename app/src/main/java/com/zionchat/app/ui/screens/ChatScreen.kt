@@ -87,6 +87,7 @@ fun ChatScreen(navController: NavController) {
     val conversations by repository.conversationsFlow.collectAsState(initial = emptyList())
     val currentConversationId by repository.currentConversationIdFlow.collectAsState(initial = null)
     val nickname by repository.nicknameFlow.collectAsState(initial = "")
+    val avatarIndex by repository.avatarIndexFlow.collectAsState(initial = 0)
     val customInstructions by repository.customInstructionsFlow.collectAsState(initial = "")
     val defaultChatModelId by repository.defaultChatModelIdFlow.collectAsState(initial = null)
 
@@ -400,12 +401,16 @@ fun ChatScreen(navController: NavController) {
         }
     }
 
+    val displayName = nickname.takeIf { it.isNotBlank() } ?: "Kendall Williamson"
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
             SidebarContent(
                 conversations = conversations,
                 currentConversationId = effectiveConversationId,
+                nickname = displayName,
+                avatarIndex = avatarIndex,
                 onClose = { scope.launch { drawerState.close() } },
                 onNewChat = ::startNewChat,
                 onConversationClick = { convo ->
@@ -741,6 +746,8 @@ fun EmptyChatState() {
 fun SidebarContent(
     conversations: List<Conversation>,
     currentConversationId: String?,
+    nickname: String,
+    avatarIndex: Int,
     onClose: () -> Unit,
     onNewChat: () -> Unit,
     onConversationClick: (Conversation) -> Unit,
@@ -875,23 +882,35 @@ fun SidebarContent(
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // 使用头像颜色
+                val avatarColor = when (avatarIndex) {
+                    0 -> Color(0xFF007AFF)
+                    1 -> Color(0xFF34C759)
+                    2 -> Color(0xFFFF9500)
+                    3 -> Color(0xFFFF3B30)
+                    4 -> Color(0xFFAF52DE)
+                    5 -> Color(0xFF5856D6)
+                    6 -> Color(0xFFFF2D55)
+                    7 -> Color(0xFF00C7BE)
+                    else -> Color(0xFF007AFF)
+                }
                 Box(
                     modifier = Modifier
                         .size(36.dp)
-                        .background(GrayLight, CircleShape),
+                        .background(avatarColor, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = AppIcons.User,
                         contentDescription = null,
-                        tint = TextSecondary,
+                        tint = Color.White,
                         modifier = Modifier.size(20.dp)
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Kendall Williamson",
+                        text = nickname,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
                         color = TextPrimary

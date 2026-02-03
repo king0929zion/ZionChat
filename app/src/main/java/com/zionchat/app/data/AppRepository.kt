@@ -21,6 +21,8 @@ class AppRepository(context: Context) {
     private val conversationsKey = stringPreferencesKey("conversations_json")
     private val currentConversationIdKey = stringPreferencesKey("current_conversation_id")
     private val nicknameKey = stringPreferencesKey("nickname")
+    private val handleKey = stringPreferencesKey("handle")
+    private val avatarIndexKey = stringPreferencesKey("avatar_index")
     private val customInstructionsKey = stringPreferencesKey("custom_instructions")
     private val defaultChatModelIdKey = stringPreferencesKey("default_chat_model_id")
     private val defaultVisionModelIdKey = stringPreferencesKey("default_vision_model_id")
@@ -53,6 +55,14 @@ class AppRepository(context: Context) {
 
     val nicknameFlow: Flow<String> = dataStore.data.map { prefs ->
         prefs[nicknameKey].orEmpty()
+    }
+
+    val handleFlow: Flow<String> = dataStore.data.map { prefs ->
+        prefs[handleKey].orEmpty()
+    }
+
+    val avatarIndexFlow: Flow<Int> = dataStore.data.map { prefs ->
+        prefs[avatarIndexKey]?.toIntOrNull() ?: 0
     }
 
     val customInstructionsFlow: Flow<String> = dataStore.data.map { prefs ->
@@ -88,6 +98,18 @@ class AppRepository(context: Context) {
     suspend fun setNickname(value: String) {
         dataStore.edit { prefs ->
             prefs[nicknameKey] = value
+        }
+    }
+
+    suspend fun setHandle(value: String) {
+        dataStore.edit { prefs ->
+            prefs[handleKey] = value
+        }
+    }
+
+    suspend fun setAvatarIndex(index: Int) {
+        dataStore.edit { prefs ->
+            prefs[avatarIndexKey] = index.toString()
         }
     }
 

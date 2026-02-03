@@ -1,50 +1,79 @@
 package com.zionchat.app.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.zionchat.app.R
 import com.zionchat.app.LocalAppRepository
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import com.zionchat.app.data.extractRemoteModelId
 import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.rememberResourceDrawablePainter
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.*
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(navController: NavController) {
     val repository = LocalAppRepository.current
+    val scope = rememberCoroutineScope()
     val models by repository.modelsFlow.collectAsState(initial = emptyList())
     val defaultChatModelId by repository.defaultChatModelIdFlow.collectAsState(initial = null)
+    val nickname by repository.nicknameFlow.collectAsState(initial = "")
+    val handle by repository.handleFlow.collectAsState(initial = "")
+    val avatarIndex by repository.avatarIndexFlow.collectAsState(initial = 0)
+
+    var showEditProfile by remember { mutableStateOf(false) }
+
     val defaultChatModelName = remember(models, defaultChatModelId) {
         val id = defaultChatModelId?.trim().orEmpty()
         if (id.isBlank()) null
         else models.firstOrNull { it.id == id }?.displayName
             ?: models.firstOrNull { extractRemoteModelId(it.id) == id }?.displayName
     }
+
+    val displayName = nickname.takeIf { it.isNotBlank() } ?: "Kendall Williamson"
+    val displayHandle = handle.takeIf { it.isNotBlank() } ?: "zizipz"
 
     Scaffold(
         topBar = { SettingsTopBar(navController) },
@@ -61,7 +90,12 @@ fun SettingsScreen(navController: NavController) {
                     .verticalScroll(rememberScrollState())
             ) {
                 // User Profile Section
-                UserProfileSection()
+                UserProfileSection(
+                    nickname = displayName,
+                    handle = displayHandle,
+                    avatarIndex = avatarIndex,
+                    onEditClick = { showEditProfile = true }
+                )
 
                 // My ChatGPT 分组
                 SettingsGroup(title = "My ChatGPT", itemCount = 2) {
@@ -170,6 +204,23 @@ fun SettingsScreen(navController: NavController) {
             )
         }
     }
+
+    // 编辑资料弹窗
+    EditProfileModal(
+        visible = showEditProfile,
+        onDismiss = { showEditProfile = false },
+        currentNickname = displayName,
+        currentHandle = displayHandle,
+        currentAvatarIndex = avatarIndex,
+        onSave = { newNickname, newHandle, newAvatarIndex ->
+            scope.launch {
+                repository.setNickname(newNickname)
+                repository.setHandle(newHandle)
+                repository.setAvatarIndex(newAvatarIndex)
+                showEditProfile = false
+            }
+        }
+    )
 }
 
 @Composable
@@ -211,8 +262,47 @@ fun SettingsTopBar(navController: NavController) {
     }
 }
 
+// 预定义头像颜色
+val AvatarColors = listOf(
+    Color(0xFF007AFF), // 蓝色
+    Color(0xFF34C759), // 绿色
+    Color(0xFFFF9500), // 橙色
+    Color(0xFFFF3B30), // 红色
+    Color(0xFFAF52DE), // 紫色
+    Color(0xFF5856D6), // 靛蓝
+    Color(0xFFFF2D55), // 粉红
+    Color(0xFF00C7BE), // 青色
+)
+
 @Composable
-fun UserProfileSection() {
+fun UserAvatar(
+    avatarIndex: Int,
+    size: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier
+) {
+    val color = AvatarColors.getOrElse(avatarIndex) { AvatarColors[0] }
+    Box(
+        modifier = modifier
+            .size(size)
+            .background(color, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = AppIcons.User,
+            contentDescription = "Avatar",
+            tint = Color.White,
+            modifier = Modifier.size(size * 0.5f)
+        )
+    }
+}
+
+@Composable
+fun UserProfileSection(
+    nickname: String,
+    handle: String,
+    avatarIndex: Int,
+    onEditClick: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -220,25 +310,16 @@ fun UserProfileSection() {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // 用户头像
-        Box(
-            modifier = Modifier
-                .size(80.dp)
-                .background(GrayLight, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = AppIcons.User,
-                contentDescription = "Avatar",
-                tint = TextSecondary,
-                modifier = Modifier.size(40.dp)
-            )
-        }
+        UserAvatar(
+            avatarIndex = avatarIndex,
+            size = 80.dp
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
         // 用户名
         Text(
-            text = "Kendall Williamson",
+            text = nickname,
             fontSize = 22.sp,
             fontWeight = FontWeight.SemiBold,
             color = TextPrimary
@@ -246,7 +327,7 @@ fun UserProfileSection() {
 
         // Handle
         Text(
-            text = "zizipz",
+            text = handle,
             fontSize = 15.sp,
             color = TextSecondary,
             modifier = Modifier.padding(top = 4.dp)
@@ -256,7 +337,7 @@ fun UserProfileSection() {
 
         // 编辑资料按钮
         Button(
-            onClick = { },
+            onClick = onEditClick,
             modifier = Modifier.height(40.dp),
             shape = RoundedCornerShape(20.dp),
             colors = ButtonDefaults.buttonColors(
@@ -270,6 +351,259 @@ fun UserProfileSection() {
                 fontWeight = FontWeight.Medium,
                 color = TextPrimary
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalAnimationApi::class)
+@Composable
+fun EditProfileModal(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    currentNickname: String,
+    currentHandle: String,
+    currentAvatarIndex: Int,
+    onSave: (String, String, Int) -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    var dragOffsetPx by remember { mutableFloatStateOf(0f) }
+    val dismissThresholdPx = remember(density) { with(density) { 120.dp.toPx() } }
+
+    var nickname by remember { mutableStateOf("") }
+    var handle by remember { mutableStateOf("") }
+    var selectedAvatarIndex by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(visible) {
+        if (visible) {
+            nickname = currentNickname
+            handle = currentHandle
+            selectedAvatarIndex = currentAvatarIndex
+            dragOffsetPx = 0f
+        }
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(),
+        exit = fadeOut()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.5f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .imePadding()
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .offset { IntOffset(0, dragOffsetPx.roundToInt()) }
+                        .draggable(
+                            orientation = Orientation.Vertical,
+                            state = rememberDraggableState { delta ->
+                                dragOffsetPx = (dragOffsetPx + delta).coerceAtLeast(0f)
+                            },
+                            onDragStopped = { velocity ->
+                                val shouldDismiss = dragOffsetPx > dismissThresholdPx || velocity > 2400f
+                                if (shouldDismiss) {
+                                    onDismiss()
+                                    dragOffsetPx = 0f
+                                } else {
+                                    scope.launch {
+                                        animate(
+                                            initialValue = dragOffsetPx,
+                                            targetValue = 0f,
+                                            animationSpec = tween(durationMillis = 180, easing = LinearEasing)
+                                        ) { value, _ ->
+                                            dragOffsetPx = value
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                        .animateEnterExit(
+                            enter = slideInVertically(initialOffsetY = { it }),
+                            exit = slideOutVertically(targetOffsetY = { it })
+                        )
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { }
+                        ),
+                    color = Surface,
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                    ) {
+                        // 拖动条
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(40.dp)
+                                    .height(4.dp)
+                                    .background(GrayLight, RoundedCornerShape(2.dp))
+                            )
+                        }
+
+                        // 标题
+                        Text(
+                            text = "Edit Profile",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = SourceSans3,
+                            color = TextPrimary
+                        )
+
+                        // 头像选择
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(
+                                text = "Avatar",
+                                fontSize = 13.sp,
+                                fontFamily = SourceSans3,
+                                color = TextSecondary
+                            )
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                itemsIndexed(AvatarColors) { index, color ->
+                                    val isSelected = index == selectedAvatarIndex
+                                    Box(
+                                        modifier = Modifier
+                                            .size(56.dp)
+                                            .clip(CircleShape)
+                                            .background(color, CircleShape)
+                                            .then(
+                                                if (isSelected) {
+                                                    Modifier.border(3.dp, TextPrimary, CircleShape)
+                                                } else {
+                                                    Modifier.clickable(
+                                                        interactionSource = remember { MutableInteractionSource() },
+                                                        indication = null
+                                                    ) { selectedAvatarIndex = index }
+                                                }
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = AppIcons.Check,
+                                                contentDescription = "Selected",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Name 输入框
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "Name",
+                                fontSize = 13.sp,
+                                fontFamily = SourceSans3,
+                                color = TextSecondary
+                            )
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = GrayLighter,
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                BasicTextField(
+                                    value = nickname,
+                                    onValueChange = { nickname = it },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    textStyle = TextStyle(
+                                        fontSize = 17.sp,
+                                        color = TextPrimary
+                                    ),
+                                    cursorBrush = SolidColor(TextPrimary),
+                                    singleLine = true
+                                )
+                            }
+                        }
+
+                        // Handle 输入框
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "Handle",
+                                fontSize = 13.sp,
+                                fontFamily = SourceSans3,
+                                color = TextSecondary
+                            )
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = GrayLighter,
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                BasicTextField(
+                                    value = handle,
+                                    onValueChange = { handle = it },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    textStyle = TextStyle(
+                                        fontSize = 17.sp,
+                                        color = TextPrimary
+                                    ),
+                                    cursorBrush = SolidColor(TextPrimary),
+                                    singleLine = true
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // 按钮
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Button(
+                                onClick = onDismiss,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = GrayLight)
+                            ) {
+                                Text(text = "Cancel", fontSize = 17.sp, color = TextPrimary)
+                            }
+
+                            Button(
+                                onClick = {
+                                    onSave(nickname.trim(), handle.trim(), selectedAvatarIndex)
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = TextPrimary)
+                            ) {
+                                Text(text = "Save", fontSize = 17.sp, color = Surface)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
