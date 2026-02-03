@@ -710,6 +710,7 @@ fun ChatScreen(navController: NavController) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .background(ThinkingBackground)
                                 .padding(top = 12.dp, bottom = 16.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -726,26 +727,26 @@ fun ChatScreen(navController: NavController) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .fillMaxHeight(0.67f)
+                            .background(ThinkingBackground)
                             .padding(horizontal = 20.dp)
                             .padding(bottom = 32.dp)
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // 大标题 Thinking
+                        // 标题 Thinking
                         Text(
                             text = "Thinking",
-                            fontSize = 28.sp,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = TextPrimary
                         )
 
-                        // 内容区域 - 统一背景色
+                        // 内容区域
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(ThinkingBackground, RoundedCornerShape(16.dp))
-                                .padding(16.dp),
+                                .padding(horizontal = 16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             MarkdownText(
@@ -825,8 +826,7 @@ fun MessageItem(
                             pressedScale = 0.98f,
                             onClick = { onShowReasoning(reasoningText) }
                         ),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = "Thinking",
