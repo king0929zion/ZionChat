@@ -697,7 +697,13 @@ fun ChatScreen(navController: NavController) {
                 }
             )
 
-            if (showThinkingSheet && !thinkingSheetText.isNullOrBlank()) {
+            // 获取当前对话的实时thinking内容
+            val currentMessageThinking = localMessages.lastOrNull { it.reasoning != null }?.reasoning
+            val displayThinkingText = if (showThinkingSheet && currentMessageThinking != null) {
+                currentMessageThinking
+            } else thinkingSheetText
+
+            if (showThinkingSheet && !displayThinkingText.isNullOrBlank()) {
                 ModalBottomSheet(
                     onDismissRequest = {
                         showThinkingSheet = false
@@ -729,15 +735,14 @@ fun ChatScreen(navController: NavController) {
                             .fillMaxHeight(0.67f)
                             .background(ThinkingBackground)
                             .padding(horizontal = 20.dp)
-                            .padding(bottom = 32.dp)
                             .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         // 标题 Thinking
                         Text(
                             text = "Thinking",
-                            fontSize = 20.sp,
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = TextPrimary
                         )
@@ -750,7 +755,7 @@ fun ChatScreen(navController: NavController) {
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             MarkdownText(
-                                markdown = thinkingSheetText.orEmpty(),
+                                markdown = displayThinkingText.orEmpty(),
                                 textStyle = TextStyle(
                                     fontSize = 14.sp,
                                     lineHeight = 22.sp,
@@ -821,7 +826,7 @@ fun MessageItem(
             if (reasoningText.isNotBlank()) {
                 Row(
                     modifier = Modifier
-                        .padding(bottom = 8.dp)
+                        .padding(bottom = 10.dp)
                         .pressableScale(
                             pressedScale = 0.98f,
                             onClick = { onShowReasoning(reasoningText) }
@@ -830,7 +835,7 @@ fun MessageItem(
                 ) {
                     Text(
                         text = "Thinking",
-                        fontSize = 15.sp,
+                        fontSize = 16.sp,
                         fontFamily = SourceSans3,
                         fontWeight = FontWeight.Medium,
                         color = ThinkingLabelColor
@@ -839,7 +844,7 @@ fun MessageItem(
                         imageVector = AppIcons.ChevronRight,
                         contentDescription = null,
                         tint = ThinkingLabelColor,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(15.dp)
                     )
                 }
             }
@@ -1678,6 +1683,7 @@ fun BottomInputArea(
             Box(
                 modifier = Modifier
                     .size(46.dp)
+                    .shadow(elevation = 8.dp, shape = CircleShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.08f))
                     .clip(CircleShape)
                     .background(Surface, CircleShape)
                     .pressableScale(pressedScale = 0.95f, onClick = onToolToggle),
@@ -1696,6 +1702,7 @@ fun BottomInputArea(
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = 46.dp)
+                    .shadow(elevation = 8.dp, shape = RoundedCornerShape(23.dp), clip = false, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.08f))
                     .background(Surface, RoundedCornerShape(23.dp)),
                 contentAlignment = Alignment.CenterStart
             ) {
