@@ -533,9 +533,20 @@ fun ChatScreen(navController: NavController) {
                     .zIndex(1f)
             )
 
+            // Bottom fade should cover from transition start all the way to the bottom (behind the input/tool sheet).
+            val bottomFadeHeight = 52.dp
+            val bottomMaskHeight = imeBottomPadding + bottomBarHeightDp + bottomFadeHeight
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(bottomMaskHeight)
+                    .background(ChatBackground)
+                    .zIndex(1f)
+            )
             BottomFadeScrim(
                 color = ChatBackground,
-                height = 52.dp,
+                height = bottomFadeHeight,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = imeBottomPadding + bottomBarHeightDp)
@@ -593,7 +604,7 @@ fun ChatScreen(navController: NavController) {
             // 底部工具面板（覆盖在输入框上方）
             ToolMenuPanel(
                 visible = showToolMenu,
-                modifier = Modifier.zIndex(4f),
+                modifier = Modifier.zIndex(20f),
                 onDismiss = { showToolMenu = false },
                 onToolSelect = { tool ->
                     selectedTool = tool
@@ -1139,12 +1150,13 @@ fun ToolMenuPanel(
     }
 
     AnimatedVisibility(
+        modifier = modifier,
         visible = visible,
         enter = fadeIn(),
         exit = fadeOut()
     ) {
         Box(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.5f))
                 .clickable(

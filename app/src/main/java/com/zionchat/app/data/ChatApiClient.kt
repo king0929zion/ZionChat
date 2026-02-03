@@ -184,9 +184,13 @@ class ChatApiClient {
                     }
 
                     val parsed = gson.fromJson(raw, ImageGenerationResponse::class.java)
-                    parsed.data?.firstOrNull()?.url
-                        ?: parsed.data?.firstOrNull()?.b64_json
-                        ?: error("No image URL in response")
+                    val url = parsed.data?.firstOrNull()?.url
+                    if (!url.isNullOrBlank()) return@use url
+
+                    val b64 = parsed.data?.firstOrNull()?.b64_json
+                    if (!b64.isNullOrBlank()) return@use "data:image/png;base64,$b64"
+
+                    error("No image URL in response")
                 }
             }
         }

@@ -14,7 +14,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -30,6 +32,7 @@ import com.zionchat.app.ui.theme.GrayLight
 import com.zionchat.app.ui.theme.GrayLighter
 import com.zionchat.app.ui.theme.TextPrimary
 import com.zionchat.app.ui.theme.TextSecondary
+import coil.compose.AsyncImage
 import org.commonmark.node.BlockQuote
 import org.commonmark.node.BulletList
 import org.commonmark.node.Code
@@ -38,6 +41,7 @@ import org.commonmark.node.Emphasis
 import org.commonmark.node.FencedCodeBlock
 import org.commonmark.node.HardLineBreak
 import org.commonmark.node.Heading
+import org.commonmark.node.Image
 import org.commonmark.node.IndentedCodeBlock
 import org.commonmark.node.Link
 import org.commonmark.node.ListItem
@@ -112,10 +116,31 @@ private fun MarkdownParagraph(
     textStyle: TextStyle,
     linkColor: Color
 ) {
-    Text(
-        text = buildInlineAnnotatedString(paragraph, linkColor),
-        style = textStyle
-    )
+    val images = remember(paragraph) { collectInlineImages(paragraph) }
+    val isOnlyImages = remember(paragraph) { isParagraphOnlyImages(paragraph) }
+    val inline = buildInlineAnnotatedString(paragraph, linkColor)
+
+    if (!isOnlyImages && inline.text.isNotBlank()) {
+        Text(text = inline, style = textStyle)
+    }
+
+    if (images.isNotEmpty()) {
+        Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+            images.forEach { img ->
+                val url = img.destination.orEmpty()
+                if (url.isNotBlank()) {
+                    AsyncImage(
+                        model = url,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp)),
+                        contentScale = ContentScale.FillWidth
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -231,6 +256,37 @@ private fun MarkdownOrderedList(
     }
 }
 
+private fun isParagraphOnlyImages(paragraph: Paragraph): Boolean {
+    var child = paragraph.firstChild
+    if (child == null) return false
+    var hasImage = false
+    while (child != null) {
+        when (child) {
+            is Image -> hasImage = true
+            is SoftLineBreak, is HardLineBreak -> Unit
+            else -> return false
+        }
+        child = child.next
+    }
+    return hasImage
+}
+
+private fun collectInlineImages(parent: Node): List<Image> {
+    val out = mutableListOf<Image>()
+    fun walk(node: Node?) {
+        var child = node?.firstChild
+        while (child != null) {
+            when (child) {
+                is Image -> out.add(child)
+                else -> walk(child)
+            }
+            child = child.next
+        }
+    }
+    walk(parent)
+    return out
+}
+
 private fun buildInlineAnnotatedString(parent: Node, linkColor: Color): AnnotatedString {
     val builder = AnnotatedString.Builder()
 
@@ -239,6 +295,13 @@ private fun buildInlineAnnotatedString(parent: Node, linkColor: Color): Annotate
             is MarkdownTextNode -> builder.append(node.literal)
             is SoftLineBreak -> builder.append('\n')
             is HardLineBreak -> builder.append('\n')
+            is Image -> {
+                var child = node.firstChild
+                while (child != null) {
+                    appendInline(child)
+                    child = child.next
+                }
+            }
             is Emphasis -> {
                 val start = builder.length
                 var child = node.firstChild
