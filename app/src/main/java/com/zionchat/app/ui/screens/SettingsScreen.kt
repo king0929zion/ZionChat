@@ -13,13 +13,18 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.draw.alpha
+import coil.compose.AsyncImage
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.FileProvider
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -60,7 +65,7 @@ fun SettingsScreen(navController: NavController) {
     val models by repository.modelsFlow.collectAsState(initial = emptyList())
     val defaultChatModelId by repository.defaultChatModelIdFlow.collectAsState(initial = null)
     val nickname by repository.nicknameFlow.collectAsState(initial = "")
-    val avatarIndex by repository.avatarIndexFlow.collectAsState(initial = 0)
+    val avatarUri by repository.avatarUriFlow.collectAsState(initial = "")
 
     var showEditProfile by remember { mutableStateOf(false) }
 
@@ -90,7 +95,7 @@ fun SettingsScreen(navController: NavController) {
                 // User Profile Section
                 UserProfileSection(
                     nickname = displayName,
-                    avatarIndex = avatarIndex,
+                    avatarUri = avatarUri,
                     onEditClick = { showEditProfile = true }
                 )
 
@@ -207,11 +212,11 @@ fun SettingsScreen(navController: NavController) {
         visible = showEditProfile,
         onDismiss = { showEditProfile = false },
         currentNickname = displayName,
-        currentAvatarIndex = avatarIndex,
-        onSave = { newNickname, newAvatarIndex ->
+        currentAvatarUri = avatarUri,
+        onSave = { newNickname, newAvatarUri ->
             scope.launch {
                 repository.setNickname(newNickname)
-                repository.setAvatarIndex(newAvatarIndex)
+                repository.setAvatarUri(newAvatarUri)
                 showEditProfile = false
             }
         }
@@ -257,44 +262,53 @@ fun SettingsTopBar(navController: NavController) {
     }
 }
 
-// 预定义头像颜色
-val AvatarColors = listOf(
-    Color(0xFF007AFF), // 蓝色
-    Color(0xFF34C759), // 绿色
-    Color(0xFFFF9500), // 橙色
-    Color(0xFFFF3B30), // 红色
-    Color(0xFFAF52DE), // 紫色
-    Color(0xFF5856D6), // 靛蓝
-    Color(0xFFFF2D55), // 粉红
-    Color(0xFF00C7BE), // 青色
-)
-
 @Composable
 fun UserAvatar(
-    avatarIndex: Int,
+    avatarUri: String,
     size: androidx.compose.ui.unit.Dp,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
 ) {
-    val color = AvatarColors.getOrElse(avatarIndex) { AvatarColors[0] }
+    val clickableModifier = if (onClick != null) {
+        Modifier.clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = onClick
+        )
+    } else {
+        Modifier
+    }
+
     Box(
         modifier = modifier
             .size(size)
-            .background(color, CircleShape),
+            .clip(CircleShape)
+            .background(GrayLight, CircleShape)
+            .then(clickableModifier),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = AppIcons.User,
-            contentDescription = "Avatar",
-            tint = Color.White,
-            modifier = Modifier.size(size * 0.5f)
-        )
+        if (avatarUri.isNotBlank()) {
+            AsyncImage(
+                model = avatarUri,
+                contentDescription = "Avatar",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Icon(
+                imageVector = AppIcons.User,
+                contentDescription = "Avatar",
+                tint = TextSecondary,
+                modifier = Modifier.size(size * 0.5f)
+            )
+        }
     }
 }
 
 @Composable
 fun UserProfileSection(
     nickname: String,
-    avatarIndex: Int,
+    avatarUri: String,
     onEditClick: () -> Unit
 ) {
     Column(
@@ -305,7 +319,7 @@ fun UserProfileSection(
     ) {
         // 用户头像
         UserAvatar(
-            avatarIndex = avatarIndex,
+            avatarUri = avatarUri,
             size = 80.dp
         )
 
@@ -347,21 +361,29 @@ fun EditProfileModal(
     visible: Boolean,
     onDismiss: () -> Unit,
     currentNickname: String,
-    currentAvatarIndex: Int,
-    onSave: (String, Int) -> Unit
+    currentAvatarUri: String,
+    onSave: (String, String) -> Unit
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     var dragOffsetPx by remember { mutableFloatStateOf(0f) }
     val dismissThresholdPx = remember(density) { with(density) { 120.dp.toPx() } }
 
     var nickname by remember { mutableStateOf("") }
-    var selectedAvatarIndex by remember { mutableIntStateOf(0) }
+    var avatarUri by remember { mutableStateOf("") }
+
+    // 图片选择器
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { avatarUri = it.toString() }
+    }
 
     LaunchedEffect(visible) {
         if (visible) {
             nickname = currentNickname
-            selectedAvatarIndex = currentAvatarIndex
+            avatarUri = currentAvatarUri
             dragOffsetPx = 0f
         }
     }
@@ -384,6 +406,7 @@ fun EditProfileModal(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.navigationBars)
                     .imePadding()
             ) {
                 Surface(
@@ -427,8 +450,11 @@ fun EditProfileModal(
                     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(24.dp),
-                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .padding(bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         // 拖动条
                         Box(
@@ -449,54 +475,79 @@ fun EditProfileModal(
                             fontSize = 17.sp,
                             fontWeight = FontWeight.SemiBold,
                             fontFamily = SourceSans3,
-                            color = TextPrimary
+                            color = TextPrimary,
+                            modifier = Modifier.align(Alignment.Start)
                         )
 
-                        // 头像选择
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text(
-                                text = "Avatar",
-                                fontSize = 13.sp,
-                                fontFamily = SourceSans3,
-                                color = TextSecondary
-                            )
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        // 头像上传区域 - 居中
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                itemsIndexed(AvatarColors) { index, color ->
-                                    val isSelected = index == selectedAvatarIndex
+                                // 可点击的头像
+                                Box(
+                                    modifier = Modifier
+                                        .size(100.dp)
+                                        .clip(CircleShape)
+                                        .background(GrayLight, CircleShape)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            imagePicker.launch("image/*")
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (avatarUri.isNotBlank()) {
+                                        AsyncImage(
+                                            model = avatarUri,
+                                            contentDescription = "Avatar",
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = AppIcons.User,
+                                            contentDescription = "Avatar",
+                                            tint = TextSecondary,
+                                            modifier = Modifier.size(50.dp)
+                                        )
+                                    }
+
+                                    // 相机图标叠加
                                     Box(
                                         modifier = Modifier
-                                            .size(56.dp)
-                                            .clip(CircleShape)
-                                            .background(color, CircleShape)
-                                            .then(
-                                                if (isSelected) {
-                                                    Modifier.border(3.dp, TextPrimary, CircleShape)
-                                                } else {
-                                                    Modifier.clickable(
-                                                        interactionSource = remember { MutableInteractionSource() },
-                                                        indication = null
-                                                    ) { selectedAvatarIndex = index }
-                                                }
-                                            ),
+                                            .fillMaxSize()
+                                            .background(Color.Black.copy(alpha = 0.3f)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        if (isSelected) {
-                                            Icon(
-                                                imageVector = AppIcons.Check,
-                                                contentDescription = "Selected",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(24.dp)
-                                            )
-                                        }
+                                        Icon(
+                                            imageVector = AppIcons.Camera,
+                                            contentDescription = "Change Photo",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(32.dp)
+                                        )
                                     }
                                 }
+
+                                Text(
+                                    text = "Tap to change photo",
+                                    fontSize = 13.sp,
+                                    fontFamily = SourceSans3,
+                                    color = TextSecondary
+                                )
                             }
                         }
 
                         // Name 输入框
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
                             Text(
                                 text = "Name",
                                 fontSize = 13.sp,
@@ -544,7 +595,7 @@ fun EditProfileModal(
 
                             Button(
                                 onClick = {
-                                    onSave(nickname.trim(), selectedAvatarIndex)
+                                    onSave(nickname.trim(), avatarUri)
                                 },
                                 modifier = Modifier
                                     .weight(1f)

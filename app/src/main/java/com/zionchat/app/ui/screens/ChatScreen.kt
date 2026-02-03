@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
@@ -58,6 +59,7 @@ import com.zionchat.app.ui.components.rememberResourceDrawablePainter
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.*
+import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -89,7 +91,7 @@ fun ChatScreen(navController: NavController) {
     val conversations by repository.conversationsFlow.collectAsState(initial = emptyList())
     val currentConversationId by repository.currentConversationIdFlow.collectAsState(initial = null)
     val nickname by repository.nicknameFlow.collectAsState(initial = "")
-    val avatarIndex by repository.avatarIndexFlow.collectAsState(initial = 0)
+    val avatarUri by repository.avatarUriFlow.collectAsState(initial = "")
     val customInstructions by repository.customInstructionsFlow.collectAsState(initial = "")
     val defaultChatModelId by repository.defaultChatModelIdFlow.collectAsState(initial = null)
     val defaultImageModelId by repository.defaultImageModelIdFlow.collectAsState(initial = null)
@@ -430,7 +432,7 @@ fun ChatScreen(navController: NavController) {
                 conversations = conversations,
                 currentConversationId = effectiveConversationId,
                 nickname = displayName,
-                avatarIndex = avatarIndex,
+                avatarUri = avatarUri,
                 onClose = { scope.launch { drawerState.close() } },
                 onNewChat = ::startNewChat,
                 onConversationClick = { convo ->
@@ -766,7 +768,7 @@ fun SidebarContent(
     conversations: List<Conversation>,
     currentConversationId: String?,
     nickname: String,
-    avatarIndex: Int,
+    avatarUri: String,
     onClose: () -> Unit,
     onNewChat: () -> Unit,
     onConversationClick: (Conversation) -> Unit,
@@ -901,30 +903,29 @@ fun SidebarContent(
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 使用头像颜色
-                val avatarColor = when (avatarIndex) {
-                    0 -> Color(0xFF007AFF)
-                    1 -> Color(0xFF34C759)
-                    2 -> Color(0xFFFF9500)
-                    3 -> Color(0xFFFF3B30)
-                    4 -> Color(0xFFAF52DE)
-                    5 -> Color(0xFF5856D6)
-                    6 -> Color(0xFFFF2D55)
-                    7 -> Color(0xFF00C7BE)
-                    else -> Color(0xFF007AFF)
-                }
+                // 头像显示
                 Box(
                     modifier = Modifier
                         .size(36.dp)
-                        .background(avatarColor, CircleShape),
+                        .clip(CircleShape)
+                        .background(GrayLight, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = AppIcons.User,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    if (avatarUri.isNotBlank()) {
+                        AsyncImage(
+                            model = avatarUri,
+                            contentDescription = "Avatar",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            imageVector = AppIcons.User,
+                            contentDescription = null,
+                            tint = TextSecondary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
