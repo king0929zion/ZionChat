@@ -478,14 +478,6 @@ fun ChatScreen(navController: NavController) {
                         }
                     }
 
-                    TopFadeScrim(
-                        color = Background,
-                        height = 56.dp,
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .offset(y = 0.dp)
-                            .zIndex(1f)
-                    )
                     BottomFadeScrim(
                         color = Background,
                         height = 52.dp,
@@ -495,6 +487,16 @@ fun ChatScreen(navController: NavController) {
                     )
                 }
             }
+
+            // 顶部渐变遮罩 - 放在最外层，覆盖在导航栏下方
+            TopFadeScrim(
+                color = Background,
+                height = 72.dp,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 72.dp) // 导航栏高度约72dp (状态栏+TopNavBar)
+                    .zIndex(2f)
+            )
 
             // 底部输入框区域 - 固定在底部（高度动态，支持多行/工具标签）
             Box(
