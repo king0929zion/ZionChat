@@ -13,6 +13,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -490,13 +491,17 @@ fun ChatScreen(navController: NavController) {
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            items(localMessages, key = { it.id }) { message ->
+                            itemsIndexed(localMessages, key = { _, item -> item.id }) { index, message ->
+                                // 只显示最近3条AI消息的工具栏
+                                val showToolbar = !isStreaming || (streamingMessageId == null) ||
+                                    (index >= localMessages.size - 3)
                                 MessageItem(
                                     message = message,
                                     conversationId = effectiveConversationId,
                                     isStreaming = isStreaming
                                         && streamingConversationId == effectiveConversationId
                                         && message.id == streamingMessageId,
+                                    showToolbar = showToolbar,
                                     onEdit = { /* TODO: 编辑消息 */ },
                                     onDelete = { convoId, messageId ->
                                         scope.launch { repository.deleteMessage(convoId, messageId) }
@@ -577,6 +582,7 @@ fun MessageItem(
     message: Message,
     conversationId: String?,
     isStreaming: Boolean = false,
+    showToolbar: Boolean = true,
     onEdit: () -> Unit,
     onDelete: (conversationId: String, messageId: String) -> Unit
 ) {
@@ -647,10 +653,10 @@ fun MessageItem(
                         .size(8.dp)
                         .background(TextSecondary.copy(alpha = cursorAlpha), CircleShape)
                 )
-            } else {
-                // 工具栏
+            } else if (showToolbar) {
+                // 工具栏 - 只显示在最近3条AI消息上，间距缩小到2.dp
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
                     modifier = Modifier.padding(top = 8.dp)
                 ) {
                     ActionButton(

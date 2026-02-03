@@ -1365,18 +1365,17 @@ object AppIcons {
             strokeLineCap = StrokeCap.Round,
             strokeLineJoin = StrokeJoin.Round
         ) {
+            // 三个圆点
             moveTo(5.5f, 12f)
             arcToRelative(2.5f, 2.5f, 0f, true, true, 5f, 0f)
             arcToRelative(2.5f, 2.5f, 0f, true, true, -5f, 0f)
-            close()
             moveTo(16.5f, 5.5f)
             arcToRelative(2.5f, 2.5f, 0f, true, true, 5f, 0f)
             arcToRelative(2.5f, 2.5f, 0f, true, true, -5f, 0f)
-            close()
             moveTo(16.5f, 18.5f)
             arcToRelative(2.5f, 2.5f, 0f, true, true, 5f, 0f)
             arcToRelative(2.5f, 2.5f, 0f, true, true, -5f, 0f)
-            close()
+            // 连接线
             moveTo(14.5f, 6.583f)
             lineTo(7.5f, 10.796f)
             moveTo(14.5f, 17.417f)
