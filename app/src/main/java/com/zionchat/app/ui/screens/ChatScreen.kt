@@ -765,7 +765,7 @@ fun MessageItem(
 
     val isUser = message.role == "user"
     if (isUser) {
-        // 用户消息 - 右对齐
+        // User message (right aligned)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End
@@ -790,7 +790,7 @@ fun MessageItem(
             }
         }
     } else {
-        // AI消息 - 左对齐
+        // Assistant message (left aligned)
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.85f)
@@ -811,11 +811,11 @@ fun MessageItem(
                             onClick = { onShowReasoning(reasoningText) }
                         ),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
                     Text(
                         text = "Thinking",
-                        fontSize = 16.sp,
+                        fontSize = 13.sp,
                         fontFamily = SourceSans3,
                         fontWeight = FontWeight.Medium,
                         color = TextSecondary
@@ -824,7 +824,7 @@ fun MessageItem(
                         imageVector = AppIcons.ChevronRight,
                         contentDescription = null,
                         tint = TextSecondary,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(12.dp)
                     )
                 }
             }
@@ -855,7 +855,7 @@ fun MessageItem(
                         .background(TextSecondary.copy(alpha = cursorAlpha), CircleShape)
                 )
             } else if (showToolbar) {
-                // 工具栏 - 只显示在最近3条AI消息上，间距缩小到2.dp
+                // Message action buttons (assistant only)
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                     modifier = Modifier.padding(top = 8.dp)
@@ -871,7 +871,7 @@ fun MessageItem(
                     ActionButton(icon = AppIcons.Share, onClick = { })
                     ActionButton(
                         icon = AppIcons.Refresh,
-                        onClick = { /* 重新生成 */ }
+                        onClick = { /* Regenerate */ }
                     )
                     ActionButton(icon = AppIcons.More, onClick = { showMenu = true })
                 }
@@ -879,7 +879,7 @@ fun MessageItem(
         }
     }
 
-    // 长按菜单
+    // Long-press menu
     if (showMenu) {
         MessageOptionsDialog(
             isUser = isUser,
