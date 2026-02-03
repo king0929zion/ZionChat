@@ -1884,4 +1884,81 @@ object AppIcons {
             close()
         }
     }.build()
+
+    // Image 图标 - 用于相册导入
+    val Image = ImageVector.Builder(
+        name = "image",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(
+            fill = SolidColor(Color.Transparent),
+            stroke = SolidColor(Color(0xFF1C1C1E)),
+            strokeLineWidth = 2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round
+        ) {
+            // 矩形框
+            moveTo(3f, 3f)
+            lineTo(21f, 3f)
+            lineTo(21f, 21f)
+            lineTo(3f, 21f)
+            close()
+            // 小圆点
+            moveTo(8.5f, 8.5f)
+            arcTo(1.5f, 1.5f, 0f, true, true, 0.01f, 0f)
+            close()
+            // 斜线
+            moveTo(21f, 15f)
+            lineTo(16f, 10f)
+            lineTo(5f, 21f)
+        }
+    }.build()
+
+    // OAuth 图标 - 用于 OAuth 连接按钮
+    val OAuth = ImageVector.Builder(
+        name = "oauth",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(
+            fill = SolidColor(Color.Transparent),
+            stroke = SolidColor(Color.White),
+            strokeLineWidth = 2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round
+        ) {
+            // 箭头
+            moveTo(15f, 14f)
+            lineTo(13f, 12f)
+            lineTo(11f, 14f)
+            moveTo(15f, 10f)
+            verticalLineTo(7f)
+            arcTo(2f, 2f, 0f, false, false, 13f, 5f)
+            horizontalLineTo(6f)
+            arcTo(2f, 2f, 0f, false, False, 4f, 7f)
+            verticalLineTo(17f)
+            arcTo(2f, 2f, 0f, false, False, 6f, 19f)
+            horizontalLineTo(13f)
+            arcTo(2f, 2f, 0f, false, False, 15f, 17f)
+            verticalLineTo(14f)
+            // 点
+            moveTo(18f, 12f)
+            horizontalLineTo(18.01f)
+            moveTo(21f, 12f)
+            horizontalLineTo(21.01f)
+            // 箭头
+            moveTo(21f, 12f)
+            arcTo(9f, 9f, 0f, true, True, 12f, 3f)
+            curveTo(14.52f, 3f, 16.93f, 4f, 18.74f, 5.74f)
+            lineTo(21f, 8f)
+            moveTo(21f, 3f)
+            verticalLineTo(8f)
+            horizontalLineTo(16f)
+        }
+    }.build()
 }

@@ -57,6 +57,7 @@ class MainActivity : ComponentActivity() {
                             composable("memories") { MemoriesScreen(navController) }
                             composable("default_model") { DefaultModelScreen(navController) }
                             composable("model_services") { ModelServicesScreen(navController) }
+                            composable("add_oauth_provider") { AddOAuthProviderScreen(navController) }
                             composable(
                                 route = "add_provider?preset={preset}&providerId={providerId}",
                                 arguments = listOf(
