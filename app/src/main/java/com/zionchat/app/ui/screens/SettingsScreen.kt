@@ -69,6 +69,12 @@ fun SettingsScreen(navController: NavController) {
 
     var showEditProfile by remember { mutableStateOf(false) }
 
+    // Appearance & Accent Color 菜单状态
+    var showAppearanceMenu by remember { mutableStateOf(false) }
+    var showAccentColorMenu by remember { mutableStateOf(false) }
+    var selectedAppearance by remember { mutableStateOf("light") }
+    var selectedAccentColor by remember { mutableStateOf("default") }
+
     val defaultChatModelName = remember(models, defaultChatModelId) {
         val id = defaultChatModelId?.trim().orEmpty()
         if (id.isBlank()) null
@@ -126,17 +132,28 @@ fun SettingsScreen(navController: NavController) {
                     SettingsItem(
                         icon = { Icon(AppIcons.Appearance, null, Modifier.size(22.dp), tint = Color.Unspecified) },
                         label = "Appearance",
-                        value = "Light",
+                        value = when(selectedAppearance) {
+                            "system" -> "System"
+                            "light" -> "Light"
+                            "dark" -> "Dark"
+                            else -> "Light"
+                        },
                         showChevron = true,
                         showDivider = true,
-                        onClick = { }
+                        onClick = {
+                            showAccentColorMenu = false
+                            showAppearanceMenu = true
+                        }
                     )
                     SettingsItem(
                         icon = { Icon(AppIcons.Accent, null, Modifier.size(22.dp), tint = Color.Unspecified) },
                         label = "Accent color",
-                        value = "Default",
+                        value = selectedAccentColor.replaceFirstChar { it.uppercase() },
                         showChevron = true,
-                        onClick = { }
+                        onClick = {
+                            showAppearanceMenu = false
+                            showAccentColorMenu = true
+                        }
                     )
                 }
 
@@ -220,6 +237,22 @@ fun SettingsScreen(navController: NavController) {
                 showEditProfile = false
             }
         }
+    )
+
+    // Appearance 菜单
+    AppearanceMenu(
+        visible = showAppearanceMenu,
+        selected = selectedAppearance,
+        onDismiss = { showAppearanceMenu = false },
+        onSelect = { selectedAppearance = it }
+    )
+
+    // Accent Color 菜单
+    AccentColorMenu(
+        visible = showAccentColorMenu,
+        selected = selectedAccentColor,
+        onDismiss = { showAccentColorMenu = false },
+        onSelect = { selectedAccentColor = it }
     )
 }
 
@@ -731,6 +764,270 @@ fun SettingsItem(
                     .background(Color.White)
                     .shadow(0.5.dp, spotColor = Color(0xFFE5E5EA), ambientColor = Color(0xFFE5E5EA))
             )
+        }
+    }
+}
+
+// Appearance 选项数据
+private val appearanceOptions = listOf(
+    Triple("system", "System", AppIcons.User),
+    Triple("light", "Light", AppIcons.Appearance),
+    Triple("dark", "Dark", AppIcons.User)
+)
+
+// Accent Color 选项数据
+private val accentColorOptions = listOf(
+    Pair("default", Color(0xFF9CA3AF)),
+    Pair("blue", Color(0xFF3B82F6)),
+    Pair("green", Color(0xFF22C55E)),
+    Pair("yellow", Color(0xFFEAB308)),
+    Pair("pink", Color(0xFFEC4899)),
+    Pair("orange", Color(0xFFF97316)),
+    Pair("purple", Color(0xFFA855F7))
+)
+
+@OptIn(ExperimentalAnimationApi::class)
+@Composable
+fun AppearanceMenu(
+    visible: Boolean,
+    selected: String,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(animationSpec = tween(200)),
+        exit = fadeOut(animationSpec = tween(200))
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.3f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                ),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            AnimatedVisibility(
+                visible = visible,
+                enter = slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(300, easing = androidx.compose.animation.core.EaseOutCubic)
+                ),
+                exit = slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(200, easing = androidx.compose.animation.core.EaseInCubic)
+                )
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 80.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    color = Color(0xFFF2F2F7).copy(alpha = 0.95f),
+                    shadowElevation = 8.dp
+                ) {
+                    Column(
+                        modifier = Modifier.padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        appearanceOptions.forEach { (key, label, icon) ->
+                            val isSelected = key == selected
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(if (isSelected) Color.White.copy(alpha = 0.6f) else Color.Transparent)
+                                    .clickable {
+                                        onSelect(key)
+                                        onDismiss()
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            tint = TextPrimary
+                                        )
+                                        Text(
+                                            text = label,
+                                            fontSize = 17.sp,
+                                            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
+                                            color = TextPrimary
+                                        )
+                                    }
+
+                                    // 选中动画
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = isSelected,
+                                        enter = androidx.compose.animation.scaleIn(
+                                            initialScale = 0f,
+                                            animationSpec = tween(200, easing = androidx.compose.animation.core.EaseOutBack)
+                                        ),
+                                        exit = androidx.compose.animation.scaleOut(
+                                            targetScale = 0f,
+                                            animationSpec = tween(150)
+                                        )
+                                    ) {
+                                        Icon(
+                                            imageVector = AppIcons.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            tint = TextPrimary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalAnimationApi::class)
+@Composable
+fun AccentColorMenu(
+    visible: Boolean,
+    selected: String,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(animationSpec = tween(200)),
+        exit = fadeOut(animationSpec = tween(200))
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.3f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                ),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            AnimatedVisibility(
+                visible = visible,
+                enter = slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(300, easing = androidx.compose.animation.core.EaseOutCubic)
+                ),
+                exit = slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(200, easing = androidx.compose.animation.core.EaseInCubic)
+                )
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 80.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    color = Color(0xFFF2F2F7).copy(alpha = 0.95f),
+                    shadowElevation = 8.dp
+                ) {
+                    Column(
+                        modifier = Modifier.padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        accentColorOptions.forEach { (key, color) ->
+                            val isSelected = key == selected
+                            val isPurple = key == "purple"
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(if (isSelected) Color.White.copy(alpha = 0.6f) else Color.Transparent)
+                                    .clickable {
+                                        onSelect(key)
+                                        onDismiss()
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        // 颜色圆点
+                                        Box(
+                                            modifier = Modifier
+                                                .size(16.dp)
+                                                .clip(CircleShape)
+                                                .background(color)
+                                                .border(0.5.dp, Color.Black.copy(alpha = 0.1f), CircleShape)
+                                        )
+
+                                        Text(
+                                            text = key.replaceFirstChar { it.uppercase() },
+                                            fontSize = 17.sp,
+                                            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
+                                            color = TextPrimary
+                                        )
+
+                                        // Plus 标签
+                                        if (isPurple) {
+                                            Text(
+                                                text = "· Plus",
+                                                fontSize = 15.sp,
+                                                color = TextSecondary
+                                            )
+                                        }
+                                    }
+
+                                    // 选中动画
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = isSelected,
+                                        enter = androidx.compose.animation.scaleIn(
+                                            initialScale = 0f,
+                                            animationSpec = tween(200, easing = androidx.compose.animation.core.EaseOutBack)
+                                        ),
+                                        exit = androidx.compose.animation.scaleOut(
+                                            targetScale = 0f,
+                                            animationSpec = tween(150)
+                                        )
+                                    ) {
+                                        Icon(
+                                            imageVector = AppIcons.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            tint = when (key) {
+                                                "default" -> Color(0xFF6B7280)
+                                                "blue" -> Color(0xFF2563EB)
+                                                "green" -> Color(0xFF16A34A)
+                                                "yellow" -> Color(0xFFCA8A04)
+                                                "pink" -> Color(0xFFDB2777)
+                                                "orange" -> Color(0xFFEA580C)
+                                                "purple" -> Color(0xFF9333EA)
+                                                else -> TextPrimary
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
