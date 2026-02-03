@@ -149,6 +149,7 @@ fun ChatScreen(navController: NavController) {
     val topBarHeightDp = with(density) { if (topBarHeightPx == 0) 66.dp else topBarHeightPx.toDp() }
     val statusBarTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val listTopPadding = statusBarTopPadding + topBarHeightDp + 8.dp
+    val imeBottomPadding = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
     val bottomBarHeightDp = with(density) { bottomBarHeightPx.toDp() }
     val bottomContentPadding = maxOf(80.dp, bottomBarHeightDp + 12.dp)
     val imeVisible = WindowInsets.ime.getBottom(density) > 0
@@ -473,7 +474,7 @@ fun ChatScreen(navController: NavController) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(top = listTopPadding, bottom = bottomContentPadding),
+                        .padding(top = listTopPadding, bottom = bottomContentPadding + imeBottomPadding),
                     contentAlignment = Alignment.Center
                 ) {
                     EmptyChatState()
@@ -486,7 +487,7 @@ fun ChatScreen(navController: NavController) {
                         start = 16.dp,
                         end = 16.dp,
                         top = listTopPadding,
-                        bottom = bottomContentPadding + 8.dp
+                        bottom = bottomContentPadding + imeBottomPadding + 8.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -537,7 +538,7 @@ fun ChatScreen(navController: NavController) {
                 height = 52.dp,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = bottomContentPadding)
+                    .padding(bottom = imeBottomPadding + bottomBarHeightDp)
                     .zIndex(1f)
             )
 
@@ -560,6 +561,7 @@ fun ChatScreen(navController: NavController) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .zIndex(3f)
                     .onSizeChanged { bottomBarHeightPx = it.height }
             ) {
                 BottomInputArea(
@@ -591,6 +593,7 @@ fun ChatScreen(navController: NavController) {
             // 底部工具面板（覆盖在输入框上方）
             ToolMenuPanel(
                 visible = showToolMenu,
+                modifier = Modifier.zIndex(4f),
                 onDismiss = { showToolMenu = false },
                 onToolSelect = { tool ->
                     selectedTool = tool
@@ -1122,6 +1125,7 @@ fun ActionButton(
 @Composable
 fun ToolMenuPanel(
     visible: Boolean,
+    modifier: Modifier = Modifier,
     onDismiss: () -> Unit,
     onToolSelect: (String) -> Unit
 ) {
@@ -1140,7 +1144,7 @@ fun ToolMenuPanel(
         exit = fadeOut()
     ) {
         Box(
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.5f))
                 .clickable(

@@ -4,8 +4,8 @@ import androidx.compose.ui.graphics.Color
 
 // iOS Style Colors
 val Background = Color(0xFFF7F7F9)
-// Slightly warmer chat background (matches HTML prototype more closely)
-val ChatBackground = Color(0xFFF8F7F2)
+// Chat background
+val ChatBackground = Color(0xFFF5F5F5)
 val Surface = Color(0xFFFFFFFF)
 val TextPrimary = Color(0xFF1C1C1E)
 val TextSecondary = Color(0xFF8E8E93)
