@@ -58,3 +58,9 @@ data class Message(
     val reasoning: String? = null,
     val timestamp: Long = System.currentTimeMillis()
 )
+
+data class MemoryItem(
+    val id: String = UUID.randomUUID().toString(),
+    val content: String,
+    val createdAt: Long = System.currentTimeMillis()
+)

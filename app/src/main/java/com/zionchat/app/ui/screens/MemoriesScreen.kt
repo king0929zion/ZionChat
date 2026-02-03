@@ -19,72 +19,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.*
-
-private data class MemoryItemUi(
-    val content: String,
-    val from: String
-)
+import kotlinx.coroutines.launch
 
 @Composable
 fun MemoriesScreen(navController: NavController) {
-    var items by remember {
-        mutableStateOf(
-            listOf(
-                MemoryItemUi(
-                    content = "User works as a software engineer and prefers concise answers.",
-                    from = "From conversation on Jan 15, 2026"
-                ),
-                MemoryItemUi(
-                    content = "User is interested in AI technology and machine learning.",
-                    from = "From conversation on Jan 14, 2026"
-                ),
-                MemoryItemUi(
-                    content = "User likes to use bullet points for lists and explanations.",
-                    from = "From conversation on Jan 12, 2026"
-                ),
-                MemoryItemUi(
-                    content = "User prefers Kotlin and Jetpack Compose for Android development.",
-                    from = "From conversation on Jan 10, 2026"
-                ),
-                MemoryItemUi(
-                    content = "User prefers to read technical documentation in English.",
-                    from = "From conversation on Jan 8, 2026"
-                ),
-                MemoryItemUi(
-                    content = "User is learning about Android app development with Kotlin.",
-                    from = "From conversation on Jan 5, 2026"
-                ),
-                MemoryItemUi(
-                    content = "User enjoys science fiction movies and books.",
-                    from = "From conversation on Jan 3, 2026"
-                ),
-                MemoryItemUi(
-                    content = "User prefers dark mode for coding but light mode for reading.",
-                    from = "From conversation on Dec 28, 2025"
-                ),
-                MemoryItemUi(
-                    content = "User uses VS Code as primary IDE and loves keyboard shortcuts.",
-                    from = "From conversation on Dec 25, 2025"
-                ),
-                MemoryItemUi(
-                    content = "User is building a ChatGPT clone app called ZionChat.",
-                    from = "From conversation on Dec 20, 2025"
-                ),
-                MemoryItemUi(
-                    content = "User prefers examples and practical code snippets.",
-                    from = "From conversation on Dec 18, 2025"
-                ),
-                MemoryItemUi(
-                    content = "User likes clean UI and smooth animations.",
-                    from = "From conversation on Dec 15, 2025"
-                )
-            )
-        )
-    }
+    val repository = LocalAppRepository.current
+    val scope = rememberCoroutineScope()
+    val items by repository.memoriesFlow.collectAsState(initial = emptyList())
 
     Column(
         modifier = Modifier
@@ -120,7 +66,7 @@ fun MemoriesScreen(navController: NavController) {
                     color = TextSecondary,
                     modifier = Modifier.padding(start = 8.dp)
                 )
-                TextButton(onClick = { items = emptyList() }) {
+                TextButton(onClick = { scope.launch { repository.clearMemories() } }) {
                     Text(
                         text = "Clear All",
                         fontSize = 15.sp,
@@ -170,7 +116,7 @@ fun MemoriesScreen(navController: NavController) {
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
                                     ) {
-                                        items = items.filterNot { it === item }
+                                        scope.launch { repository.deleteMemory(item.id) }
                                     },
                                 contentAlignment = Alignment.Center
                             ) {

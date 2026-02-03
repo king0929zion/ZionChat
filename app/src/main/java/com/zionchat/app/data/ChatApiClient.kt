@@ -11,6 +11,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.util.UUID
@@ -21,6 +22,90 @@ class ChatApiClient {
     private val client = OkHttpClient()
     private val gson = Gson()
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+    private val markdownImageRegex = Regex("!\\[[^\\]]*\\]\\(([^)]+)\\)")
+
+    suspend fun webSearch(query: String): Result<String> {
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) return Result.success("")
+
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val url =
+                    "https://api.duckduckgo.com/".toHttpUrl().newBuilder()
+                        .addQueryParameter("q", trimmed)
+                        .addQueryParameter("format", "json")
+                        .addQueryParameter("no_html", "1")
+                        .addQueryParameter("no_redirect", "1")
+                        .addQueryParameter("skip_disambig", "1")
+                        .build()
+
+                val request =
+                    Request.Builder()
+                        .url(url)
+                        .get()
+                        .addHeader("Accept", "application/json")
+                        .build()
+
+                client.newCall(request).execute().use { response ->
+                    val raw = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        error("HTTP ${response.code}: $raw")
+                    }
+
+                    val json = runCatching { JsonParser.parseString(raw).asJsonObject }.getOrNull()
+                        ?: error("Invalid search response")
+
+                    val abstractText = json.get("AbstractText")?.asString?.trim().orEmpty()
+                    val heading = json.get("Heading")?.asString?.trim().orEmpty()
+
+                    fun flattenRelatedTopics(acc: MutableList<String>, el: com.google.gson.JsonElement?) {
+                        val arr = runCatching { el?.asJsonArray }.getOrNull() ?: return
+                        arr.forEach { item ->
+                            val obj = runCatching { item.asJsonObject }.getOrNull() ?: return@forEach
+                            if (obj.has("Topics")) {
+                                flattenRelatedTopics(acc, obj.get("Topics"))
+                                return@forEach
+                            }
+                            val text = obj.get("Text")?.asString?.trim().orEmpty()
+                            val urlStr = obj.get("FirstURL")?.asString?.trim().orEmpty()
+                            if (text.isNotBlank()) {
+                                acc.add(
+                                    if (urlStr.isNotBlank()) "$text ($urlStr)" else text
+                                )
+                            }
+                        }
+                    }
+
+                    val relatedItems = mutableListOf<String>()
+                    flattenRelatedTopics(relatedItems, json.get("RelatedTopics"))
+                    val related = relatedItems
+                        .filter { it.isNotBlank() }
+                        .take(6)
+
+                    buildString {
+                        if (heading.isNotBlank()) {
+                            append("Heading: ")
+                            append(heading)
+                            append('\n')
+                        }
+                        if (abstractText.isNotBlank()) {
+                            append("Abstract: ")
+                            append(abstractText)
+                            append("\n\n")
+                        }
+                        if (related.isNotEmpty()) {
+                            append("Related:\n")
+                            related.forEach { item ->
+                                append("- ")
+                                append(item)
+                                append('\n')
+                            }
+                        }
+                    }.trim()
+                }
+            }
+        }
+    }
 
     suspend fun listModels(
         provider: ProviderConfig,
@@ -164,7 +249,7 @@ class ChatApiClient {
                 val body = gson.toJson(
                     mapOf(
                         "model" to modelId,
-                        "messages" to messages.map { mapOf("role" to it.role, "content" to it.content) }
+                        "messages" to toOpenAIChatMessages(messages)
                     )
                 )
                 val requestBuilder = Request.Builder()
@@ -221,7 +306,7 @@ class ChatApiClient {
         val body = gson.toJson(
             mapOf(
                 "model" to modelId,
-                "messages" to messages.map { mapOf("role" to it.role, "content" to it.content) },
+                "messages" to toOpenAIChatMessages(messages),
                 "stream" to true
             )
         )
@@ -736,6 +821,48 @@ class ChatApiClient {
             .map { it.trim().trimEnd('/') }
             .filter { it.isNotBlank() }
             .distinct()
+    }
+
+    private fun toOpenAIChatMessages(messages: List<Message>): List<Map<String, Any>> {
+        return messages.map { message ->
+            val role = message.role
+            if (role != "user") {
+                mapOf("role" to role, "content" to message.content)
+            } else {
+                val (text, images) = extractMarkdownImages(message.content)
+                if (images.isEmpty()) {
+                    mapOf("role" to role, "content" to message.content)
+                } else {
+                    val parts = mutableListOf<Map<String, Any>>()
+                    if (text.isNotBlank()) {
+                        parts.add(mapOf("type" to "text", "text" to text))
+                    }
+                    images.forEach { url ->
+                        parts.add(mapOf("type" to "image_url", "image_url" to mapOf("url" to url)))
+                    }
+                    mapOf("role" to role, "content" to parts)
+                }
+            }
+        }
+    }
+
+    private fun extractMarkdownImages(content: String): Pair<String, List<String>> {
+        val raw = content.trim()
+        if (raw.isBlank()) return "" to emptyList()
+
+        val urls =
+            markdownImageRegex.findAll(raw)
+                .mapNotNull { match ->
+                    match.groupValues.getOrNull(1)?.trim()
+                }
+                .map { it.trim() }
+                .filter { it.startsWith("http", ignoreCase = true) || it.startsWith("data:image", ignoreCase = true) }
+                .distinct()
+                .toList()
+
+        if (urls.isEmpty()) return raw to emptyList()
+        val text = raw.replace(markdownImageRegex, "").trim()
+        return text to urls
     }
 }
 

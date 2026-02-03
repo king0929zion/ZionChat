@@ -40,6 +40,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,7 +54,9 @@ import com.zionchat.app.LocalProviderAuthManager
 import com.zionchat.app.data.AppRepository
 import com.zionchat.app.data.ChatApiClient
 import com.zionchat.app.data.Conversation
+import com.zionchat.app.data.HttpHeader
 import com.zionchat.app.data.Message
+import com.zionchat.app.data.ProviderConfig
 import com.zionchat.app.data.extractRemoteModelId
 import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.BottomFadeScrim
@@ -63,7 +66,10 @@ import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.*
 import coil.compose.AsyncImage
+import com.google.gson.JsonParser
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.compose.animation.core.animateFloatAsState
@@ -262,6 +268,7 @@ fun ChatScreen(navController: NavController) {
 
         scope.launch {
             val nowMs = System.currentTimeMillis()
+            val provisionalTitle = trimmed.lineSequence().firstOrNull().orEmpty().trim().take(24)
             val initialConversations = repository.conversationsFlow.first()
 
             var conversationId = effectiveConversationId?.trim().takeIf { !it.isNullOrBlank() }
@@ -279,7 +286,21 @@ fun ChatScreen(navController: NavController) {
             preferredConversationSetAtMs = nowMs
             repository.setCurrentConversationId(safeConversationId)
 
-            val userMessage = Message(role = "user", content = trimmed)
+            val toolPrefixLabel =
+                when (selectedTool) {
+                    "camera" -> "Camera"
+                    "photos" -> "Photos"
+                    "files" -> "Files"
+                    "web" -> "Web search"
+                    "image" -> "Create image"
+                    "mcp" -> "MCP Tools"
+                    else -> null
+                }
+            val userContent = if (!toolPrefixLabel.isNullOrBlank()) "[${toolPrefixLabel}] $trimmed" else trimmed
+            val hasVisionInput =
+                userContent.contains("data:image", ignoreCase = true) ||
+                    Regex("!\\[[^\\]]*\\]\\(([^)]+)\\)").containsMatchIn(userContent)
+            val userMessage = Message(role = "user", content = userContent)
             pendingMessages = pendingMessages + PendingMessage(safeConversationId, userMessage)
             messageText = ""
             scrollToBottomToken++
@@ -292,9 +313,8 @@ fun ChatScreen(navController: NavController) {
                 latestConversationForTitle != null &&
                     (latestConversationForTitle.title.isBlank() || latestConversationForTitle.title == "New chat")
             ) {
-                val title = trimmed.lineSequence().firstOrNull().orEmpty().trim().take(24)
-                if (title.isNotBlank()) {
-                    repository.updateConversation(latestConversationForTitle.copy(title = title))
+                if (provisionalTitle.isNotBlank()) {
+                    repository.updateConversation(latestConversationForTitle.copy(title = provisionalTitle))
                 }
             }
 
@@ -310,16 +330,24 @@ fun ChatScreen(navController: NavController) {
                 return@launch
             }
 
+            val effectiveModelId =
+                if (hasVisionInput) {
+                    repository.defaultVisionModelIdFlow.first()?.trim().takeIf { !it.isNullOrBlank() }
+                        ?: latestDefaultChatModelId
+                } else {
+                    latestDefaultChatModelId
+                }
+
             val allModels = repository.modelsFlow.first()
             val selectedModel =
-                allModels.firstOrNull { it.id == latestDefaultChatModelId }
-                    ?: allModels.firstOrNull { extractRemoteModelId(it.id) == latestDefaultChatModelId }
+                allModels.firstOrNull { it.id == effectiveModelId }
+                    ?: allModels.firstOrNull { extractRemoteModelId(it.id) == effectiveModelId }
             if (selectedModel == null) {
                 repository.appendMessage(
                     safeConversationId,
                     Message(
                         role = "assistant",
-                        content = "Default chat model not found: $latestDefaultChatModelId. Enable or add it in Models, then re-select it in Settings → Default model."
+                        content = "Default model not found: $effectiveModelId. Enable or add it in Models, then re-select it in Settings → Default model."
                     )
                 )
                 return@launch
@@ -341,6 +369,11 @@ fun ChatScreen(navController: NavController) {
             val systemMessage = run {
                 val latestNickname = repository.nicknameFlow.first().trim()
                 val latestInstructions = repository.customInstructionsFlow.first().trim()
+                val latestMemories =
+                    repository.memoriesFlow.first()
+                        .map { it.content.trim() }
+                        .filter { it.isNotBlank() }
+                        .take(12)
                 val content = buildString {
                     if (latestNickname.isNotBlank()) {
                         append("Nickname: ")
@@ -349,6 +382,15 @@ fun ChatScreen(navController: NavController) {
                     if (latestInstructions.isNotBlank()) {
                         if (isNotEmpty()) append("\n\n")
                         append(latestInstructions)
+                    }
+                    if (latestMemories.isNotEmpty()) {
+                        if (isNotEmpty()) append("\n\n")
+                        append("Memories:\n")
+                        latestMemories.forEach { memory ->
+                            append("- ")
+                            append(memory)
+                            append('\n')
+                        }
                     }
                 }.trim()
                 if (content.isBlank()) null else Message(role = "system", content = content)
@@ -395,8 +437,23 @@ fun ChatScreen(navController: NavController) {
                     )
                 } else {
                     // 普通聊天流程
+                    val toolContextMessage =
+                        if (selectedTool == "web") {
+                            val webContext = chatApiClient.webSearch(trimmed).getOrDefault("")
+                            webContext.takeIf { it.isNotBlank() }?.let { content ->
+                                Message(
+                                    role = "system",
+                                    content =
+                                        "Use the following web search results as reference. If they are insufficient, answer based on best effort.\n\n$content"
+                                )
+                            }
+                        } else {
+                            null
+                        }
+
                     val requestMessages = buildList {
                         if (systemMessage != null) add(systemMessage)
+                        if (toolContextMessage != null) add(toolContextMessage)
                         addAll(currentMessages)
                         if (currentMessages.lastOrNull()?.id != userMessage.id) add(userMessage)
                     }
@@ -492,6 +549,82 @@ fun ChatScreen(navController: NavController) {
                             safeConversationId,
                             assistantMessage.copy(content = finalContent, reasoning = finalReasoning)
                         )
+                    }
+
+                    if (finalContent.isNotBlank()) {
+                        val chatModelId = extractRemoteModelId(selectedModel.id)
+                        val chatExtraHeaders = selectedModel.headers
+                        val userTextForMemory = trimmed
+                        val assistantTextForMemory = finalContent
+
+                        scope.launch(Dispatchers.IO) {
+                            runCatching {
+                                val candidates =
+                                    extractMemoryCandidatesFromTurn(
+                                        chatApiClient = chatApiClient,
+                                        provider = resolvedProvider,
+                                        modelId = chatModelId,
+                                        userText = userTextForMemory,
+                                        assistantText = assistantTextForMemory,
+                                        extraHeaders = chatExtraHeaders
+                                    )
+                                candidates.forEach { repository.addMemory(it) }
+                            }
+                        }
+
+                        scope.launch(Dispatchers.IO) {
+                            runCatching {
+                                val titleModelKey = repository.defaultTitleModelIdFlow.first()?.trim().orEmpty()
+                                if (titleModelKey.isBlank()) return@runCatching
+
+                                val modelsAll = repository.modelsFlow.first()
+                                val titleModel =
+                                    modelsAll.firstOrNull { it.id == titleModelKey }
+                                        ?: modelsAll.firstOrNull { extractRemoteModelId(it.id) == titleModelKey }
+                                        ?: return@runCatching
+
+                                val providersAll = repository.providersFlow.first()
+                                val titleProvider =
+                                    titleModel.providerId?.let { pid -> providersAll.firstOrNull { it.id == pid } }
+                                        ?: providersAll.firstOrNull()
+                                        ?: return@runCatching
+
+                                if (titleProvider.apiUrl.isBlank() || titleProvider.apiKey.isBlank()) return@runCatching
+
+                                val validTitleProvider = providerAuthManager.ensureValidProvider(titleProvider)
+                                val convo = repository.conversationsFlow.first().firstOrNull { it.id == safeConversationId }
+                                    ?: return@runCatching
+
+                                val currentTitle = convo.title.trim()
+                                val shouldGenerateTitle =
+                                    currentTitle.isBlank() ||
+                                        currentTitle == "New chat" ||
+                                        (provisionalTitle.isNotBlank() && currentTitle == provisionalTitle.trim())
+                                if (!shouldGenerateTitle) return@runCatching
+
+                                val transcript =
+                                    buildConversationTranscript(
+                                        messages = convo.messages,
+                                        maxMessages = 12,
+                                        maxCharsPerMessage = 420
+                                    )
+                                if (transcript.isBlank()) return@runCatching
+
+                                val generatedTitle =
+                                    generateConversationTitle(
+                                        chatApiClient = chatApiClient,
+                                        provider = validTitleProvider,
+                                        modelId = extractRemoteModelId(titleModel.id),
+                                        transcript = transcript,
+                                        extraHeaders = titleModel.headers
+                                    )?.trim().orEmpty()
+
+                                val finalTitle = generatedTitle.trim().trim('"', '\'').take(48)
+                                if (finalTitle.isBlank()) return@runCatching
+
+                                repository.updateConversation(convo.copy(title = finalTitle))
+                            }
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -694,6 +827,7 @@ fun ChatScreen(navController: NavController) {
             // 底部工具面板（覆盖在输入框上方）
             ToolMenuPanel(
                 visible = showToolMenu,
+                bottomBarHeight = bottomBarHeightDp,
                 modifier = Modifier.zIndex(20f),
                 onDismiss = { showToolMenu = false },
                 onToolSelect = { tool ->
@@ -1327,6 +1461,7 @@ fun ActionButton(
 @Composable
 fun ToolMenuPanel(
     visible: Boolean,
+    bottomBarHeight: Dp,
     modifier: Modifier = Modifier,
     onDismiss: () -> Unit,
     onToolSelect: (String) -> Unit
@@ -1349,17 +1484,23 @@ fun ToolMenuPanel(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDismiss
-                )
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = bottomBarHeight)
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onDismiss
+                    )
+            )
             Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
+                        .padding(bottom = bottomBarHeight)
                         .offset { IntOffset(0, dragOffsetPx.roundToInt()) }
                         .draggable(
                             orientation = Orientation.Vertical,
@@ -1834,4 +1975,153 @@ fun BottomInputArea(
             }
         }
     }
+}
+
+private fun buildConversationTranscript(
+    messages: List<Message>,
+    maxMessages: Int,
+    maxCharsPerMessage: Int
+): String {
+    if (messages.isEmpty()) return ""
+    val tail = messages.takeLast(maxMessages)
+    return buildString {
+        tail.forEach { msg ->
+            val prefix =
+                when (msg.role) {
+                    "user" -> "User"
+                    "assistant" -> "Assistant"
+                    else -> msg.role.replaceFirstChar { it.uppercase() }
+                }
+            append(prefix)
+            append(": ")
+            append(msg.content.replace('\n', ' ').trim().take(maxCharsPerMessage))
+            append('\n')
+        }
+    }.trim()
+}
+
+private suspend fun collectStreamContent(
+    chatApiClient: ChatApiClient,
+    provider: ProviderConfig,
+    modelId: String,
+    messages: List<Message>,
+    extraHeaders: List<HttpHeader>
+): String {
+    val sb = StringBuilder()
+    chatApiClient.chatCompletionsStream(
+        provider = provider,
+        modelId = modelId,
+        messages = messages,
+        extraHeaders = extraHeaders
+    ).collect { delta ->
+        delta.content?.let { sb.append(it) }
+    }
+    return sb.toString().trim()
+}
+
+private fun stripMarkdownCodeFences(text: String): String {
+    var t = text.trim()
+    if (t.startsWith("```")) {
+        t = t.substringAfter('\n', t).trim()
+    }
+    if (t.endsWith("```")) {
+        t = t.dropLast(3).trim()
+    }
+    return t.trim()
+}
+
+private fun parseJsonStringArray(text: String): List<String> {
+    val cleaned = stripMarkdownCodeFences(text).trim()
+    if (cleaned.isBlank()) return emptyList()
+
+    val candidate = run {
+        val start = cleaned.indexOf('[')
+        val end = cleaned.lastIndexOf(']')
+        if (start >= 0 && end > start) cleaned.substring(start, end + 1) else cleaned
+    }
+
+    val element = runCatching { JsonParser.parseString(candidate) }.getOrNull() ?: return emptyList()
+    val array =
+        when {
+            element.isJsonArray -> element.asJsonArray
+            element.isJsonObject -> element.asJsonObject.getAsJsonArray("memories")
+            else -> null
+        } ?: return emptyList()
+
+    return array.mapNotNull { el ->
+        runCatching { el.asString }.getOrNull()?.trim()?.takeIf { it.isNotBlank() }
+    }
+}
+
+private suspend fun extractMemoryCandidatesFromTurn(
+    chatApiClient: ChatApiClient,
+    provider: ProviderConfig,
+    modelId: String,
+    userText: String,
+    assistantText: String,
+    extraHeaders: List<HttpHeader>
+): List<String> {
+    val u = userText.trim()
+    val a = assistantText.trim()
+    if (u.isBlank() || a.isBlank()) return emptyList()
+
+    val systemPrompt =
+        "Extract stable user-specific facts that could help in future conversations. Return ONLY a JSON array of strings. " +
+            "If there is nothing worth saving, return []. Do not include temporary requests or task-specific details."
+
+    val userPrompt =
+        buildString {
+            append("User message:\n")
+            append(u.take(900))
+            append("\n\nAssistant reply:\n")
+            append(a.take(1400))
+            append("\n\nReturn JSON array only.")
+        }
+
+    val raw =
+        collectStreamContent(
+            chatApiClient = chatApiClient,
+            provider = provider,
+            modelId = modelId,
+            messages = listOf(
+                Message(role = "system", content = systemPrompt),
+                Message(role = "user", content = userPrompt)
+            ),
+            extraHeaders = extraHeaders
+        )
+
+    return parseJsonStringArray(raw)
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .distinct()
+        .take(3)
+}
+
+private suspend fun generateConversationTitle(
+    chatApiClient: ChatApiClient,
+    provider: ProviderConfig,
+    modelId: String,
+    transcript: String,
+    extraHeaders: List<HttpHeader>
+): String? {
+    val t = transcript.trim()
+    if (t.isBlank()) return null
+
+    val systemPrompt =
+        "Generate a concise conversation title (max 6 words). Respond with ONLY the title, no quotes, no punctuation."
+
+    val raw =
+        collectStreamContent(
+            chatApiClient = chatApiClient,
+            provider = provider,
+            modelId = modelId,
+            messages = listOf(
+                Message(role = "system", content = systemPrompt),
+                Message(role = "user", content = t.take(1800))
+            ),
+            extraHeaders = extraHeaders
+        )
+
+    val firstLine = stripMarkdownCodeFences(raw).lineSequence().firstOrNull().orEmpty().trim()
+    return firstLine.takeIf { it.isNotBlank() }
 }

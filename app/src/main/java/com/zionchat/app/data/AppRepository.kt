@@ -19,6 +19,7 @@ class AppRepository(context: Context) {
     private val providersKey = stringPreferencesKey("providers_json")
     private val modelsKey = stringPreferencesKey("models_json")
     private val conversationsKey = stringPreferencesKey("conversations_json")
+    private val memoriesKey = stringPreferencesKey("memories_json")
     private val currentConversationIdKey = stringPreferencesKey("current_conversation_id")
     private val nicknameKey = stringPreferencesKey("nickname")
     private val handleKey = stringPreferencesKey("handle")
@@ -32,6 +33,7 @@ class AppRepository(context: Context) {
     private val providerListType = object : TypeToken<List<ProviderConfig>>() {}.type
     private val modelListType = object : TypeToken<List<ModelConfig>>() {}.type
     private val conversationListType = object : TypeToken<List<Conversation>>() {}.type
+    private val memoryListType = object : TypeToken<List<MemoryItem>>() {}.type
 
     val providersFlow: Flow<List<ProviderConfig>> = dataStore.data.map { prefs ->
         val json = prefs[providersKey] ?: "[]"
@@ -47,6 +49,12 @@ class AppRepository(context: Context) {
         val json = prefs[conversationsKey] ?: "[]"
         runCatching { gson.fromJson<List<Conversation>>(json, conversationListType) }.getOrDefault(emptyList())
             .sortedByDescending { it.updatedAt }
+    }
+
+    val memoriesFlow: Flow<List<MemoryItem>> = dataStore.data.map { prefs ->
+        val json = prefs[memoriesKey] ?: "[]"
+        runCatching { gson.fromJson<List<MemoryItem>>(json, memoryListType) }.getOrDefault(emptyList())
+            .sortedByDescending { it.createdAt }
     }
 
     val currentConversationIdFlow: Flow<String?> = dataStore.data.map { prefs ->
@@ -347,6 +355,39 @@ class AppRepository(context: Context) {
         conversations.add(0, updatedConversation)
         dataStore.edit { prefs ->
             prefs[conversationsKey] = gson.toJson(conversations)
+        }
+    }
+
+    suspend fun addMemory(content: String): MemoryItem? {
+        val text = content.trim()
+        if (text.isBlank()) return null
+
+        val memories = memoriesFlow.first().toMutableList()
+        val existingIndex = memories.indexOfFirst { it.content.trim().equals(text, ignoreCase = true) }
+        if (existingIndex >= 0) {
+            return memories[existingIndex]
+        }
+
+        val item = MemoryItem(content = text)
+        memories.add(0, item)
+        dataStore.edit { prefs ->
+            prefs[memoriesKey] = gson.toJson(memories)
+        }
+        return item
+    }
+
+    suspend fun deleteMemory(id: String) {
+        val key = id.trim()
+        if (key.isBlank()) return
+        val memories = memoriesFlow.first().filterNot { it.id == key }
+        dataStore.edit { prefs ->
+            prefs[memoriesKey] = gson.toJson(memories)
+        }
+    }
+
+    suspend fun clearMemories() {
+        dataStore.edit { prefs ->
+            prefs[memoriesKey] = "[]"
         }
     }
 }
