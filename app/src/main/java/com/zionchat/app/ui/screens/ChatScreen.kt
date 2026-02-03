@@ -506,6 +506,16 @@ fun ChatScreen(navController: NavController) {
                         }
                     }
 
+                    // 顶部渐变遮罩 - 在消息列表区域内
+                    // 消息向上滚动到按钮附近时渐变消失
+                    TopFadeScrim(
+                        color = Background,
+                        height = 80.dp,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .zIndex(1f)
+                    )
+
                     BottomFadeScrim(
                         color = Background,
                         height = 52.dp,
@@ -515,17 +525,6 @@ fun ChatScreen(navController: NavController) {
                     )
                 }
             }
-
-            // 顶部渐变遮罩 - 覆盖在导航栏下方
-            // 蓝色线位置（导航栏底部）开始渐变，橙色线位置（按钮处）完全消失
-            TopFadeScrim(
-                color = Background,
-                height = 40.dp,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 56.dp) // 状态栏下方的导航栏底部位置
-                    .zIndex(2f)
-            )
 
             // 底部输入框区域 - 固定在底部（高度动态，支持多行/工具标签）
             Box(
