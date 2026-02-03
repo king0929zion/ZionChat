@@ -796,13 +796,12 @@ fun AppearanceMenu(
 ) {
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(animationSpec = tween(200)),
-        exit = fadeOut(animationSpec = tween(200))
+        enter = fadeIn(animationSpec = tween(150)),
+        exit = fadeOut(animationSpec = tween(150))
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.3f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -813,38 +812,44 @@ fun AppearanceMenu(
             AnimatedVisibility(
                 visible = visible,
                 enter = slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = tween(300, easing = androidx.compose.animation.core.EaseOutCubic)
+                    initialOffsetY = { it / 2 },
+                    animationSpec = tween(250, easing = androidx.compose.animation.core.EaseOutCubic)
+                ) + androidx.compose.animation.scaleIn(
+                    initialScale = 0.95f,
+                    animationSpec = tween(250, easing = androidx.compose.animation.core.EaseOutCubic)
                 ),
                 exit = slideOutVertically(
-                    targetOffsetY = { it },
+                    targetOffsetY = { it / 2 },
+                    animationSpec = tween(200, easing = androidx.compose.animation.core.EaseInCubic)
+                ) + androidx.compose.animation.scaleOut(
+                    targetScale = 0.95f,
                     animationSpec = tween(200, easing = androidx.compose.animation.core.EaseInCubic)
                 )
             ) {
                 Surface(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 80.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    color = Color(0xFFF2F2F7).copy(alpha = 0.95f),
-                    shadowElevation = 8.dp
+                        .fillMaxWidth(0.85f)
+                        .padding(bottom = 120.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFFF2F2F7),
+                    shadowElevation = 16.dp
                 ) {
                     Column(
                         modifier = Modifier.padding(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         appearanceOptions.forEach { (key, label, icon) ->
                             val isSelected = key == selected
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(if (isSelected) Color.White.copy(alpha = 0.6f) else Color.Transparent)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color.Transparent)
                                     .clickable {
                                         onSelect(key)
                                         onDismiss()
                                     }
-                                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                                    .padding(horizontal = 12.dp, vertical = 12.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -853,38 +858,28 @@ fun AppearanceMenu(
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
                                         Icon(
                                             imageVector = icon,
                                             contentDescription = null,
-                                            modifier = Modifier.size(20.dp),
+                                            modifier = Modifier.size(18.dp),
                                             tint = TextPrimary
                                         )
                                         Text(
                                             text = label,
-                                            fontSize = 17.sp,
-                                            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Normal,
                                             color = TextPrimary
                                         )
                                     }
 
-                                    // 选中动画
-                                    androidx.compose.animation.AnimatedVisibility(
-                                        visible = isSelected,
-                                        enter = androidx.compose.animation.scaleIn(
-                                            initialScale = 0f,
-                                            animationSpec = tween(200, easing = androidx.compose.animation.core.EaseOutBack)
-                                        ),
-                                        exit = androidx.compose.animation.scaleOut(
-                                            targetScale = 0f,
-                                            animationSpec = tween(150)
-                                        )
-                                    ) {
+                                    // 选中打勾
+                                    if (isSelected) {
                                         Icon(
                                             imageVector = AppIcons.Check,
                                             contentDescription = null,
-                                            modifier = Modifier.size(20.dp),
+                                            modifier = Modifier.size(18.dp),
                                             tint = TextPrimary
                                         )
                                     }
@@ -908,13 +903,12 @@ fun AccentColorMenu(
 ) {
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(animationSpec = tween(200)),
-        exit = fadeOut(animationSpec = tween(200))
+        enter = fadeIn(animationSpec = tween(150)),
+        exit = fadeOut(animationSpec = tween(150))
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.3f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -925,25 +919,31 @@ fun AccentColorMenu(
             AnimatedVisibility(
                 visible = visible,
                 enter = slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = tween(300, easing = androidx.compose.animation.core.EaseOutCubic)
+                    initialOffsetY = { it / 2 },
+                    animationSpec = tween(250, easing = androidx.compose.animation.core.EaseOutCubic)
+                ) + androidx.compose.animation.scaleIn(
+                    initialScale = 0.95f,
+                    animationSpec = tween(250, easing = androidx.compose.animation.core.EaseOutCubic)
                 ),
                 exit = slideOutVertically(
-                    targetOffsetY = { it },
+                    targetOffsetY = { it / 2 },
+                    animationSpec = tween(200, easing = androidx.compose.animation.core.EaseInCubic)
+                ) + androidx.compose.animation.scaleOut(
+                    targetScale = 0.95f,
                     animationSpec = tween(200, easing = androidx.compose.animation.core.EaseInCubic)
                 )
             ) {
                 Surface(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 80.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    color = Color(0xFFF2F2F7).copy(alpha = 0.95f),
-                    shadowElevation = 8.dp
+                        .fillMaxWidth(0.85f)
+                        .padding(bottom = 120.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFFF2F2F7),
+                    shadowElevation = 16.dp
                 ) {
                     Column(
                         modifier = Modifier.padding(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         accentColorOptions.forEach { (key, color) ->
                             val isSelected = key == selected
@@ -951,13 +951,13 @@ fun AccentColorMenu(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(if (isSelected) Color.White.copy(alpha = 0.6f) else Color.Transparent)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color.Transparent)
                                     .clickable {
                                         onSelect(key)
                                         onDismiss()
                                     }
-                                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                                    .padding(horizontal = 12.dp, vertical = 12.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -966,21 +966,20 @@ fun AccentColorMenu(
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
                                         // 颜色圆点
                                         Box(
                                             modifier = Modifier
-                                                .size(16.dp)
+                                                .size(14.dp)
                                                 .clip(CircleShape)
                                                 .background(color)
-                                                .border(0.5.dp, Color.Black.copy(alpha = 0.1f), CircleShape)
                                         )
 
                                         Text(
                                             text = key.replaceFirstChar { it.uppercase() },
-                                            fontSize = 17.sp,
-                                            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Normal,
                                             color = TextPrimary
                                         )
 
@@ -988,36 +987,26 @@ fun AccentColorMenu(
                                         if (isPurple) {
                                             Text(
                                                 text = "· Plus",
-                                                fontSize = 15.sp,
+                                                fontSize = 14.sp,
                                                 color = TextSecondary
                                             )
                                         }
                                     }
 
-                                    // 选中动画
-                                    androidx.compose.animation.AnimatedVisibility(
-                                        visible = isSelected,
-                                        enter = androidx.compose.animation.scaleIn(
-                                            initialScale = 0f,
-                                            animationSpec = tween(200, easing = androidx.compose.animation.core.EaseOutBack)
-                                        ),
-                                        exit = androidx.compose.animation.scaleOut(
-                                            targetScale = 0f,
-                                            animationSpec = tween(150)
-                                        )
-                                    ) {
+                                    // 选中打勾
+                                    if (isSelected) {
                                         Icon(
                                             imageVector = AppIcons.Check,
                                             contentDescription = null,
-                                            modifier = Modifier.size(20.dp),
+                                            modifier = Modifier.size(18.dp),
                                             tint = when (key) {
                                                 "default" -> Color(0xFF6B7280)
-                                                "blue" -> Color(0xFF2563EB)
-                                                "green" -> Color(0xFF16A34A)
+                                                "blue" -> Color(0xFF3B82F6)
+                                                "green" -> Color(0xFF22C55E)
                                                 "yellow" -> Color(0xFFCA8A04)
-                                                "pink" -> Color(0xFFDB2777)
-                                                "orange" -> Color(0xFFEA580C)
-                                                "purple" -> Color(0xFF9333EA)
+                                                "pink" -> Color(0xFFEC4899)
+                                                "orange" -> Color(0xFFF97316)
+                                                "purple" -> Color(0xFFA855F7)
                                                 else -> TextPrimary
                                             }
                                         )
