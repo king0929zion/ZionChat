@@ -140,6 +140,7 @@ fun AddOAuthProviderScreen(
             "codex" -> OAuthClient.OAuthProvider.Codex
             "iflow" -> OAuthClient.OAuthProvider.IFlow
             "antigravity" -> OAuthClient.OAuthProvider.Antigravity
+            "gemini-cli" -> OAuthClient.OAuthProvider.GeminiCli
             else -> null
         }
     }
@@ -151,6 +152,7 @@ fun AddOAuthProviderScreen(
                 OAuthClient.OAuthProvider.Codex -> "Codex"
                 OAuthClient.OAuthProvider.IFlow -> "iFlow"
                 OAuthClient.OAuthProvider.Antigravity -> "Antigravity"
+                OAuthClient.OAuthProvider.GeminiCli -> "Gemini CLI"
                 else -> ""
             }
     }
@@ -226,6 +228,7 @@ fun AddOAuthProviderScreen(
                                 OAuthClient.OAuthProvider.Codex -> oauthClient.startCodexOAuth()
                                 OAuthClient.OAuthProvider.IFlow -> oauthClient.startIFlowOAuth()
                                 OAuthClient.OAuthProvider.Antigravity -> oauthClient.startAntigravityOAuth()
+                                OAuthClient.OAuthProvider.GeminiCli -> oauthClient.startGeminiCliOAuth()
                             }
                         oauthStart = start
                         callbackUrl = ""
@@ -317,6 +320,28 @@ fun AddOAuthProviderScreen(
                                                 apiUrl = "https://daily-cloudcode-pa.googleapis.com",
                                                 apiKey = token.accessToken,
                                                 oauthProvider = "antigravity",
+                                                oauthAccessToken = token.accessToken,
+                                                oauthRefreshToken = token.refreshToken,
+                                                oauthEmail = token.email,
+                                                oauthProjectId = token.projectId,
+                                                oauthExpiresAtMs = token.expiresAtMs
+                                            )
+                                        }
+                                    }
+                                    OAuthClient.OAuthProvider.GeminiCli -> {
+                                        oauthClient.exchangeGeminiCli(
+                                            code = code,
+                                            redirectUri = start.redirectUri,
+                                            pkceCodeVerifier = start.pkceCodeVerifier.orEmpty()
+                                        ).map { token ->
+                                            ProviderConfig(
+                                                presetId = "gemini-cli",
+                                                iconAsset = "gemini-color.svg",
+                                                name = providerName.trim().ifBlank { "Gemini CLI" },
+                                                type = "gemini-cli",
+                                                apiUrl = "https://cloudcode-pa.googleapis.com",
+                                                apiKey = token.accessToken,
+                                                oauthProvider = "gemini-cli",
                                                 oauthAccessToken = token.accessToken,
                                                 oauthRefreshToken = token.refreshToken,
                                                 oauthEmail = token.email,
@@ -444,6 +469,7 @@ private fun suggestEnabledModels(provider: OAuthClient.OAuthProvider, modelIds: 
             listOfNotNull(byLower["gpt-5.1-codex"], byLower["gpt-5-codex"], modelIds.firstOrNull()).distinct()
         OAuthClient.OAuthProvider.IFlow -> listOfNotNull(modelIds.firstOrNull()).distinct()
         OAuthClient.OAuthProvider.Antigravity -> listOfNotNull(modelIds.firstOrNull()).distinct()
+        OAuthClient.OAuthProvider.GeminiCli -> listOfNotNull(modelIds.firstOrNull()).distinct()
     }
 }
 
@@ -584,7 +610,8 @@ private fun AvatarSelectionModal(
     val builtinAvatars = listOf(
         "codex",
         "iflow",
-        "antigravity"
+        "antigravity",
+        "gemini-cli"
     )
 
     Dialog(

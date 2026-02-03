@@ -30,6 +30,7 @@ class ChatApiClient {
             when (provider.type.trim().lowercase()) {
                 "codex" -> runCatching { listCodexModels(provider) }
                 "antigravity" -> runCatching { listAntigravityModels(provider) }
+                "gemini-cli" -> runCatching { listGeminiCliModels(provider) }
                 else ->
                     runCatching {
                         val url = provider.apiUrl.trimEnd('/') + "/models"
@@ -205,6 +206,7 @@ class ChatApiClient {
         return when (provider.type.trim().lowercase()) {
             "codex" -> codexResponsesStream(provider, modelId, messages, extraHeaders)
             "antigravity" -> antigravityStream(provider, modelId, messages, extraHeaders)
+            "gemini-cli" -> geminiCliStream(provider, modelId, messages, extraHeaders)
             else -> openAIChatCompletionsStream(provider, modelId, messages, extraHeaders)
         }
     }
@@ -466,6 +468,90 @@ class ChatApiClient {
         }
     }.flowOn(Dispatchers.IO)
 
+    private fun geminiCliStream(
+        provider: ProviderConfig,
+        modelId: String,
+        messages: List<Message>,
+        extraHeaders: List<HttpHeader>
+    ): Flow<ChatStreamDelta> = flow {
+        val project = provider.oauthProjectId?.trim().orEmpty()
+        if (project.isBlank()) {
+            throw IllegalStateException("Missing project id")
+        }
+
+        val url = provider.apiUrl.trimEnd('/') + "/v1internal:streamGenerateContent?alt=sse"
+
+        val systemText =
+            messages.filter { it.role == "system" || it.role == "developer" }
+                .joinToString("\n\n") { it.content }
+                .trim()
+
+        val contents =
+            messages.filterNot { it.role == "system" || it.role == "developer" }
+                .mapNotNull { message ->
+                    val role =
+                        when (message.role) {
+                            "assistant" -> "model"
+                            "user" -> "user"
+                            else -> null
+                        } ?: return@mapNotNull null
+                    mapOf("role" to role, "parts" to listOf(mapOf("text" to message.content)))
+                }
+
+        val requestPayload = mutableMapOf<String, Any>("contents" to contents)
+        if (systemText.isNotBlank()) {
+            requestPayload["systemInstruction"] = mapOf("role" to "user", "parts" to listOf(mapOf("text" to systemText)))
+        }
+
+        val body = gson.toJson(mapOf("project" to project, "request" to requestPayload, "model" to modelId))
+
+        val requestBuilder =
+            Request.Builder()
+                .url(url)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Authorization", "Bearer ${provider.apiKey}")
+                .addHeader("Accept", "text/event-stream")
+                .addHeader("User-Agent", GEMINI_CLI_USER_AGENT)
+                .addHeader("X-Goog-Api-Client", GEMINI_CLI_API_CLIENT)
+                .addHeader("Client-Metadata", GEMINI_CLI_CLIENT_METADATA)
+
+        extraHeaders
+            .filter { it.key.isNotBlank() }
+            .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
+
+        val request = requestBuilder.post(body.toRequestBody(jsonMediaType)).build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                val errorBody = response.body?.string().orEmpty()
+                throw IllegalStateException("HTTP ${response.code}: $errorBody")
+            }
+
+            val source = response.body?.source() ?: throw IllegalStateException("Response body is null")
+            while (!source.exhausted()) {
+                val line = source.readUtf8Line() ?: continue
+                if (!line.startsWith("data:")) continue
+                val data = line.removePrefix("data:").trim()
+                if (data == "[DONE]") break
+
+                val json = runCatching { JsonParser.parseString(data).asJsonObject }.getOrNull() ?: continue
+                val responseObj = json.getAsJsonObject("response") ?: json
+                val candidates = responseObj.getAsJsonArray("candidates") ?: continue
+                if (candidates.size() == 0) continue
+                val first = candidates[0].asJsonObject
+                val contentObj = first.getAsJsonObject("content") ?: continue
+                val parts = contentObj.getAsJsonArray("parts") ?: continue
+                parts.forEach { partEl ->
+                    val part = runCatching { partEl.asJsonObject }.getOrNull() ?: return@forEach
+                    val text = part.get("text")?.asString ?: return@forEach
+                    if (text.isEmpty()) return@forEach
+                    val isThought = part.get("thought")?.asBoolean ?: false
+                    if (isThought) emit(ChatStreamDelta(reasoning = text)) else emit(ChatStreamDelta(content = text))
+                }
+            }
+        }
+    }.flowOn(Dispatchers.IO)
+
     private fun listAntigravityModels(provider: ProviderConfig): List<String> {
         val baseUrls = antigravityBaseUrlFallbackOrder(provider)
         var lastError: String? = null
@@ -500,6 +586,32 @@ class ChatApiClient {
 
         if (!lastError.isNullOrBlank()) error(lastError!!)
         return emptyList()
+    }
+
+    private fun listGeminiCliModels(provider: ProviderConfig): List<String> {
+        val url = provider.apiUrl.trimEnd('/') + "/v1internal:fetchAvailableModels"
+        val request =
+            Request.Builder()
+                .url(url)
+                .post("{}".toRequestBody(jsonMediaType))
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Authorization", "Bearer ${provider.apiKey}")
+                .addHeader("Accept", "application/json")
+                .addHeader("User-Agent", GEMINI_CLI_USER_AGENT)
+                .addHeader("X-Goog-Api-Client", GEMINI_CLI_API_CLIENT)
+                .addHeader("Client-Metadata", GEMINI_CLI_CLIENT_METADATA)
+                .build()
+
+        client.newCall(request).execute().use { response ->
+            val raw = response.body?.string().orEmpty()
+            if (!response.isSuccessful) error("HTTP ${response.code}: $raw")
+
+            val json = runCatching { JsonParser.parseString(raw).asJsonObject }.getOrNull() ?: return emptyList()
+            val models = json.getAsJsonObject("models") ?: return emptyList()
+            return models.entrySet().mapNotNull { entry ->
+                entry.key?.trim()?.takeIf { it.isNotBlank() }
+            }.sorted()
+        }
     }
 
     /**
@@ -563,6 +675,10 @@ class ChatApiClient {
         private const val ANTIGRAVITY_BASE_DAILY = "https://daily-cloudcode-pa.googleapis.com"
         private const val ANTIGRAVITY_BASE_SANDBOX = "https://daily-cloudcode-pa.sandbox.googleapis.com"
         private const val IFLOW_USER_AGENT = "iFlow-Cli"
+        private const val GEMINI_CLI_USER_AGENT = "google-api-nodejs-client/9.15.1"
+        private const val GEMINI_CLI_API_CLIENT = "gl-node/22.17.0"
+        private const val GEMINI_CLI_CLIENT_METADATA =
+            "ideType=IDE_UNSPECIFIED,platform=PLATFORM_UNSPECIFIED,pluginType=GEMINI"
 
         private val CODEX_DEFAULT_MODELS =
             listOf(

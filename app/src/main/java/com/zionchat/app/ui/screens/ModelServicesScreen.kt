@@ -51,7 +51,7 @@ fun ModelServicesScreen(navController: NavController) {
     val scope = rememberCoroutineScope()
 
     val configuredProviders by repository.providersFlow.collectAsState(initial = emptyList())
-    val oauthPresetIds = remember { setOf("codex", "iflow", "antigravity") }
+    val oauthPresetIds = remember { setOf("codex", "iflow", "antigravity", "gemini-cli") }
 
     Column(
         modifier = Modifier

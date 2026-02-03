@@ -104,6 +104,41 @@ class OAuthClient {
         )
     }
 
+    fun startGeminiCliOAuth(): OAuthStartResult {
+        val state = generateRandomState()
+        val codeVerifier = generatePkceCodeVerifier()
+        val codeChallenge = generatePkceCodeChallenge(codeVerifier)
+        val redirectUri = "http://localhost:$GEMINI_CLI_CALLBACK_PORT/oauth2callback"
+        val scopes =
+            listOf(
+                "https://www.googleapis.com/auth/cloud-platform",
+                "https://www.googleapis.com/auth/userinfo.email",
+                "https://www.googleapis.com/auth/userinfo.profile"
+            ).joinToString(" ")
+
+        val authUrl =
+            Uri.parse(GEMINI_CLI_AUTH_URL).buildUpon()
+                .appendQueryParameter("access_type", "offline")
+                .appendQueryParameter("client_id", GEMINI_CLI_CLIENT_ID)
+                .appendQueryParameter("prompt", "consent")
+                .appendQueryParameter("redirect_uri", redirectUri)
+                .appendQueryParameter("response_type", "code")
+                .appendQueryParameter("scope", scopes)
+                .appendQueryParameter("state", state)
+                .appendQueryParameter("code_challenge", codeChallenge)
+                .appendQueryParameter("code_challenge_method", "S256")
+                .build()
+                .toString()
+
+        return OAuthStartResult(
+            provider = OAuthProvider.GeminiCli,
+            authUrl = authUrl,
+            redirectUri = redirectUri,
+            state = state,
+            pkceCodeVerifier = codeVerifier
+        )
+    }
+
     fun parseCallback(input: String): OAuthCallback? {
         val raw = input.trim()
         if (raw.isBlank()) return null
@@ -280,6 +315,53 @@ class OAuthClient {
         }
     }
 
+    suspend fun exchangeGeminiCli(code: String, redirectUri: String, pkceCodeVerifier: String): Result<GeminiCliOAuthResult> {
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val form =
+                    FormBody.Builder()
+                        .add("code", code)
+                        .add("client_id", GEMINI_CLI_CLIENT_ID)
+                        .add("redirect_uri", redirectUri)
+                        .add("grant_type", "authorization_code")
+                        .add("code_verifier", pkceCodeVerifier)
+                        .build()
+
+                val request =
+                    Request.Builder()
+                        .url(GEMINI_CLI_TOKEN_URL)
+                        .post(form)
+                        .addHeader("Accept", "application/json")
+                        .addHeader("Content-Type", "application/x-www-form-urlencoded")
+                        .build()
+
+                val token =
+                    client.newCall(request).execute().use { response ->
+                        val raw = response.body?.string().orEmpty()
+                        if (!response.isSuccessful) error("HTTP ${response.code}: $raw")
+                        gson.fromJson(raw, AntigravityTokenResponse::class.java)
+                    }
+
+                val accessToken = token.access_token?.trim().orEmpty()
+                if (accessToken.isBlank()) error("Missing access_token in response")
+
+                val expiresInSec = token.expires_in?.coerceAtLeast(0L) ?: 0L
+                val expiresAtMs = System.currentTimeMillis() + expiresInSec * 1000L
+
+                val email = fetchGoogleUserEmail(accessToken)
+                val projectId = fetchGeminiCliProjectId(accessToken)
+
+                GeminiCliOAuthResult(
+                    accessToken = accessToken,
+                    refreshToken = token.refresh_token?.trim(),
+                    expiresAtMs = expiresAtMs,
+                    email = email,
+                    projectId = projectId
+                )
+            }
+        }
+    }
+
     suspend fun refreshCodex(refreshToken: String): Result<CodexOAuthResult> {
         return withContext(Dispatchers.IO) {
             runCatching {
@@ -441,6 +523,56 @@ class OAuthClient {
         }
     }
 
+    suspend fun refreshGeminiCli(refreshToken: String): Result<GeminiCliOAuthResult> {
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val token = refreshToken.trim()
+                if (token.isBlank()) error("Missing refresh token")
+
+                val form =
+                    FormBody.Builder()
+                        .add("client_id", GEMINI_CLI_CLIENT_ID)
+                        .add("grant_type", "refresh_token")
+                        .add("refresh_token", token)
+                        .build()
+
+                val request =
+                    Request.Builder()
+                        .url(GEMINI_CLI_TOKEN_URL)
+                        .post(form)
+                        .addHeader("Accept", "application/json")
+                        .addHeader("Content-Type", "application/x-www-form-urlencoded")
+                        .addHeader("User-Agent", GEMINI_CLI_TOKEN_USER_AGENT)
+                        .build()
+
+                val tokenResp =
+                    client.newCall(request).execute().use { response ->
+                        val raw = response.body?.string().orEmpty()
+                        if (!response.isSuccessful) error("HTTP ${response.code}: $raw")
+                        gson.fromJson(raw, AntigravityTokenResponse::class.java)
+                    }
+
+                val accessToken = tokenResp.access_token?.trim().orEmpty()
+                if (accessToken.isBlank()) error("Missing access_token in response")
+
+                val expiresInSec = tokenResp.expires_in?.coerceAtLeast(0L) ?: 0L
+                val expiresAtMs = System.currentTimeMillis() + expiresInSec * 1000L
+
+                val email = fetchGoogleUserEmail(accessToken)
+                val projectId = fetchGeminiCliProjectId(accessToken)
+                val newRefreshToken = tokenResp.refresh_token?.trim().takeIf { !it.isNullOrBlank() } ?: token
+
+                GeminiCliOAuthResult(
+                    accessToken = accessToken,
+                    refreshToken = newRefreshToken,
+                    expiresAtMs = expiresAtMs,
+                    email = email,
+                    projectId = projectId
+                )
+            }
+        }
+    }
+
     private fun fetchIFlowUserInfo(accessToken: String): IFlowUserInfoData {
         val url = "${IFLOW_USERINFO_URL}?accessToken=${Uri.encode(accessToken)}"
         val request = Request.Builder().url(url).get().addHeader("Accept", "application/json").build()
@@ -529,6 +661,61 @@ class OAuthClient {
         return onboardAntigravity(accessToken, tierId)
     }
 
+    private suspend fun fetchGeminiCliProjectId(accessToken: String): String? {
+        val metadata =
+            mapOf(
+                "ideType" to "IDE_UNSPECIFIED",
+                "platform" to "PLATFORM_UNSPECIFIED",
+                "pluginType" to "GEMINI"
+            )
+
+        val payload = gson.toJson(mapOf("metadata" to metadata))
+        val loadUrl = "$GEMINI_CLI_API_BASE/$GEMINI_CLI_API_VERSION:loadCodeAssist"
+        val request =
+            Request.Builder()
+                .url(loadUrl)
+                .post(payload.toRequestBody(jsonMediaType))
+                .addHeader("Authorization", "Bearer $accessToken")
+                .addHeader("Content-Type", "application/json")
+                .addHeader("User-Agent", GEMINI_CLI_API_USER_AGENT)
+                .addHeader("X-Goog-Api-Client", GEMINI_CLI_API_CLIENT)
+                .addHeader("Client-Metadata", GEMINI_CLI_CLIENT_METADATA)
+                .build()
+
+        val raw =
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) error("HTTP ${response.code}: $body")
+                body
+            }
+
+        val loadObj = JsonParser.parseString(raw).asJsonObject
+        val directProjectId =
+            runCatching {
+                when (val v = loadObj.get("cloudaicompanionProject")) {
+                    null -> ""
+                    else ->
+                        when {
+                            v.isJsonPrimitive -> v.asString
+                            v.isJsonObject -> v.asJsonObject.get("id")?.asString
+                            else -> ""
+                        }
+                }
+            }.getOrNull()?.trim().orEmpty()
+        if (directProjectId.isBlank()) return null
+
+        val tierId =
+            runCatching {
+                val tiers = loadObj.getAsJsonArray("allowedTiers") ?: return@runCatching "legacy-tier"
+                tiers.firstOrNull { it.isJsonObject && it.asJsonObject.get("isDefault")?.asBoolean == true }
+                    ?.asJsonObject
+                    ?.get("id")
+                    ?.asString
+            }.getOrNull()?.trim().takeIf { !it.isNullOrBlank() } ?: "legacy-tier"
+
+        return onboardGeminiCli(accessToken, tierId, directProjectId) ?: directProjectId
+    }
+
     private suspend fun onboardAntigravity(accessToken: String, tierId: String): String? {
         val payload =
             gson.toJson(
@@ -584,6 +771,68 @@ class OAuthClient {
         return null
     }
 
+    private suspend fun onboardGeminiCli(accessToken: String, tierId: String, projectId: String): String? {
+        val trimmedProject = projectId.trim()
+        if (trimmedProject.isBlank()) return null
+
+        val metadata =
+            mapOf(
+                "ideType" to "IDE_UNSPECIFIED",
+                "platform" to "PLATFORM_UNSPECIFIED",
+                "pluginType" to "GEMINI"
+            )
+
+        val payload =
+            gson.toJson(
+                mapOf(
+                    "tierId" to tierId,
+                    "metadata" to metadata,
+                    "cloudaicompanionProject" to trimmedProject
+                )
+            )
+
+        val url = "$GEMINI_CLI_API_BASE/$GEMINI_CLI_API_VERSION:onboardUser"
+        repeat(6) {
+            val request =
+                Request.Builder()
+                    .url(url)
+                    .post(payload.toRequestBody(jsonMediaType))
+                    .addHeader("Authorization", "Bearer $accessToken")
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("User-Agent", GEMINI_CLI_API_USER_AGENT)
+                    .addHeader("X-Goog-Api-Client", GEMINI_CLI_API_CLIENT)
+                    .addHeader("Client-Metadata", GEMINI_CLI_CLIENT_METADATA)
+                    .build()
+
+            val raw =
+                client.newCall(request).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) error("HTTP ${response.code}: $body")
+                    body
+                }
+
+            val obj = JsonParser.parseString(raw).asJsonObject
+            val done = obj.get("done")?.asBoolean ?: false
+            if (!done) {
+                delay(5000)
+                return@repeat
+            }
+
+            val responseProjectId =
+                runCatching {
+                    val responseObj = obj.getAsJsonObject("response") ?: return@runCatching null
+                    val project = responseObj.get("cloudaicompanionProject") ?: return@runCatching null
+                    if (project.isJsonPrimitive) project.asString
+                    else if (project.isJsonObject) project.asJsonObject.get("id")?.asString
+                    else null
+                }.getOrNull()?.trim()
+
+            if (!responseProjectId.isNullOrBlank()) return responseProjectId
+            return trimmedProject
+        }
+        return trimmedProject
+    }
+
     private fun parseCodexIdTokenClaims(idToken: String): CodexIdClaims? {
         val parts = idToken.split(".")
         if (parts.size != 3) return null
@@ -633,7 +882,8 @@ class OAuthClient {
     enum class OAuthProvider {
         Codex,
         IFlow,
-        Antigravity
+        Antigravity,
+        GeminiCli
     }
 
     data class OAuthCallback(
@@ -661,6 +911,14 @@ class OAuthClient {
     )
 
     data class AntigravityOAuthResult(
+        val accessToken: String,
+        val refreshToken: String?,
+        val expiresAtMs: Long,
+        val email: String?,
+        val projectId: String?
+    )
+
+    data class GeminiCliOAuthResult(
         val accessToken: String,
         val refreshToken: String?,
         val expiresAtMs: Long,
@@ -739,5 +997,23 @@ class OAuthClient {
             """{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}"""
 
         private const val ANTIGRAVITY_TOKEN_USER_AGENT = "antigravity/1.104.0 darwin/arm64"
+
+        private const val GEMINI_CLI_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+        private const val GEMINI_CLI_TOKEN_URL = "https://oauth2.googleapis.com/token"
+        private const val GEMINI_CLI_CLIENT_ID_PART_A = "681255809395"
+        private const val GEMINI_CLI_CLIENT_ID_PART_B = "oo8ft2oprdrnp9e3aqf6av3hmdib135j"
+        private const val GEMINI_CLI_CLIENT_ID_PART_C = "apps.googleusercontent.com"
+        private val GEMINI_CLI_CLIENT_ID =
+            "$GEMINI_CLI_CLIENT_ID_PART_A-$GEMINI_CLI_CLIENT_ID_PART_B.$GEMINI_CLI_CLIENT_ID_PART_C"
+        private const val GEMINI_CLI_CALLBACK_PORT = 8085
+
+        private const val GEMINI_CLI_API_BASE = "https://cloudcode-pa.googleapis.com"
+        private const val GEMINI_CLI_API_VERSION = "v1internal"
+        private const val GEMINI_CLI_API_USER_AGENT = "google-api-nodejs-client/9.15.1"
+        private const val GEMINI_CLI_API_CLIENT = "gl-node/22.17.0"
+        private const val GEMINI_CLI_CLIENT_METADATA =
+            "ideType=IDE_UNSPECIFIED,platform=PLATFORM_UNSPECIFIED,pluginType=GEMINI"
+
+        private const val GEMINI_CLI_TOKEN_USER_AGENT = "google-api-nodejs-client/9.15.1"
     }
 }

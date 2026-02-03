@@ -55,6 +55,17 @@ class ProviderAuthManager(
                                 oauthExpiresAtMs = token.expiresAtMs
                             )
                         }
+                    "gemini-cli" ->
+                        oauthClient.refreshGeminiCli(refreshToken).getOrThrow().let { token ->
+                            provider.copy(
+                                apiKey = token.accessToken,
+                                oauthAccessToken = token.accessToken,
+                                oauthRefreshToken = token.refreshToken ?: provider.oauthRefreshToken,
+                                oauthEmail = token.email ?: provider.oauthEmail,
+                                oauthProjectId = token.projectId ?: provider.oauthProjectId,
+                                oauthExpiresAtMs = token.expiresAtMs
+                            )
+                        }
                     else -> provider
                 }
 
@@ -69,4 +80,3 @@ class ProviderAuthManager(
         private const val EXPIRY_SKEW_MS = 60_000L
     }
 }
-
