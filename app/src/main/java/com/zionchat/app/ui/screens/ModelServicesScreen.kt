@@ -38,8 +38,7 @@ import com.zionchat.app.data.ProviderConfig
 import com.zionchat.app.data.ProviderPreset
 import com.zionchat.app.data.resolveProviderIconAsset
 import com.zionchat.app.ui.components.AssetIcon
-import com.zionchat.app.ui.components.FloatingTopBar
-import com.zionchat.app.ui.components.TopFadeScrim
+import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.*
@@ -53,32 +52,50 @@ fun ModelServicesScreen(navController: NavController) {
 
     val configuredProviders by repository.providersFlow.collectAsState(initial = emptyList())
 
-    val contentTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 86.dp
-
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
     ) {
-        // Provider List
+        PageTopBar(
+            title = "Model services",
+            onBack = { navController.navigateUp() },
+            trailing = {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Surface, CircleShape)
+                        .pressableScale(pressedScale = 0.95f) {
+                            navController.navigate("add_provider?preset=&providerId=")
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Plus,
+                        contentDescription = "Add Provider",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
-                .padding(top = contentTopPadding, bottom = 16.dp),
+                .padding(top = 12.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             configuredProviders.forEach { provider ->
                 SwipeableConfiguredProviderItem(
                     provider = provider,
                     iconAsset = resolveProviderIconAsset(provider),
-                    onClick = {
-                        navController.navigate("add_provider?preset=&providerId=${provider.id}")
-                    },
-                    onDelete = {
-                        scope.launch { repository.deleteProviderAndModels(provider.id) }
-                    }
+                    onClick = { navController.navigate("add_provider?preset=&providerId=${provider.id}") },
+                    onDelete = { scope.launch { repository.deleteProviderAndModels(provider.id) } }
                 )
             }
 
@@ -91,44 +108,11 @@ fun ModelServicesScreen(navController: NavController) {
             DEFAULT_PROVIDER_PRESETS.forEach { provider ->
                 ProviderItem(
                     provider = provider,
-                    onClick = {
-                        navController.navigate("add_provider?preset=${provider.id}&providerId=")
-                    }
+                    onClick = { navController.navigate("add_provider?preset=${provider.id}&providerId=") }
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
         }
-
-        TopFadeScrim(
-            color = Background,
-            height = 64.dp,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .offset(y = (-20).dp)
-        )
-
-        FloatingTopBar(
-            title = "Model Services",
-            onBack = { navController.navigateUp() },
-            modifier = Modifier.align(Alignment.TopCenter),
-            trailing = {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Surface, CircleShape)
-                        .pressableScale(pressedScale = 0.95f) { navController.navigate("add_provider?preset=&providerId=") },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = AppIcons.Plus,
-                        contentDescription = "Add Provider",
-                        tint = TextPrimary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
-        )
     }
 }
 

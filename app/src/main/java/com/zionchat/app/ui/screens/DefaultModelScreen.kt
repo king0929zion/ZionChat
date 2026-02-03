@@ -33,8 +33,7 @@ import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.data.extractRemoteModelId
 import com.zionchat.app.data.ModelConfig
 import com.zionchat.app.data.ProviderConfig
-import com.zionchat.app.ui.components.FloatingTopBar
-import com.zionchat.app.ui.components.TopFadeScrim
+import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.*
@@ -76,19 +75,21 @@ fun DefaultModelScreen(navController: NavController) {
         )
     }
 
-    val contentTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 86.dp
-
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
     ) {
+        PageTopBar(
+            title = "Default model",
+            onBack = { navController.navigateUp() }
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
-                .padding(top = contentTopPadding)
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -120,20 +121,6 @@ fun DefaultModelScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(32.dp))
         }
-
-        TopFadeScrim(
-            color = Background,
-            height = 64.dp,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .offset(y = (-20).dp)
-        )
-
-        FloatingTopBar(
-            title = "Default Model",
-            onBack = { navController.navigateUp() },
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
     }
 
     DefaultModelSelectorModal(

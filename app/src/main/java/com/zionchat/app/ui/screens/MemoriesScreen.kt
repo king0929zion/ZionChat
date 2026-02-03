@@ -19,8 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.zionchat.app.ui.components.FloatingTopBar
-import com.zionchat.app.ui.components.TopFadeScrim
+import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.*
@@ -87,18 +86,20 @@ fun MemoriesScreen(navController: NavController) {
         )
     }
 
-    val contentTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 86.dp
-
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
     ) {
+        PageTopBar(
+            title = "Memories",
+            onBack = { navController.navigateUp() }
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(top = contentTopPadding)
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -187,19 +188,5 @@ fun MemoriesScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(32.dp))
         }
-
-        TopFadeScrim(
-            color = Background,
-            height = 64.dp,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .offset(y = (-20).dp)
-        )
-
-        FloatingTopBar(
-            title = "Memories",
-            onBack = { navController.navigateUp() },
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
     }
 }

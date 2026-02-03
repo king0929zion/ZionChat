@@ -47,8 +47,7 @@ import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.data.HttpHeader
 import com.zionchat.app.data.ModelConfig
 import com.zionchat.app.ui.components.BottomFadeScrim
-import com.zionchat.app.ui.components.FloatingTopBar
-import com.zionchat.app.ui.components.TopFadeScrim
+import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.Background
@@ -79,8 +78,6 @@ fun ModelConfigScreen(
         }
     }
 
-    val contentTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 82.dp
-
     fun save() {
         val id = existingModel?.id ?: modelId ?: return
         scope.launch {
@@ -99,15 +96,38 @@ fun ModelConfigScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Background)) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(top = contentTopPadding, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+    Column(modifier = Modifier.fillMaxSize().background(Background)) {
+        PageTopBar(
+            title = "Model configuration",
+            onBack = { navController.popBackStack() },
+            trailing = {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Surface, CircleShape)
+                        .pressableScale(pressedScale = 0.95f, onClick = ::save),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Check,
+                        contentDescription = "Save",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        )
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 12.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = "Model Name",
@@ -246,44 +266,14 @@ fun ModelConfigScreen(
             }
 
             Spacer(modifier = Modifier.height(32.dp))
-        }
-
-        BottomFadeScrim(
-            color = Background,
-            height = 44.dp,
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
-
-        TopFadeScrim(
-            color = Background,
-            height = 64.dp,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .offset(y = (-20).dp)
-        )
-
-        FloatingTopBar(
-            title = "Model configuration",
-            onBack = { navController.popBackStack() },
-            modifier = Modifier.align(Alignment.TopCenter),
-            trailing = {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Surface, CircleShape)
-                        .pressableScale(pressedScale = 0.95f, onClick = ::save),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = AppIcons.Check,
-                        contentDescription = "Save",
-                        tint = TextPrimary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
             }
-        )
+
+            BottomFadeScrim(
+                color = Background,
+                height = 44.dp,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
     }
 }
 
@@ -429,4 +419,3 @@ private data class Header(
     val key: String,
     val value: String
 )
-

@@ -483,7 +483,7 @@ fun ChatScreen(navController: NavController) {
                         height = 56.dp,
                         modifier = Modifier
                             .align(Alignment.TopCenter)
-                            .offset(y = (-22).dp)
+                            .offset(y = 0.dp)
                             .zIndex(1f)
                     )
                     BottomFadeScrim(

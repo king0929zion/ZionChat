@@ -23,8 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.zionchat.app.LocalAppRepository
-import com.zionchat.app.ui.components.FloatingTopBar
-import com.zionchat.app.ui.components.TopFadeScrim
+import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.*
 import kotlinx.coroutines.flow.collect
@@ -80,19 +79,21 @@ fun PersonalizationScreen(navController: NavController) {
             .collect { }
     }
 
-    val contentTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 86.dp
-
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
     ) {
+        PageTopBar(
+            title = "Personalization",
+            onBack = { navController.navigateUp() }
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
-                .padding(top = contentTopPadding)
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -215,20 +216,6 @@ fun PersonalizationScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(32.dp))
         }
-
-        TopFadeScrim(
-            color = Background,
-            height = 64.dp,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .offset(y = (-20).dp)
-        )
-
-        FloatingTopBar(
-            title = "Personalization",
-            onBack = { navController.navigateUp() },
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
     }
 }
 

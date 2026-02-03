@@ -24,8 +24,7 @@ import com.zionchat.app.data.DEFAULT_PROVIDER_PRESETS
 import com.zionchat.app.data.findProviderPreset
 import com.zionchat.app.data.resolveProviderIconAsset
 import com.zionchat.app.ui.components.AssetIcon
-import com.zionchat.app.ui.components.FloatingTopBar
-import com.zionchat.app.ui.components.TopFadeScrim
+import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.*
@@ -105,19 +104,64 @@ fun AddProviderScreen(
             }
     }
 
-    val contentTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 86.dp
-
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
     ) {
+        PageTopBar(
+            title = "Add provider",
+            onBack = { navController.navigateUp() },
+            trailing = {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Surface, CircleShape)
+                        .pressableScale(pressedScale = 0.95f) {
+                            if (providerName.isBlank() || apiUrl.isBlank()) return@pressableScale
+                            scope.launch {
+                                val normalizedIconAsset = selectedIconAsset.trim().takeIf { it.isNotBlank() }
+                                repository.upsertProvider(
+                                    existingProvider?.let { existing ->
+                                        existing.copy(
+                                            name = providerName.trim(),
+                                            type = selectedType.trim(),
+                                            apiUrl = apiUrl.trim(),
+                                            apiKey = apiKey.trim(),
+                                            iconAsset = normalizedIconAsset ?: existing.iconAsset
+                                        )
+                                    } ?: ProviderConfig(
+                                        presetId = preset?.takeIf { it.isNotBlank() },
+                                        iconAsset = normalizedIconAsset,
+                                        name = providerName.trim(),
+                                        type = selectedType.trim(),
+                                        apiUrl = apiUrl.trim(),
+                                        apiKey = apiKey.trim()
+                                    )
+                                )
+                                navController.navigateUp()
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Check,
+                        contentDescription = "Save",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
-                .padding(top = contentTopPadding),
+                .padding(top = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Avatar Selection
@@ -284,61 +328,6 @@ fun AddProviderScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
         }
-
-        TopFadeScrim(
-            color = Background,
-            height = 64.dp,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .offset(y = (-20).dp)
-        )
-
-        FloatingTopBar(
-            title = "Add Provider",
-            onBack = { navController.navigateUp() },
-            modifier = Modifier.align(Alignment.TopCenter),
-            trailing = {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Surface, CircleShape)
-                        .pressableScale(pressedScale = 0.95f) {
-                            if (providerName.isBlank() || apiUrl.isBlank()) return@pressableScale
-                            scope.launch {
-                                val normalizedIconAsset = selectedIconAsset.trim().takeIf { it.isNotBlank() }
-                                repository.upsertProvider(
-                                    existingProvider?.let { existing ->
-                                        existing.copy(
-                                            name = providerName.trim(),
-                                            type = selectedType.trim(),
-                                            apiUrl = apiUrl.trim(),
-                                            apiKey = apiKey.trim(),
-                                            iconAsset = normalizedIconAsset ?: existing.iconAsset
-                                        )
-                                    } ?: ProviderConfig(
-                                        presetId = preset?.takeIf { it.isNotBlank() },
-                                        iconAsset = normalizedIconAsset,
-                                        name = providerName.trim(),
-                                        type = selectedType.trim(),
-                                        apiUrl = apiUrl.trim(),
-                                        apiKey = apiKey.trim()
-                                    )
-                                )
-                                navController.navigateUp()
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = AppIcons.Check,
-                        contentDescription = "Save",
-                        tint = TextPrimary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
-        )
 
         AvatarSelectionModal(
             visible = showAvatarModal,

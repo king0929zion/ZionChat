@@ -73,8 +73,7 @@ import com.zionchat.app.LocalChatApiClient
 import com.zionchat.app.data.ModelConfig
 import com.zionchat.app.data.buildModelStorageId
 import com.zionchat.app.ui.components.BottomFadeScrim
-import com.zionchat.app.ui.components.FloatingTopBar
-import com.zionchat.app.ui.components.TopFadeScrim
+import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.Background
@@ -160,12 +159,33 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
         onRefresh = { fetchedSignature = null }
     )
 
-    val contentTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 82.dp
+    Column(modifier = Modifier.fillMaxSize().background(Background)) {
+        PageTopBar(
+            title = "Models",
+            onBack = { navController.popBackStack() },
+            trailing = {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Surface, CircleShape)
+                        .pressableScale(pressedScale = 0.95f) { showAddModal = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Plus,
+                        contentDescription = "Add Model",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        )
 
-    Box(modifier = Modifier.fillMaxSize().background(Background)) {
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .weight(1f)
                 .pullRefresh(pullRefreshState)
         ) {
             Column(
@@ -173,7 +193,7 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp)
-                    .padding(top = contentTopPadding, bottom = 16.dp),
+                    .padding(top = 12.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (activeProvider == null) {
@@ -240,7 +260,7 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                 state = pullRefreshState,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = contentTopPadding - 44.dp),
+                    .padding(top = 4.dp),
                 contentColor = TextPrimary,
                 backgroundColor = Surface
             )
@@ -251,37 +271,6 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
-
-        TopFadeScrim(
-            color = Background,
-            height = 64.dp,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .offset(y = (-20).dp)
-        )
-
-        FloatingTopBar(
-            title = "Models",
-            onBack = { navController.popBackStack() },
-            modifier = Modifier.align(Alignment.TopCenter),
-            trailing = {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Surface, CircleShape)
-                        .pressableScale(pressedScale = 0.95f) { showAddModal = true },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = AppIcons.Plus,
-                        contentDescription = "Add Model",
-                        tint = TextPrimary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
-        )
 
         AddModelModal(
             visible = showAddModal,
