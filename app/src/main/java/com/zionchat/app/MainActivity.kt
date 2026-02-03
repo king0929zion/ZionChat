@@ -58,7 +58,17 @@ class MainActivity : ComponentActivity() {
                             composable("memories") { MemoriesScreen(navController) }
                             composable("default_model") { DefaultModelScreen(navController) }
                             composable("model_services") { ModelServicesScreen(navController) }
-                            composable("add_oauth_provider") { AddOAuthProviderScreen(navController) }
+                            composable(
+                                route = "add_oauth_provider?provider={provider}&providerId={providerId}",
+                                arguments = listOf(
+                                    navArgument("provider") { defaultValue = "" },
+                                    navArgument("providerId") { defaultValue = "" }
+                                )
+                            ) { backStackEntry ->
+                                val provider = backStackEntry.arguments?.getString("provider")?.trim().takeIf { !it.isNullOrBlank() }
+                                val providerId = backStackEntry.arguments?.getString("providerId")?.trim().takeIf { !it.isNullOrBlank() }
+                                AddOAuthProviderScreen(navController, provider, providerId)
+                            }
                             composable(
                                 route = "add_provider?preset={preset}&providerId={providerId}",
                                 arguments = listOf(

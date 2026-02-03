@@ -44,6 +44,7 @@ import com.zionchat.app.data.ModelConfig
 import com.zionchat.app.data.OAuthClient
 import com.zionchat.app.data.ProviderConfig
 import com.zionchat.app.data.buildModelStorageId
+import com.zionchat.app.data.extractRemoteModelId
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.SourceSans3
 import com.zionchat.app.ui.components.pressableScale
@@ -64,18 +65,32 @@ private data class ModelItem(
 )
 
 @Composable
-fun AddOAuthProviderScreen(navController: NavController) {
+fun AddOAuthProviderScreen(
+    navController: NavController,
+    initialProvider: String? = null,
+    providerId: String? = null
+) {
     val repository = LocalAppRepository.current
     val chatApiClient = LocalChatApiClient.current
     val oauthClient = LocalOAuthClient.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    val lockedProviderId = remember(initialProvider) {
+        initialProvider?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
+    }
+    val existingProviderId = remember(providerId) { providerId?.trim()?.takeIf { it.isNotBlank() } }
+    val providers by repository.providersFlow.collectAsState(initial = emptyList())
+    val allModels by repository.modelsFlow.collectAsState(initial = emptyList())
+    val existingProvider = remember(providers, existingProviderId) {
+        existingProviderId?.let { id -> providers.firstOrNull { it.id == id } }
+    }
+
     var providerName by remember { mutableStateOf("") }
     var currentStep by remember { mutableStateOf(OAuthStep.STEP_1_CONNECT) }
     var callbackUrl by remember { mutableStateOf("") }
     var showAvatarModal by remember { mutableStateOf(false) }
-    var selectedAvatar by remember { mutableStateOf("codex") }
+    var selectedAvatar by remember(lockedProviderId) { mutableStateOf(lockedProviderId ?: "codex") }
     var showModelsSection by remember { mutableStateOf(false) }
     var isWorking by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
@@ -86,6 +101,39 @@ fun AddOAuthProviderScreen(navController: NavController) {
     var models by remember { mutableStateOf<List<ModelItem>>(emptyList()) }
 
     val enabledCount = models.count { it.enabled }
+
+    LaunchedEffect(existingProvider?.id) {
+        val providerConfig = existingProvider ?: return@LaunchedEffect
+        if (connectedProvider?.id == providerConfig.id && currentStep == OAuthStep.STEP_3_COMPLETED) return@LaunchedEffect
+
+        connectedProvider = providerConfig
+        providerName = providerConfig.name
+        providerConfig.oauthProvider?.trim()?.takeIf { it.isNotBlank() }?.let { selectedAvatar = it }
+        oauthStart = null
+        callbackUrl = ""
+        currentStep = OAuthStep.STEP_3_COMPLETED
+        showModelsSection = true
+        errorText = null
+    }
+
+    LaunchedEffect(existingProvider?.id, allModels) {
+        val providerConfig = existingProvider ?: return@LaunchedEffect
+        if (connectedProvider?.id != providerConfig.id) return@LaunchedEffect
+
+        val providerModels =
+            allModels.filter { it.providerId?.trim() == providerConfig.id.trim() }
+        models =
+            providerModels
+                .map { model ->
+                    ModelItem(
+                        id = extractRemoteModelId(model.id),
+                        name = model.displayName,
+                        enabled = model.enabled
+                    )
+                }
+                .sortedBy { it.name.lowercase() }
+        showModelsSection = true
+    }
 
     fun resolvedOauthProvider(): OAuthClient.OAuthProvider? {
         return when (selectedAvatar.lowercase()) {
@@ -146,7 +194,7 @@ fun AddOAuthProviderScreen(navController: NavController) {
             // 头像选择区
             AvatarSection(
                 selectedAvatar = selectedAvatar,
-                onAvatarClick = { showAvatarModal = true }
+                onAvatarClick = { if (lockedProviderId == null) showAvatarModal = true }
             )
 
             // 表单区域
@@ -227,7 +275,7 @@ fun AddOAuthProviderScreen(navController: NavController) {
                                         ).map { token ->
                                             ProviderConfig(
                                                 presetId = "codex",
-                                                iconAsset = "openai.svg",
+                                                iconAsset = "codex.svg",
                                                 name = providerName.trim().ifBlank { "Codex" },
                                                 type = "codex",
                                                 apiUrl = "https://chatgpt.com/backend-api/codex",

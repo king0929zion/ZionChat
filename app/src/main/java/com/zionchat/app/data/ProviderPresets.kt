@@ -24,6 +24,13 @@ val DEFAULT_PROVIDER_PRESETS: List<ProviderPreset> = listOf(
         iconAsset = "openai.svg"
     ),
     ProviderPreset(
+        id = "codex",
+        name = "Codex",
+        type = "codex",
+        apiUrl = "https://chatgpt.com/backend-api/codex",
+        iconAsset = "codex.svg"
+    ),
+    ProviderPreset(
         id = "anthropic",
         name = "Anthropic",
         type = "anthropic",
@@ -35,6 +42,13 @@ val DEFAULT_PROVIDER_PRESETS: List<ProviderPreset> = listOf(
         name = "Gemini",
         type = "google",
         apiUrl = "https://generativelanguage.googleapis.com/v1beta",
+        iconAsset = "gemini-color.svg"
+    ),
+    ProviderPreset(
+        id = "antigravity",
+        name = "Antigravity",
+        type = "antigravity",
+        apiUrl = "https://cloudcode-pa.googleapis.com",
         iconAsset = "gemini-color.svg"
     ),
     ProviderPreset(
@@ -172,6 +186,7 @@ fun resolveProviderIconAsset(provider: ProviderConfig): String? {
 private fun computeAIIconAssetByName(name: String): String? {
     val lowerName = name.lowercase()
     return when {
+        PATTERN_CODEX.containsMatchIn(lowerName) -> "codex.svg"
         PATTERN_LONGCAT.containsMatchIn(lowerName) -> "longcat.svg"
         PATTERN_IFLOW.containsMatchIn(lowerName) -> "iflow.svg"
         PATTERN_MODELSCOPE.containsMatchIn(lowerName) -> "modelscope.svg"
@@ -196,6 +211,7 @@ private fun computeAIIconAssetByName(name: String): String? {
     }
 }
 
+private val PATTERN_CODEX = Regex("codex")
 private val PATTERN_LONGCAT = Regex("longcat")
 private val PATTERN_IFLOW = Regex("iflow")
 private val PATTERN_MODELSCOPE = Regex("modelscope")

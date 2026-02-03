@@ -51,6 +51,7 @@ fun ModelServicesScreen(navController: NavController) {
     val scope = rememberCoroutineScope()
 
     val configuredProviders by repository.providersFlow.collectAsState(initial = emptyList())
+    val oauthPresetIds = remember { setOf("codex", "iflow", "antigravity") }
 
     Column(
         modifier = Modifier
@@ -90,13 +91,18 @@ fun ModelServicesScreen(navController: NavController) {
                 .padding(top = 12.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            OAuthConnectItem(onClick = { navController.navigate("add_oauth_provider") })
-
             configuredProviders.forEach { provider ->
                 SwipeableConfiguredProviderItem(
                     provider = provider,
                     iconAsset = resolveProviderIconAsset(provider),
-                    onClick = { navController.navigate("add_provider?preset=&providerId=${provider.id}") },
+                    onClick = {
+                        val oauthProvider = provider.oauthProvider?.trim()?.lowercase().orEmpty()
+                        if (oauthProvider.isNotBlank()) {
+                            navController.navigate("add_oauth_provider?provider=$oauthProvider&providerId=${provider.id}")
+                        } else {
+                            navController.navigate("add_provider?preset=&providerId=${provider.id}")
+                        }
+                    },
                     onDelete = { scope.launch { repository.deleteProviderAndModels(provider.id) } }
                 )
             }
@@ -110,7 +116,14 @@ fun ModelServicesScreen(navController: NavController) {
             DEFAULT_PROVIDER_PRESETS.forEach { provider ->
                 ProviderItem(
                     provider = provider,
-                    onClick = { navController.navigate("add_provider?preset=${provider.id}&providerId=") }
+                    oauthBadge = oauthPresetIds.contains(provider.id),
+                    onClick = {
+                        if (oauthPresetIds.contains(provider.id)) {
+                            navController.navigate("add_oauth_provider?provider=${provider.id}&providerId=")
+                        } else {
+                            navController.navigate("add_provider?preset=${provider.id}&providerId=")
+                        }
+                    }
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -119,47 +132,9 @@ fun ModelServicesScreen(navController: NavController) {
 }
 
 @Composable
-private fun OAuthConnectItem(onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .background(GrayLight, RoundedCornerShape(14.dp))
-            .clip(RoundedCornerShape(14.dp))
-            .pressableScale(pressedScale = 0.98f, onClick = onClick)
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(28.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(Surface, RoundedCornerShape(8.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = AppIcons.OAuth,
-                contentDescription = "OAuth",
-                tint = TextPrimary,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-
-        Text(
-            text = "Connect with OAuth",
-            fontSize = 17.sp,
-            fontWeight = FontWeight.Normal,
-            fontFamily = SourceSans3,
-            color = TextPrimary,
-            maxLines = 1
-        )
-    }
-}
-
-@Composable
 private fun ProviderItem(
     provider: ProviderPreset,
+    oauthBadge: Boolean = false,
     onClick: () -> Unit
 ) {
     Row(
@@ -187,6 +162,9 @@ private fun ProviderItem(
             color = TextPrimary,
             maxLines = 1
         )
+
+        Spacer(modifier = Modifier.weight(1f))
+        if (oauthBadge) OAuthBadge()
     }
 }
 
@@ -280,7 +258,31 @@ private fun SwipeableConfiguredProviderItem(
                 maxLines = 1,
                 modifier = Modifier.weight(1f)
             )
+
+            if (!provider.oauthProvider.isNullOrBlank()) {
+                OAuthBadge()
+            }
         }
+    }
+}
+
+@Composable
+private fun OAuthBadge() {
+    Box(
+        modifier = Modifier
+            .height(22.dp)
+            .background(Color(0xFFEDEDED), RoundedCornerShape(11.dp))
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "OAuth",
+            fontSize = 12.sp,
+            fontFamily = SourceSans3,
+            fontWeight = FontWeight.Medium,
+            color = TextSecondary,
+            maxLines = 1
+        )
     }
 }
 
