@@ -46,6 +46,8 @@ import androidx.navigation.NavController
 import com.zionchat.app.R
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.LocalChatApiClient
+import com.zionchat.app.data.AppRepository
+import com.zionchat.app.data.ChatApiClient
 import com.zionchat.app.data.Conversation
 import com.zionchat.app.data.Message
 import com.zionchat.app.data.extractRemoteModelId
@@ -417,84 +419,6 @@ fun ChatScreen(navController: NavController) {
                 selectedTool = null // 清除选中的工具
             }
         }
-    }
-
-    // 图片生成处理函数
-    suspend fun handleImageGeneration(
-        repository: com.zionchat.app.data.AppRepository,
-        chatApiClient: com.zionchat.app.data.ChatApiClient,
-        safeConversationId: String,
-        userPrompt: String,
-        assistantMessage: com.zionchat.app.data.Message,
-        updateAssistantContent: (String) -> Unit
-    ) {
-        // 显示正在生成的提示
-        updateAssistantContent("🎨 Generating image...")
-
-        // 获取生图模型配置
-        val imageModelId = repository.defaultImageModelIdFlow.first()
-        if (imageModelId.isNullOrBlank()) {
-            updateAssistantContent("❌ Please configure Image Model in Settings → Default model before generating images.")
-            repository.appendMessage(
-                safeConversationId,
-                assistantMessage.copy(content = "Please configure Image Model in Settings → Default model before generating images.")
-            )
-            return
-        }
-
-        val allModels = repository.modelsFlow.first()
-        val imageModel = allModels.firstOrNull { it.id == imageModelId }
-            ?: allModels.firstOrNull { extractRemoteModelId(it.id) == imageModelId }
-        if (imageModel == null) {
-            updateAssistantContent("❌ Image model not found: $imageModelId. Enable or add it in Models.")
-            repository.appendMessage(
-                safeConversationId,
-                assistantMessage.copy(content = "Image model not found: $imageModelId. Enable or add it in Models.")
-            )
-            return
-        }
-
-        val providerList = repository.providersFlow.first()
-        val provider = imageModel.providerId?.let { pid -> providerList.firstOrNull { it.id == pid } }
-            ?: providerList.firstOrNull()
-        if (provider == null || provider.apiUrl.isBlank() || provider.apiKey.isBlank()) {
-            updateAssistantContent("❌ Please add a provider with valid API URL and API Key.")
-            repository.appendMessage(
-                safeConversationId,
-                assistantMessage.copy(content = "Please add a provider with valid API URL and API Key.")
-            )
-            return
-        }
-
-        // 调用图片生成API
-        val result = chatApiClient.generateImage(
-            provider = provider,
-            modelId = extractRemoteModelId(imageModel.id),
-            prompt = userPrompt,
-            extraHeaders = imageModel.headers,
-            size = "1024x1024",
-            quality = "standard",
-            n = 1
-        )
-
-        result.fold(
-            onSuccess = { imageUrl ->
-                val markdownImage = "![Generated Image]($imageUrl)"
-                updateAssistantContent(markdownImage)
-                repository.appendMessage(
-                    safeConversationId,
-                    assistantMessage.copy(content = markdownImage)
-                )
-            },
-            onFailure = { error ->
-                val errorMsg = "❌ Image generation failed: ${error.message ?: error.toString()}"
-                updateAssistantContent(errorMsg)
-                repository.appendMessage(
-                    safeConversationId,
-                    assistantMessage.copy(content = errorMsg)
-                )
-            }
-        )
     }
 
     val displayName = nickname.takeIf { it.isNotBlank() } ?: "Kendall Williamson"
@@ -1354,6 +1278,83 @@ fun QuickActionButton(
             color = TextPrimary
         )
     }
+}
+
+private suspend fun handleImageGeneration(
+    repository: AppRepository,
+    chatApiClient: ChatApiClient,
+    safeConversationId: String,
+    userPrompt: String,
+    assistantMessage: Message,
+    updateAssistantContent: (String) -> Unit
+) {
+    // 显示正在生成的提示
+    updateAssistantContent("🎨 Generating image...")
+
+    // 获取生图模型配置
+    val imageModelId = repository.defaultImageModelIdFlow.first()
+    if (imageModelId.isNullOrBlank()) {
+        updateAssistantContent("❌ Please configure Image Model in Settings → Default model before generating images.")
+        repository.appendMessage(
+            safeConversationId,
+            assistantMessage.copy(content = "Please configure Image Model in Settings → Default model before generating images.")
+        )
+        return
+    }
+
+    val allModels = repository.modelsFlow.first()
+    val imageModel = allModels.firstOrNull { it.id == imageModelId }
+        ?: allModels.firstOrNull { extractRemoteModelId(it.id) == imageModelId }
+    if (imageModel == null) {
+        updateAssistantContent("❌ Image model not found: $imageModelId. Enable or add it in Models.")
+        repository.appendMessage(
+            safeConversationId,
+            assistantMessage.copy(content = "Image model not found: $imageModelId. Enable or add it in Models.")
+        )
+        return
+    }
+
+    val providerList = repository.providersFlow.first()
+    val provider = imageModel.providerId?.let { pid -> providerList.firstOrNull { it.id == pid } }
+        ?: providerList.firstOrNull()
+    if (provider == null || provider.apiUrl.isBlank() || provider.apiKey.isBlank()) {
+        updateAssistantContent("❌ Please add a provider with valid API URL and API Key.")
+        repository.appendMessage(
+            safeConversationId,
+            assistantMessage.copy(content = "Please add a provider with valid API URL and API Key.")
+        )
+        return
+    }
+
+    // 调用图片生成API
+    val result = chatApiClient.generateImage(
+        provider = provider,
+        modelId = extractRemoteModelId(imageModel.id),
+        prompt = userPrompt,
+        extraHeaders = imageModel.headers,
+        size = "1024x1024",
+        quality = "standard",
+        n = 1
+    )
+
+    result.fold(
+        onSuccess = { imageUrl ->
+            val markdownImage = "![Generated Image]($imageUrl)"
+            updateAssistantContent(markdownImage)
+            repository.appendMessage(
+                safeConversationId,
+                assistantMessage.copy(content = markdownImage)
+            )
+        },
+        onFailure = { error ->
+            val errorMsg = "❌ Image generation failed: ${error.message ?: error.toString()}"
+            updateAssistantContent(errorMsg)
+            repository.appendMessage(
+                safeConversationId,
+                assistantMessage.copy(content = errorMsg)
+            )
+        }
+    )
 }
 
 @Composable
