@@ -1025,7 +1025,7 @@ fun SidebarContent(
                 modifier = Modifier
                     .weight(1f)
                     .height(40.dp)
-                    .background(GrayLight, RoundedCornerShape(20.dp))
+                    .background(Color(0xFFF5F5F5), RoundedCornerShape(20.dp))
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {

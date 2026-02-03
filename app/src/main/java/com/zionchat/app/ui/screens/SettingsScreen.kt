@@ -852,7 +852,7 @@ fun AppearanceMenu(
                     modifier = Modifier
                         .widthIn(max = 200.dp),
                     shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFFF2F2F7),
+                    color = Color(0xFFF5F5F5),
                     shadowElevation = 16.dp
                 ) {
                     Column(
@@ -974,7 +974,7 @@ fun AccentColorMenu(
                     modifier = Modifier
                         .widthIn(max = 200.dp),
                     shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFFF2F2F7),
+                    color = Color(0xFFF5F5F5),
                     shadowElevation = 16.dp
                 ) {
                     Column(
