@@ -46,8 +46,8 @@ jobs:
           echo "Signing secrets not set; building unsigned release."
         fi
 
-    - name: Build APKs (Debug + Release)
-      run: gradle assembleDebug assembleRelease --stacktrace
+    - name: Build Release APK
+      run: gradle assembleRelease --stacktrace
 
     - name: Run tests
       run: gradle test
@@ -66,7 +66,6 @@ jobs:
       with:
         name: ZionChat-v${{ steps.get_version.outputs.version }}
         path: |
-          app/build/outputs/apk/debug/*.apk
           app/build/outputs/apk/release/*.apk
 
     - name: Create Release
@@ -91,7 +90,6 @@ jobs:
           **Note**: You may need to enable "Install from unknown sources" in your device settings.
         files: |
           app/build/outputs/apk/release/*.apk
-          app/build/outputs/apk/debug/*.apk
         draft: false
         prerelease: false
       env:
