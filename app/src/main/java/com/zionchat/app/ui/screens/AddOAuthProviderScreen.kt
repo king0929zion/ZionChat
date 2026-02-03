@@ -19,7 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.windowInsetsPadding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.foundation.text.BasicTextField
@@ -594,7 +593,7 @@ private fun StepIndicator(currentStep: OAuthStep) {
         )
 
         // Line 1
-        StepLine(isCompleted = stepNumber > 1)
+        StepLine(isCompleted = stepNumber > 1, modifier = Modifier.weight(1f))
 
         // Step 2
         StepCircle(
@@ -604,7 +603,7 @@ private fun StepIndicator(currentStep: OAuthStep) {
         )
 
         // Line 2
-        StepLine(isCompleted = stepNumber > 2)
+        StepLine(isCompleted = stepNumber > 2, modifier = Modifier.weight(1f))
 
         // Step 3
         StepCircle(
@@ -658,10 +657,9 @@ private fun StepCircle(
 }
 
 @Composable
-private fun StepLine(isCompleted: Boolean) {
+private fun StepLine(isCompleted: Boolean, modifier: Modifier = Modifier) {
     Box(
-        modifier = Modifier
-            .weight(1f)
+        modifier = modifier
             .height(2.dp)
             .padding(horizontal = 8.dp)
             .background(
@@ -985,7 +983,7 @@ private fun CustomToggleSwitch(enabled: Boolean) {
                     start = if (enabled) 0.dp else 4.dp,
                     end = if (enabled) 4.dp else 0.dp
                 )
-                .offset(x = thumbOffset * (width - thumbSize - if (enabled) 8.dp else 0.dp).value.dp)
+                .offset(x = (thumbOffset * ((width - thumbSize - if (enabled) 8.dp else 0.dp).value)).dp)
                 .size(thumbSize)
                 .clip(CircleShape)
                 .background(if (enabled) Color.White else Color(0xFF9CA3AF)),

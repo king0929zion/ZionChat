@@ -1940,11 +1940,11 @@ object AppIcons {
             verticalLineTo(7f)
             arcTo(2f, 2f, 0f, false, false, 13f, 5f)
             horizontalLineTo(6f)
-            arcTo(2f, 2f, 0f, false, False, 4f, 7f)
+            arcTo(2f, 2f, 0f, false, false, 4f, 7f)
             verticalLineTo(17f)
-            arcTo(2f, 2f, 0f, false, False, 6f, 19f)
+            arcTo(2f, 2f, 0f, false, false, 6f, 19f)
             horizontalLineTo(13f)
-            arcTo(2f, 2f, 0f, false, False, 15f, 17f)
+            arcTo(2f, 2f, 0f, false, false, 15f, 17f)
             verticalLineTo(14f)
             // 点
             moveTo(18f, 12f)
@@ -1953,7 +1953,7 @@ object AppIcons {
             horizontalLineTo(21.01f)
             // 箭头
             moveTo(21f, 12f)
-            arcTo(9f, 9f, 0f, true, True, 12f, 3f)
+            arcTo(9f, 9f, 0f, true, true, 12f, 3f)
             curveTo(14.52f, 3f, 16.93f, 4f, 18.74f, 5.74f)
             lineTo(21f, 8f)
             moveTo(21f, 3f)
