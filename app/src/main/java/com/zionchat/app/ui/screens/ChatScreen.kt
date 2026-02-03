@@ -1164,9 +1164,11 @@ fun ToolMenuPanel(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                             onClick = { }
-                        ),
+                        )
+                        .zIndex(10f),
                     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                    colors = CardDefaults.cardColors(containerColor = Surface)
+                    colors = CardDefaults.cardColors(containerColor = Surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp)
