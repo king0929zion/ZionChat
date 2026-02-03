@@ -88,6 +88,9 @@ fun ChatScreen(navController: NavController) {
     var showToolMenu by remember { mutableStateOf(false) }
     var selectedTool by remember { mutableStateOf<String?>(null) }
     var messageText by remember { mutableStateOf("") }
+    var showThinkingSheet by remember { mutableStateOf(false) }
+    var thinkingSheetText by remember { mutableStateOf<String?>(null) }
+    val thinkingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val conversations by repository.conversationsFlow.collectAsState(initial = emptyList())
     val currentConversationId by repository.currentConversationIdFlow.collectAsState(initial = null)
@@ -364,11 +367,11 @@ fun ChatScreen(navController: NavController) {
             streamingConversationId = safeConversationId
             scrollToBottomToken++
 
-            fun updateAssistantContent(content: String) {
+            fun updateAssistantContent(content: String, reasoning: String?) {
                 pendingMessages =
                     pendingMessages.map { pending ->
                         if (pending.conversationId == safeConversationId && pending.message.id == assistantMessage.id) {
-                            pending.copy(message = pending.message.copy(content = content))
+                            pending.copy(message = pending.message.copy(content = content, reasoning = reasoning))
                         } else {
                             pending
                         }
@@ -384,7 +387,7 @@ fun ChatScreen(navController: NavController) {
                         safeConversationId = safeConversationId,
                         userPrompt = trimmed,
                         assistantMessage = assistantMessage,
-                        updateAssistantContent = { updateAssistantContent(it) }
+                        updateAssistantContent = { updateAssistantContent(it, null) }
                     )
                 } else {
                     // 普通聊天流程
@@ -394,33 +397,103 @@ fun ChatScreen(navController: NavController) {
                         if (currentMessages.lastOrNull()?.id != userMessage.id) add(userMessage)
                     }
 
-                    val fullContent = StringBuilder()
+                    val visibleContent = StringBuilder()
+                    val thinkingContent = StringBuilder()
+                    var inThink = false
+                    var remainder = ""
+                    val keepTail = 9 // tag boundary buffer
                     var lastUiUpdateMs = 0L
+
+                    fun appendWithThinkExtraction(input: String) {
+                        if (input.isEmpty()) return
+                        var s = remainder + input
+                        remainder = ""
+                        var i = 0
+                        while (i < s.length) {
+                            if (!inThink) {
+                                val idxThink = s.indexOf("<think>", i)
+                                val idxThinking = s.indexOf("<thinking>", i)
+                                val next = when {
+                                    idxThink < 0 -> idxThinking
+                                    idxThinking < 0 -> idxThink
+                                    else -> minOf(idxThink, idxThinking)
+                                }
+                                if (next < 0) {
+                                    val safeEnd = maxOf(i, s.length - keepTail)
+                                    if (safeEnd > i) visibleContent.append(s.substring(i, safeEnd))
+                                    remainder = s.substring(safeEnd)
+                                    return
+                                }
+                                if (next > i) visibleContent.append(s.substring(i, next))
+                                if (idxThinking == next) {
+                                    inThink = true
+                                    i = next + "<thinking>".length
+                                } else {
+                                    inThink = true
+                                    i = next + "<think>".length
+                                }
+                            } else {
+                                val idxEndThink = s.indexOf("</think>", i)
+                                val idxEndThinking = s.indexOf("</thinking>", i)
+                                val next = when {
+                                    idxEndThink < 0 -> idxEndThinking
+                                    idxEndThinking < 0 -> idxEndThink
+                                    else -> minOf(idxEndThink, idxEndThinking)
+                                }
+                                if (next < 0) {
+                                    val safeEnd = maxOf(i, s.length - keepTail)
+                                    if (safeEnd > i) thinkingContent.append(s.substring(i, safeEnd))
+                                    remainder = s.substring(safeEnd)
+                                    return
+                                }
+                                if (next > i) thinkingContent.append(s.substring(i, next))
+                                if (idxEndThinking == next) {
+                                    inThink = false
+                                    i = next + "</thinking>".length
+                                } else {
+                                    inThink = false
+                                    i = next + "</think>".length
+                                }
+                            }
+                        }
+                    }
 
                     chatApiClient.chatCompletionsStream(
                         provider = provider,
                         modelId = extractRemoteModelId(selectedModel.id),
                         messages = requestMessages,
                         extraHeaders = selectedModel.headers
-                    ).collect { chunk ->
-                        fullContent.append(chunk)
+                    ).collect { delta ->
+                        delta.reasoning?.takeIf { it.isNotBlank() }?.let { thinkingContent.append(it) }
+                        delta.content?.let { appendWithThinkExtraction(it) }
                         val now = System.currentTimeMillis()
-                        if (now - lastUiUpdateMs >= 33L || fullContent.length % 80 == 0) {
-                            updateAssistantContent(fullContent.toString())
+                        val shouldUpdate = now - lastUiUpdateMs >= 33L ||
+                            (visibleContent.length + thinkingContent.length) % 120 == 0
+                        if (shouldUpdate) {
+                            val thinkingNow = thinkingContent.toString().trim().ifBlank { null }
+                            updateAssistantContent(visibleContent.toString(), thinkingNow)
                             lastUiUpdateMs = now
                         }
                     }
 
-                    val finalContent = fullContent.toString()
-                    updateAssistantContent(finalContent)
-                    if (finalContent.isNotBlank()) {
-                        repository.appendMessage(safeConversationId, assistantMessage.copy(content = finalContent))
+                    if (remainder.isNotEmpty()) {
+                        if (inThink) thinkingContent.append(remainder) else visibleContent.append(remainder)
+                        remainder = ""
+                    }
+                    val finalContent = visibleContent.toString()
+                    val finalReasoning = thinkingContent.toString().trim().ifBlank { null }
+                    updateAssistantContent(finalContent, finalReasoning)
+                    if (finalContent.isNotBlank() || !finalReasoning.isNullOrBlank()) {
+                        repository.appendMessage(
+                            safeConversationId,
+                            assistantMessage.copy(content = finalContent, reasoning = finalReasoning)
+                        )
                     }
                 }
             } catch (e: Exception) {
                 val errorMsg = "Request failed: ${e.message ?: e.toString()}"
-                updateAssistantContent(errorMsg)
-                repository.appendMessage(safeConversationId, assistantMessage.copy(content = errorMsg))
+                updateAssistantContent(errorMsg, null)
+                repository.appendMessage(safeConversationId, assistantMessage.copy(content = errorMsg, reasoning = null))
             } finally {
                 isStreaming = false
                 streamingMessageId = null
@@ -501,6 +574,12 @@ fun ChatScreen(navController: NavController) {
                                 && streamingConversationId == effectiveConversationId
                                 && message.id == streamingMessageId,
                             showToolbar = showToolbar,
+                            onShowReasoning = { reasoning ->
+                                keyboardController?.hide()
+                                showToolMenu = false
+                                thinkingSheetText = reasoning
+                                showThinkingSheet = true
+                            },
                             onEdit = { /* TODO */ },
                             onDelete = { convoId, messageId ->
                                 scope.launch { repository.deleteMessage(convoId, messageId) }
@@ -616,6 +695,56 @@ fun ChatScreen(navController: NavController) {
                     showToolMenu = false
                 }
             )
+
+            if (showThinkingSheet && !thinkingSheetText.isNullOrBlank()) {
+                ModalBottomSheet(
+                    onDismissRequest = {
+                        showThinkingSheet = false
+                        thinkingSheetText = null
+                    },
+                    sheetState = thinkingSheetState,
+                    containerColor = ChatBackground,
+                    dragHandle = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 10.dp, bottom = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(52.dp)
+                                    .height(5.dp)
+                                    .background(TextPrimary.copy(alpha = 0.55f), RoundedCornerShape(3.dp))
+                            )
+                        }
+                    }
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 22.dp)
+                            .padding(bottom = 28.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Text(
+                            text = "Thinking",
+                            fontSize = 30.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
+                        )
+                        MarkdownText(
+                            markdown = thinkingSheetText.orEmpty(),
+                            textStyle = TextStyle(
+                                fontSize = 17.sp,
+                                lineHeight = 26.sp,
+                                color = TextPrimary
+                            )
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -627,6 +756,7 @@ fun MessageItem(
     conversationId: String?,
     isStreaming: Boolean = false,
     showToolbar: Boolean = true,
+    onShowReasoning: (String) -> Unit,
     onEdit: () -> Unit,
     onDelete: (conversationId: String, messageId: String) -> Unit
 ) {
@@ -671,6 +801,33 @@ fun MessageItem(
                     onLongClick = { showMenu = true }
                 )
         ) {
+            val reasoningText = message.reasoning?.trim().orEmpty()
+            if (reasoningText.isNotBlank()) {
+                Row(
+                    modifier = Modifier
+                        .padding(bottom = 10.dp)
+                        .pressableScale(
+                            pressedScale = 0.98f,
+                            onClick = { onShowReasoning(reasoningText) }
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "Thinking",
+                        fontSize = 22.sp,
+                        fontFamily = SourceSans3,
+                        fontWeight = FontWeight.Medium,
+                        color = TextSecondary
+                    )
+                    Icon(
+                        imageVector = AppIcons.ChevronRight,
+                        contentDescription = null,
+                        tint = TextSecondary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
             MarkdownText(
                 markdown = message.content,
                 textStyle = TextStyle(

@@ -91,7 +91,7 @@ class ChatApiClient {
         modelId: String,
         messages: List<Message>,
         extraHeaders: List<HttpHeader> = emptyList()
-    ): Flow<String> = flow {
+    ): Flow<ChatStreamDelta> = flow {
         val url = provider.apiUrl.trimEnd('/') + "/chat/completions"
         val body = gson.toJson(
             mapOf(
@@ -129,9 +129,11 @@ class ChatApiClient {
 
                     try {
                         val chunk = gson.fromJson(data, OpenAIStreamChunk::class.java)
-                        val content = chunk.choices?.firstOrNull()?.delta?.content
-                        if (!content.isNullOrEmpty()) {
-                            emit(content)
+                        val delta = chunk.choices?.firstOrNull()?.delta
+                        val content = delta?.content
+                        val reasoning = delta?.reasoning_content ?: delta?.reasoning ?: delta?.thinking
+                        if (!content.isNullOrEmpty() || !reasoning.isNullOrEmpty()) {
+                            emit(ChatStreamDelta(content = content, reasoning = reasoning))
                         }
                     } catch (_: Exception) {
                         // 忽略解析错误，继续处理下一行
@@ -227,7 +229,15 @@ data class OpenAIStreamChoice(
 )
 
 data class OpenAIStreamDelta(
-    val content: String?
+    val content: String?,
+    val reasoning_content: String? = null,
+    val reasoning: String? = null,
+    val thinking: String? = null
+)
+
+data class ChatStreamDelta(
+    val content: String? = null,
+    val reasoning: String? = null
 )
 
 // 图片生成相关数据类

@@ -47,5 +47,6 @@ data class Message(
     val id: String = UUID.randomUUID().toString(),
     val role: String,
     val content: String,
+    val reasoning: String? = null,
     val timestamp: Long = System.currentTimeMillis()
 )
