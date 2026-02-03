@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
@@ -703,7 +704,7 @@ fun ChatScreen(navController: NavController) {
                         thinkingSheetText = null
                     },
                     sheetState = thinkingSheetState,
-                    containerColor = Surface,
+                    containerColor = ThinkingBackground,
                     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
                     dragHandle = {
                         Box(
@@ -724,10 +725,12 @@ fun ChatScreen(navController: NavController) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .fillMaxHeight(0.67f)
                             .padding(horizontal = 20.dp)
                             .padding(bottom = 32.dp)
                             .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         // 大标题 Thinking
                         Text(
@@ -737,27 +740,22 @@ fun ChatScreen(navController: NavController) {
                             color = TextPrimary
                         )
 
-                        // 内容区域 - 使用卡片样式
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = ChatBackground),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                        // 内容区域 - 统一背景色
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(ThinkingBackground, RoundedCornerShape(16.dp))
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp)
-                            ) {
-                                MarkdownText(
-                                    markdown = thinkingSheetText.orEmpty(),
-                                    textStyle = TextStyle(
-                                        fontSize = 16.sp,
-                                        lineHeight = 24.sp,
-                                        color = TextPrimary
-                                    )
+                            MarkdownText(
+                                markdown = thinkingSheetText.orEmpty(),
+                                textStyle = TextStyle(
+                                    fontSize = 14.sp,
+                                    lineHeight = 22.sp,
+                                    color = TextPrimary
                                 )
-                            }
+                            )
                         }
                     }
                 }
@@ -830,23 +828,17 @@ fun MessageItem(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(
-                        imageVector = AppIcons.Think,
-                        contentDescription = null,
-                        tint = TextSecondary,
-                        modifier = Modifier.size(18.dp)
-                    )
                     Text(
                         text = "Thinking",
                         fontSize = 15.sp,
                         fontFamily = SourceSans3,
                         fontWeight = FontWeight.Medium,
-                        color = TextSecondary
+                        color = ThinkingLabelColor
                     )
                     Icon(
                         imageVector = AppIcons.ChevronRight,
                         contentDescription = null,
-                        tint = TextSecondary,
+                        tint = ThinkingLabelColor,
                         modifier = Modifier.size(14.dp)
                     )
                 }
@@ -1235,6 +1227,7 @@ fun TopNavBar(
             Box(
                 modifier = Modifier
                     .size(42.dp)
+                    .shadow(elevation = 2.dp, shape = CircleShape, clip = false)
                     .clip(CircleShape)
                     .background(Surface, CircleShape)
                     .pressableScale(pressedScale = 0.95f, onClick = onMenuClick),
@@ -1263,6 +1256,7 @@ fun TopNavBar(
             Box(
                 modifier = Modifier
                     .height(42.dp)
+                    .shadow(elevation = 2.dp, shape = RoundedCornerShape(21.dp), clip = false)
                     .background(Surface, RoundedCornerShape(21.dp))
                     .padding(horizontal = 20.dp),
                 contentAlignment = Alignment.Center
@@ -1280,6 +1274,7 @@ fun TopNavBar(
         Box(
             modifier = Modifier
                 .size(42.dp)
+                .shadow(elevation = 2.dp, shape = CircleShape, clip = false)
                 .clip(CircleShape)
                 .background(Surface, CircleShape)
                 .pressableScale(pressedScale = 0.95f, onClick = onNewChatClick),
