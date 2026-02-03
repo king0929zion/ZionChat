@@ -1066,12 +1066,12 @@ fun SidebarContent(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
             SidebarMenuItem(
-                icon = { Icon(AppIcons.NewChat, null, Modifier.size(20.dp), TextPrimary) },
+                icon = { Icon(AppIcons.NewChat, null, Modifier.size(22.dp), TextPrimary) },
                 label = "New chat",
                 onClick = onNewChat
             )
             SidebarMenuItem(
-                icon = { Icon(AppIcons.ChatGPTLogo, null, Modifier.size(20.dp), TextPrimary) },
+                icon = { Icon(AppIcons.ChatGPTLogo, null, Modifier.size(22.dp), TextPrimary) },
                 label = "Images",
                 onClick = { }
             )
@@ -1080,7 +1080,7 @@ fun SidebarContent(
                     Icon(
                         painter = rememberResourceDrawablePainter(R.drawable.ic_apps),
                         contentDescription = null,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(22.dp),
                         tint = Color.Unspecified
                     )
                 },
@@ -1192,21 +1192,22 @@ fun SidebarMenuItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .pressableScale(onClick = onClick)
+            .pressableScale(onClick: onClick)
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(26.dp),
             contentAlignment = Alignment.Center
         ) {
             icon()
         }
         Text(
             text = label,
-            fontSize = 16.sp,
+            fontSize = 17.sp,
             fontFamily = SourceSans3,
+            fontWeight = FontWeight.Medium,
             color = TextPrimary
         )
     }
