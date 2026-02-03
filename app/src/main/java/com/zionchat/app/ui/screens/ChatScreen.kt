@@ -474,7 +474,7 @@ fun ChatScreen(navController: NavController) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(top = listTopPadding, bottom = bottomContentPadding + imeBottomPadding),
+                        .padding(top = listTopPadding, bottom = bottomContentPadding),
                     contentAlignment = Alignment.Center
                 ) {
                     EmptyChatState()
@@ -487,7 +487,7 @@ fun ChatScreen(navController: NavController) {
                         start = 16.dp,
                         end = 16.dp,
                         top = listTopPadding,
-                        bottom = bottomContentPadding + imeBottomPadding + 8.dp
+                        bottom = bottomContentPadding + 8.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -533,9 +533,9 @@ fun ChatScreen(navController: NavController) {
                     .zIndex(1f)
             )
 
-            // Bottom fade should cover from transition start all the way to the bottom (behind the input/tool sheet).
-            val bottomFadeHeight = 52.dp
-            val bottomMaskHeight = imeBottomPadding + bottomBarHeightDp + bottomFadeHeight
+            // Bottom fade: start at the input bar top and fade into the bar.
+            val bottomFadeHeight = 24.dp
+            val bottomMaskHeight = imeBottomPadding + bottomBarHeightDp
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -549,7 +549,7 @@ fun ChatScreen(navController: NavController) {
                 height = bottomFadeHeight,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = imeBottomPadding + bottomBarHeightDp)
+                    .padding(bottom = bottomMaskHeight)
                     .zIndex(1f)
             )
 
@@ -572,33 +572,38 @@ fun ChatScreen(navController: NavController) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .zIndex(3f)
-                    .onSizeChanged { bottomBarHeightPx = it.height }
+                    .imePadding()
             ) {
-                BottomInputArea(
-                    selectedTool = selectedTool,
-                    onToolToggle = {
-                        if (showToolMenu) {
-                            showToolMenu = false
-                            return@BottomInputArea
-                        }
-                        if (imeVisible) {
-                            keyboardController?.hide()
-                            scope.launch {
-                                delay(180)
+                Box(
+                    modifier = Modifier
+                        .zIndex(3f)
+                        .onSizeChanged { bottomBarHeightPx = it.height }
+                ) {
+                    BottomInputArea(
+                        selectedTool = selectedTool,
+                        onToolToggle = {
+                            if (showToolMenu) {
+                                showToolMenu = false
+                                return@BottomInputArea
+                            }
+                            if (imeVisible) {
+                                keyboardController?.hide()
+                                scope.launch {
+                                    delay(180)
+                                    showToolMenu = true
+                                }
+                            } else {
                                 showToolMenu = true
                             }
-                        } else {
-                            showToolMenu = true
-                        }
-                    },
-                    onClearTool = { selectedTool = null },
-                    messageText = messageText,
-                    onMessageChange = { messageText = it },
-                    onSend = ::sendMessage,
-                    sendAllowed = !defaultChatModelId.isNullOrBlank(),
-                    imeVisible = imeVisible
-                )
+                        },
+                        onClearTool = { selectedTool = null },
+                        messageText = messageText,
+                        onMessageChange = { messageText = it },
+                        onSend = ::sendMessage,
+                        sendAllowed = !defaultChatModelId.isNullOrBlank(),
+                        imeVisible = imeVisible
+                    )
+                }
             }
 
             // 底部工具面板（覆盖在输入框上方）
@@ -1485,7 +1490,6 @@ fun BottomInputArea(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .imePadding()
             .padding(horizontal = 16.dp)
             .padding(top = 6.dp, bottom = bottomPadding)
             .background(ChatBackground)
