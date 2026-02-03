@@ -90,6 +90,8 @@ fun ModelServicesScreen(navController: NavController) {
                 .padding(top = 12.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            OAuthConnectItem(onClick = { navController.navigate("add_oauth_provider") })
+
             configuredProviders.forEach { provider ->
                 SwipeableConfiguredProviderItem(
                     provider = provider,
@@ -113,6 +115,45 @@ fun ModelServicesScreen(navController: NavController) {
             }
             Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+}
+
+@Composable
+private fun OAuthConnectItem(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .background(GrayLight, RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(14.dp))
+            .pressableScale(pressedScale = 0.98f, onClick = onClick)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Surface, RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = AppIcons.OAuth,
+                contentDescription = "OAuth",
+                tint = TextPrimary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+
+        Text(
+            text = "Connect with OAuth",
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Normal,
+            fontFamily = SourceSans3,
+            color = TextPrimary,
+            maxLines = 1
+        )
     }
 }
 

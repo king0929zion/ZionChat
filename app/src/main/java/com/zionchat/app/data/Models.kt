@@ -9,7 +9,15 @@ data class ProviderConfig(
     val name: String,
     val type: String,
     val apiUrl: String,
-    val apiKey: String
+    val apiKey: String,
+    val oauthProvider: String? = null,
+    val oauthAccessToken: String? = null,
+    val oauthRefreshToken: String? = null,
+    val oauthIdToken: String? = null,
+    val oauthAccountId: String? = null,
+    val oauthEmail: String? = null,
+    val oauthProjectId: String? = null,
+    val oauthExpiresAtMs: Long? = null
 )
 
 data class ModelConfig(

@@ -1,5 +1,7 @@
 package com.zionchat.app.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.EaseOutBack
 import androidx.compose.animation.core.animateFloatAsState
@@ -28,15 +30,24 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
+import com.zionchat.app.LocalAppRepository
+import com.zionchat.app.LocalChatApiClient
+import com.zionchat.app.LocalOAuthClient
+import com.zionchat.app.data.ModelConfig
+import com.zionchat.app.data.OAuthClient
+import com.zionchat.app.data.ProviderConfig
+import com.zionchat.app.data.buildModelStorageId
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.SourceSans3
 import com.zionchat.app.ui.components.pressableScale
+import kotlinx.coroutines.launch
 
 // 页面状态
 private enum class OAuthStep {
@@ -49,45 +60,76 @@ private enum class OAuthStep {
 private data class ModelItem(
     val id: String,
     val name: String,
-    var enabled: Boolean
+    val enabled: Boolean
 )
 
 @Composable
 fun AddOAuthProviderScreen(navController: NavController) {
+    val repository = LocalAppRepository.current
+    val chatApiClient = LocalChatApiClient.current
+    val oauthClient = LocalOAuthClient.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
     var providerName by remember { mutableStateOf("") }
     var currentStep by remember { mutableStateOf(OAuthStep.STEP_1_CONNECT) }
     var callbackUrl by remember { mutableStateOf("") }
     var showAvatarModal by remember { mutableStateOf(false) }
-    var selectedAvatar by remember { mutableStateOf("openai") }
+    var selectedAvatar by remember { mutableStateOf("codex") }
     var showModelsSection by remember { mutableStateOf(false) }
+    var isWorking by remember { mutableStateOf(false) }
+    var errorText by remember { mutableStateOf<String?>(null) }
 
-    // 模拟模型列表
-    var models by remember {
-        mutableStateOf(
-            listOf(
-                ModelItem("gpt-4o", "GPT-4o", true),
-                ModelItem("gpt-4o-mini", "GPT-4o Mini", false),
-                ModelItem("gpt-4-turbo", "GPT-4 Turbo", false),
-                ModelItem("gpt-3.5-turbo", "GPT-3.5 Turbo", true),
-                ModelItem("dall-e-3", "DALL-E 3", false),
-                ModelItem("whisper-1", "Whisper", false)
-            )
-        )
-    }
+    var oauthStart by remember { mutableStateOf<OAuthClient.OAuthStartResult?>(null) }
+    var connectedProvider by remember { mutableStateOf<ProviderConfig?>(null) }
+
+    var models by remember { mutableStateOf<List<ModelItem>>(emptyList()) }
 
     val enabledCount = models.count { it.enabled }
+
+    fun resolvedOauthProvider(): OAuthClient.OAuthProvider? {
+        return when (selectedAvatar.lowercase()) {
+            "codex" -> OAuthClient.OAuthProvider.Codex
+            "iflow" -> OAuthClient.OAuthProvider.IFlow
+            "antigravity" -> OAuthClient.OAuthProvider.Antigravity
+            else -> null
+        }
+    }
+
+    LaunchedEffect(selectedAvatar) {
+        if (providerName.isNotBlank()) return@LaunchedEffect
+        providerName =
+            when (resolvedOauthProvider()) {
+                OAuthClient.OAuthProvider.Codex -> "Codex"
+                OAuthClient.OAuthProvider.IFlow -> "iFlow"
+                OAuthClient.OAuthProvider.Antigravity -> "Antigravity"
+                else -> ""
+            }
+    }
 
     Scaffold(
         topBar = {
             AddProviderTopBar(
                 onBack = { navController.navigateUp() },
                 onSave = {
+                    if (isWorking) return@AddProviderTopBar
+                    errorText = null
+                    val provider = connectedProvider
                     if (providerName.isBlank()) {
-                        // 显示错误提示
-                    } else if (currentStep != OAuthStep.STEP_3_COMPLETED) {
-                        // 显示请先完成OAuth提示
-                    } else {
-                        // 保存并返回
+                        errorText = "Provider name is required."
+                        return@AddProviderTopBar
+                    }
+                    if (currentStep != OAuthStep.STEP_3_COMPLETED || provider == null) {
+                        errorText = "Please complete OAuth first."
+                        return@AddProviderTopBar
+                    }
+                    scope.launch {
+                        val trimmedName = providerName.trim()
+                        if (trimmedName.isNotBlank() && provider.name != trimmedName) {
+                            val updated = provider.copy(name = trimmedName)
+                            repository.upsertProvider(updated)
+                            connectedProvider = updated
+                        }
                         navController.navigateUp()
                     }
                 }
@@ -123,20 +165,181 @@ fun AddOAuthProviderScreen(navController: NavController) {
                     currentStep = currentStep,
                     callbackUrl = callbackUrl,
                     onCallbackUrlChange = { callbackUrl = it },
-                    onStartOAuth = { currentStep = OAuthStep.STEP_2_CALLBACK },
+                    onStartOAuth = {
+                        if (isWorking) return@OAuthSection
+                        errorText = null
+                        val provider = resolvedOauthProvider()
+                        if (provider == null) {
+                            errorText = "Please select an OAuth provider."
+                            return@OAuthSection
+                        }
+                        val start =
+                            when (provider) {
+                                OAuthClient.OAuthProvider.Codex -> oauthClient.startCodexOAuth()
+                                OAuthClient.OAuthProvider.IFlow -> oauthClient.startIFlowOAuth()
+                                OAuthClient.OAuthProvider.Antigravity -> oauthClient.startAntigravityOAuth()
+                            }
+                        oauthStart = start
+                        callbackUrl = ""
+                        currentStep = OAuthStep.STEP_2_CALLBACK
+                        runCatching {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(start.authUrl)))
+                        }.onFailure { throwable ->
+                            errorText = "Failed to open browser: ${throwable.message ?: throwable.toString()}"
+                        }
+                    },
                     onSubmitCallback = {
-                        if (callbackUrl.isNotBlank()) {
-                            currentStep = OAuthStep.STEP_3_COMPLETED
-                            showModelsSection = true
+                        if (isWorking) return@OAuthSection
+                        val start = oauthStart
+                        if (start == null) {
+                            errorText = "Please start OAuth first."
+                            return@OAuthSection
+                        }
+                        val parsed = oauthClient.parseCallback(callbackUrl)
+                        if (parsed == null) {
+                            errorText = "Invalid callback URL."
+                            return@OAuthSection
+                        }
+                        if (!parsed.error.isNullOrBlank()) {
+                            errorText = parsed.errorDescription?.takeIf { it.isNotBlank() } ?: parsed.error
+                            return@OAuthSection
+                        }
+                        val code = parsed.code?.trim().orEmpty()
+                        if (code.isBlank()) {
+                            errorText = "Missing authorization code in callback URL."
+                            return@OAuthSection
+                        }
+                        if (parsed.state?.trim().orEmpty() != start.state.trim()) {
+                            errorText = "OAuth state mismatch. Please retry."
+                            return@OAuthSection
+                        }
+
+                        isWorking = true
+                        errorText = null
+                        scope.launch {
+                            val providerResult: Result<ProviderConfig> =
+                                when (start.provider) {
+                                    OAuthClient.OAuthProvider.Codex -> {
+                                        oauthClient.exchangeCodex(
+                                            code = code,
+                                            redirectUri = start.redirectUri,
+                                            pkceCodeVerifier = start.pkceCodeVerifier.orEmpty()
+                                        ).map { token ->
+                                            ProviderConfig(
+                                                presetId = "codex",
+                                                iconAsset = "openai.svg",
+                                                name = providerName.trim().ifBlank { "Codex" },
+                                                type = "codex",
+                                                apiUrl = "https://chatgpt.com/backend-api/codex",
+                                                apiKey = token.accessToken,
+                                                oauthProvider = "codex",
+                                                oauthAccessToken = token.accessToken,
+                                                oauthRefreshToken = token.refreshToken,
+                                                oauthIdToken = token.idToken,
+                                                oauthAccountId = token.accountId,
+                                                oauthEmail = token.email,
+                                                oauthExpiresAtMs = token.expiresAtMs
+                                            )
+                                        }
+                                    }
+                                    OAuthClient.OAuthProvider.IFlow -> {
+                                        oauthClient.exchangeIFlow(code = code, redirectUri = start.redirectUri).map { token ->
+                                            ProviderConfig(
+                                                presetId = "iflow",
+                                                iconAsset = "iflow.svg",
+                                                name = providerName.trim().ifBlank { "iFlow" },
+                                                type = "openai",
+                                                apiUrl = "https://apis.iflow.cn/v1",
+                                                apiKey = token.apiKey,
+                                                oauthProvider = "iflow",
+                                                oauthAccessToken = token.accessToken,
+                                                oauthRefreshToken = token.refreshToken,
+                                                oauthEmail = token.email,
+                                                oauthExpiresAtMs = token.expiresAtMs
+                                            )
+                                        }
+                                    }
+                                    OAuthClient.OAuthProvider.Antigravity -> {
+                                        oauthClient.exchangeAntigravity(code = code, redirectUri = start.redirectUri).map { token ->
+                                            ProviderConfig(
+                                                presetId = "antigravity",
+                                                iconAsset = "google-color.svg",
+                                                name = providerName.trim().ifBlank { "Antigravity" },
+                                                type = "antigravity",
+                                                apiUrl = "https://cloudcode-pa.googleapis.com",
+                                                apiKey = token.accessToken,
+                                                oauthProvider = "antigravity",
+                                                oauthAccessToken = token.accessToken,
+                                                oauthRefreshToken = token.refreshToken,
+                                                oauthEmail = token.email,
+                                                oauthProjectId = token.projectId,
+                                                oauthExpiresAtMs = token.expiresAtMs
+                                            )
+                                        }
+                                    }
+                                }
+
+                            providerResult.onSuccess { providerConfig ->
+                                connectedProvider = providerConfig
+                                repository.upsertProvider(providerConfig)
+
+                                val modelIds =
+                                    chatApiClient.listModels(providerConfig).getOrElse { throwable ->
+                                        errorText = "Failed to load models: ${throwable.message ?: throwable.toString()}"
+                                        emptyList()
+                                    }
+                                val enabledSet = suggestEnabledModels(start.provider, modelIds).toSet()
+                                models =
+                                    modelIds.map { idValue ->
+                                        ModelItem(id = idValue, name = idValue, enabled = enabledSet.contains(idValue))
+                                    }
+
+                                if (modelIds.isNotEmpty()) {
+                                    repository.upsertModels(
+                                        modelIds.map { idValue ->
+                                            ModelConfig(
+                                                id = buildModelStorageId(providerConfig.id, idValue),
+                                                displayName = idValue,
+                                                enabled = enabledSet.contains(idValue),
+                                                providerId = providerConfig.id
+                                            )
+                                        }
+                                    )
+                                }
+
+                                currentStep = OAuthStep.STEP_3_COMPLETED
+                                showModelsSection = true
+                            }.onFailure { throwable ->
+                                errorText = throwable.message ?: throwable.toString()
+                            }
+
+                            isWorking = false
                         }
                     },
                     onCancel = { currentStep = OAuthStep.STEP_1_CONNECT },
                     onReset = {
+                        val providerId = connectedProvider?.id
+                        if (!providerId.isNullOrBlank()) {
+                            scope.launch { repository.deleteProviderAndModels(providerId) }
+                        }
                         currentStep = OAuthStep.STEP_1_CONNECT
                         showModelsSection = false
                         callbackUrl = ""
+                        models = emptyList()
+                        oauthStart = null
+                        connectedProvider = null
                     }
                 )
+
+                if (!errorText.isNullOrBlank()) {
+                    Text(
+                        text = errorText.orEmpty(),
+                        fontSize = 13.sp,
+                        fontFamily = SourceSans3,
+                        color = Color(0xFFFF3B30),
+                        modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                    )
+                }
 
                 // Models Section (OAuth完成后显示)
                 AnimatedVisibility(
@@ -148,8 +351,21 @@ fun AddOAuthProviderScreen(navController: NavController) {
                         models = models,
                         enabledCount = enabledCount,
                         onToggleModel = { modelId ->
-                            models = models.map {
-                                if (it.id == modelId) it.copy(enabled = !it.enabled) else it
+                            val providerId = connectedProvider?.id?.trim().orEmpty()
+                            if (providerId.isBlank()) return@ModelsSection
+                            models = models.map { item ->
+                                if (item.id == modelId) item.copy(enabled = !item.enabled) else item
+                            }
+                            val updated = models.firstOrNull { it.id == modelId } ?: return@ModelsSection
+                            scope.launch {
+                                repository.upsertModel(
+                                    ModelConfig(
+                                        id = buildModelStorageId(providerId, updated.id),
+                                        displayName = updated.name,
+                                        enabled = updated.enabled,
+                                        providerId = providerId
+                                    )
+                                )
                             }
                         }
                     )
@@ -169,6 +385,17 @@ fun AddOAuthProviderScreen(navController: NavController) {
             onDismiss = { showAvatarModal = false },
             onImportFromGallery = { /* 打开相册 */ }
         )
+    }
+}
+
+private fun suggestEnabledModels(provider: OAuthClient.OAuthProvider, modelIds: List<String>): List<String> {
+    if (modelIds.isEmpty()) return emptyList()
+    val byLower = modelIds.associateBy { it.lowercase() }
+    return when (provider) {
+        OAuthClient.OAuthProvider.Codex ->
+            listOfNotNull(byLower["gpt-5.1-codex"], byLower["gpt-5-codex"], modelIds.firstOrNull()).distinct()
+        OAuthClient.OAuthProvider.IFlow -> listOfNotNull(modelIds.firstOrNull()).distinct()
+        OAuthClient.OAuthProvider.Antigravity -> listOfNotNull(modelIds.firstOrNull()).distinct()
     }
 }
 
@@ -307,10 +534,9 @@ private fun AvatarSelectionModal(
     onImportFromGallery: () -> Unit
 ) {
     val builtinAvatars = listOf(
-        "openai", "anthropic", "google", "azure", "ollama", "deepseek",
-        "moonshot", "yi", "groq", "openrouter", "mistral", "gemini",
-        "grok", "baichuan", "zhipu", "minimax", "stepfun", "hunyuan",
-        "silicon", "together", "perplexity", "fireworks", "cerebras", "meta"
+        "codex",
+        "iflow",
+        "antigravity"
     )
 
     Dialog(

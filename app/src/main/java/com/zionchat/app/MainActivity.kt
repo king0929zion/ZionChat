@@ -45,7 +45,8 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     CompositionLocalProvider(
                         LocalAppRepository provides appContainer.repository,
-                        LocalChatApiClient provides appContainer.chatApiClient
+                        LocalChatApiClient provides appContainer.chatApiClient,
+                        LocalOAuthClient provides appContainer.oauthClient
                     ) {
                         NavHost(
                             navController = navController,
