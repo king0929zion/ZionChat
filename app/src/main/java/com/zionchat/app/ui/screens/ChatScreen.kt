@@ -1227,7 +1227,7 @@ fun TopNavBar(
             Box(
                 modifier = Modifier
                     .size(42.dp)
-                    .shadow(elevation = 2.dp, shape = CircleShape, clip = false)
+                    .shadow(elevation = 8.dp, shape = CircleShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.08f))
                     .clip(CircleShape)
                     .background(Surface, CircleShape)
                     .pressableScale(pressedScale = 0.95f, onClick = onMenuClick),
@@ -1256,7 +1256,7 @@ fun TopNavBar(
             Box(
                 modifier = Modifier
                     .height(42.dp)
-                    .shadow(elevation = 2.dp, shape = RoundedCornerShape(21.dp), clip = false)
+                    .shadow(elevation = 8.dp, shape = RoundedCornerShape(21.dp), clip = false, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.08f))
                     .background(Surface, RoundedCornerShape(21.dp))
                     .padding(horizontal = 20.dp),
                 contentAlignment = Alignment.Center
@@ -1274,7 +1274,7 @@ fun TopNavBar(
         Box(
             modifier = Modifier
                 .size(42.dp)
-                .shadow(elevation = 2.dp, shape = CircleShape, clip = false)
+                .shadow(elevation = 8.dp, shape = CircleShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.08f))
                 .clip(CircleShape)
                 .background(Surface, CircleShape)
                 .pressableScale(pressedScale = 0.95f, onClick = onNewChatClick),
