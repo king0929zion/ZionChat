@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import coil.compose.AsyncImage
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -135,7 +136,7 @@ fun SettingsScreen(navController: NavController) {
                 // Appearance 分组
                 SettingsGroup(title = "Appearance", itemCount = 2) {
                     Box(modifier = Modifier.onGloballyPositioned { coordinates ->
-                        appearanceAnchorY = coordinates.boundsInWindow().top
+                        appearanceAnchorY = coordinates.positionInWindow().y
                     }) {
                         SettingsItem(
                             icon = { Icon(AppIcons.Appearance, null, Modifier.size(22.dp), tint = Color.Unspecified) },
@@ -155,7 +156,7 @@ fun SettingsScreen(navController: NavController) {
                         )
                     }
                     Box(modifier = Modifier.onGloballyPositioned { coordinates ->
-                        accentColorAnchorY = coordinates.boundsInWindow().top
+                        accentColorAnchorY = coordinates.positionInWindow().y
                     }) {
                         SettingsItem(
                             icon = { Icon(AppIcons.Accent, null, Modifier.size(22.dp), tint = Color.Unspecified) },
