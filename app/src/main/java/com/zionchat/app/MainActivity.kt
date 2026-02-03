@@ -46,7 +46,8 @@ class MainActivity : ComponentActivity() {
                     CompositionLocalProvider(
                         LocalAppRepository provides appContainer.repository,
                         LocalChatApiClient provides appContainer.chatApiClient,
-                        LocalOAuthClient provides appContainer.oauthClient
+                        LocalOAuthClient provides appContainer.oauthClient,
+                        LocalProviderAuthManager provides appContainer.providerAuthManager
                     ) {
                         NavHost(
                             navController = navController,

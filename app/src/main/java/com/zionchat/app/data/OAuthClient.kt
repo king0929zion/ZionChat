@@ -280,6 +280,167 @@ class OAuthClient {
         }
     }
 
+    suspend fun refreshCodex(refreshToken: String): Result<CodexOAuthResult> {
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val token = refreshToken.trim()
+                if (token.isBlank()) error("Missing refresh token")
+
+                val form =
+                    FormBody.Builder()
+                        .add("client_id", CODEX_CLIENT_ID)
+                        .add("grant_type", "refresh_token")
+                        .add("refresh_token", token)
+                        .add("scope", "openid profile email")
+                        .build()
+
+                val request =
+                    Request.Builder()
+                        .url(CODEX_TOKEN_URL)
+                        .post(form)
+                        .addHeader("Accept", "application/json")
+                        .addHeader("Content-Type", "application/x-www-form-urlencoded")
+                        .build()
+
+                client.newCall(request).execute().use { response ->
+                    val raw = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) error("HTTP ${response.code}: $raw")
+
+                    val parsed = gson.fromJson(raw, CodexTokenResponse::class.java)
+                    val accessToken = parsed.access_token?.trim().orEmpty()
+                    if (accessToken.isBlank()) error("Missing access_token in response")
+
+                    val expiresInSec = parsed.expires_in?.coerceAtLeast(0L) ?: 0L
+                    val expiresAtMs = System.currentTimeMillis() + expiresInSec * 1000L
+
+                    val idToken = parsed.id_token?.trim()
+                    val newRefreshToken = parsed.refresh_token?.trim().takeIf { !it.isNullOrBlank() }
+                    val claims = idToken?.let { parseCodexIdTokenClaims(it) }
+
+                    CodexOAuthResult(
+                        accessToken = accessToken,
+                        refreshToken = newRefreshToken ?: token,
+                        idToken = idToken,
+                        expiresAtMs = expiresAtMs,
+                        email = claims?.email,
+                        accountId = claims?.accountId
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun refreshIFlow(refreshToken: String): Result<IFlowOAuthResult> {
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val token = refreshToken.trim()
+                if (token.isBlank()) error("Missing refresh token")
+
+                val form =
+                    FormBody.Builder()
+                        .add("grant_type", "refresh_token")
+                        .add("refresh_token", token)
+                        .add("client_id", IFLOW_CLIENT_ID)
+                        .add("client_secret", IFLOW_CLIENT_SECRET)
+                        .build()
+
+                val basic =
+                    Base64.encodeToString(
+                        "${IFLOW_CLIENT_ID}:${IFLOW_CLIENT_SECRET}".toByteArray(),
+                        Base64.NO_WRAP
+                    )
+
+                val request =
+                    Request.Builder()
+                        .url(IFLOW_TOKEN_URL)
+                        .post(form)
+                        .addHeader("Accept", "application/json")
+                        .addHeader("Content-Type", "application/x-www-form-urlencoded")
+                        .addHeader("Authorization", "Basic $basic")
+                        .build()
+
+                val tokenResp =
+                    client.newCall(request).execute().use { response ->
+                        val raw = response.body?.string().orEmpty()
+                        if (!response.isSuccessful) error("HTTP ${response.code}: $raw")
+                        gson.fromJson(raw, IFlowTokenResponse::class.java)
+                    }
+
+                val accessToken = tokenResp.access_token?.trim().orEmpty()
+                if (accessToken.isBlank()) error("Missing access_token in response")
+
+                val expiresInSec = tokenResp.expires_in?.coerceAtLeast(0L) ?: 0L
+                val expiresAtMs = System.currentTimeMillis() + expiresInSec * 1000L
+
+                val info = fetchIFlowUserInfo(accessToken)
+                val apiKey = info.apiKey?.trim().orEmpty()
+                if (apiKey.isBlank()) error("Empty apiKey returned by iFlow user info")
+
+                val email = info.email?.trim().takeIf { !it.isNullOrBlank() } ?: info.phone?.trim()
+                val newRefreshToken = tokenResp.refresh_token?.trim().takeIf { !it.isNullOrBlank() } ?: token
+
+                IFlowOAuthResult(
+                    accessToken = accessToken,
+                    refreshToken = newRefreshToken,
+                    apiKey = apiKey,
+                    expiresAtMs = expiresAtMs,
+                    email = email
+                )
+            }
+        }
+    }
+
+    suspend fun refreshAntigravity(refreshToken: String): Result<AntigravityOAuthResult> {
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val token = refreshToken.trim()
+                if (token.isBlank()) error("Missing refresh token")
+
+                val form =
+                    FormBody.Builder()
+                        .add("client_id", ANTIGRAVITY_CLIENT_ID)
+                        .add("client_secret", ANTIGRAVITY_CLIENT_SECRET)
+                        .add("grant_type", "refresh_token")
+                        .add("refresh_token", token)
+                        .build()
+
+                val request =
+                    Request.Builder()
+                        .url(ANTIGRAVITY_TOKEN_URL)
+                        .post(form)
+                        .addHeader("Accept", "application/json")
+                        .addHeader("Content-Type", "application/x-www-form-urlencoded")
+                        .addHeader("User-Agent", ANTIGRAVITY_TOKEN_USER_AGENT)
+                        .build()
+
+                val tokenResp =
+                    client.newCall(request).execute().use { response ->
+                        val raw = response.body?.string().orEmpty()
+                        if (!response.isSuccessful) error("HTTP ${response.code}: $raw")
+                        gson.fromJson(raw, AntigravityTokenResponse::class.java)
+                    }
+
+                val accessToken = tokenResp.access_token?.trim().orEmpty()
+                if (accessToken.isBlank()) error("Missing access_token in response")
+
+                val expiresInSec = tokenResp.expires_in?.coerceAtLeast(0L) ?: 0L
+                val expiresAtMs = System.currentTimeMillis() + expiresInSec * 1000L
+
+                val email = fetchGoogleUserEmail(accessToken)
+                val projectId = fetchAntigravityProjectId(accessToken)
+                val newRefreshToken = tokenResp.refresh_token?.trim().takeIf { !it.isNullOrBlank() } ?: token
+
+                AntigravityOAuthResult(
+                    accessToken = accessToken,
+                    refreshToken = newRefreshToken,
+                    expiresAtMs = expiresAtMs,
+                    email = email,
+                    projectId = projectId
+                )
+            }
+        }
+    }
+
     private fun fetchIFlowUserInfo(accessToken: String): IFlowUserInfoData {
         val url = "${IFLOW_USERINFO_URL}?accessToken=${Uri.encode(accessToken)}"
         val request = Request.Builder().url(url).get().addHeader("Accept", "application/json").build()
@@ -576,5 +737,7 @@ class OAuthClient {
         private const val ANTIGRAVITY_API_CLIENT = "google-cloud-sdk vscode_cloudshelleditor/0.1"
         private const val ANTIGRAVITY_CLIENT_METADATA =
             """{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}"""
+
+        private const val ANTIGRAVITY_TOKEN_USER_AGENT = "antigravity/1.104.0 darwin/arm64"
     }
 }

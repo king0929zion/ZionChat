@@ -49,6 +49,7 @@ import androidx.navigation.NavController
 import com.zionchat.app.R
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.LocalChatApiClient
+import com.zionchat.app.LocalProviderAuthManager
 import com.zionchat.app.data.AppRepository
 import com.zionchat.app.data.ChatApiClient
 import com.zionchat.app.data.Conversation
@@ -83,6 +84,7 @@ private data class PendingMessage(val conversationId: String, val message: Messa
 fun ChatScreen(navController: NavController) {
     val repository = LocalAppRepository.current
     val chatApiClient = LocalChatApiClient.current
+    val providerAuthManager = LocalProviderAuthManager.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -380,6 +382,7 @@ fun ChatScreen(navController: NavController) {
             }
 
             try {
+                val resolvedProvider = providerAuthManager.ensureValidProvider(provider)
                 if (isImageGeneration) {
                     // 图片生成流程
                     handleImageGeneration(
@@ -460,7 +463,7 @@ fun ChatScreen(navController: NavController) {
                     }
 
                     chatApiClient.chatCompletionsStream(
-                        provider = provider,
+                        provider = resolvedProvider,
                         modelId = extractRemoteModelId(selectedModel.id),
                         messages = requestMessages,
                         extraHeaders = selectedModel.headers

@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.LocalChatApiClient
+import com.zionchat.app.LocalProviderAuthManager
 import com.zionchat.app.data.ModelConfig
 import com.zionchat.app.data.buildModelStorageId
 import com.zionchat.app.ui.components.BottomFadeScrim
@@ -92,6 +93,7 @@ import androidx.compose.material3.Surface as M3Surface
 fun ModelsScreen(navController: NavController, providerId: String? = null) {
     val repository = LocalAppRepository.current
     val chatApiClient = LocalChatApiClient.current
+    val providerAuthManager = LocalProviderAuthManager.current
     val scope = rememberCoroutineScope()
 
     val providers by repository.providersFlow.collectAsState(initial = emptyList())
@@ -116,8 +118,10 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
 
         isFetchingRemote = true
         remoteError = null
-        val result = chatApiClient.listModels(provider)
-        val modelIds = result.getOrElse { throwable ->
+        val modelIds = runCatching {
+            val resolvedProvider = providerAuthManager.ensureValidProvider(provider)
+            chatApiClient.listModels(resolvedProvider).getOrThrow()
+        }.getOrElse { throwable ->
             remoteError = "Failed to load models: ${throwable.message ?: throwable.toString()}"
             emptyList()
         }
