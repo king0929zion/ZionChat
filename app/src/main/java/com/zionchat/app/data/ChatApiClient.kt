@@ -24,7 +24,7 @@ class ChatApiClient {
     ): Result<List<String>> {
         return withContext(Dispatchers.IO) {
             when (provider.type.trim().lowercase()) {
-                "codex" -> Result.success(CODEX_DEFAULT_MODELS)
+                "codex" -> runCatching { listCodexModels(provider) }
                 "antigravity" -> runCatching { listAntigravityModels(provider) }
                 else ->
                     runCatching {
@@ -50,6 +50,98 @@ class ChatApiClient {
                     }
             }
         }
+    }
+
+    private fun listCodexModels(provider: ProviderConfig): List<String> {
+        val base = provider.apiUrl.trimEnd('/')
+        val endpoints =
+            listOf(
+                "$base/models",
+                "$base/v1/models"
+            )
+
+        for (url in endpoints) {
+            val requestBuilder =
+                Request.Builder()
+                    .url(url)
+                    .get()
+                    .addHeader("Accept", "application/json")
+                    .addHeader("Authorization", "Bearer ${provider.apiKey}")
+                    .addHeader("Openai-Beta", "responses=experimental")
+                    .addHeader("Version", "0.21.0")
+                    .addHeader("Session_id", UUID.randomUUID().toString())
+                    .addHeader("User-Agent", "codex_cli_rs/0.50.0 (Android; ZionChat)")
+                    .addHeader("Connection", "Keep-Alive")
+
+            val isOAuthToken =
+                provider.oauthProvider?.trim()?.equals("codex", ignoreCase = true) == true ||
+                    !provider.oauthAccessToken.isNullOrBlank() ||
+                    !provider.oauthRefreshToken.isNullOrBlank() ||
+                    !provider.oauthIdToken.isNullOrBlank()
+            if (isOAuthToken) {
+                requestBuilder.addHeader("Originator", "codex_cli_rs")
+                provider.oauthAccountId?.trim()?.takeIf { it.isNotBlank() }?.let { accountId ->
+                    requestBuilder.addHeader("Chatgpt-Account-Id", accountId)
+                }
+            }
+
+            val request = requestBuilder.build()
+            val ids =
+                runCatching {
+                    client.newCall(request).execute().use { response ->
+                        val raw = response.body?.string().orEmpty()
+                        if (!response.isSuccessful) return@use emptyList<String>()
+                        parseModelIdsFromJson(raw)
+                    }
+                }.getOrElse { emptyList() }
+
+            if (ids.isNotEmpty()) return ids
+        }
+
+        return CODEX_DEFAULT_MODELS
+    }
+
+    private fun parseModelIdsFromJson(raw: String): List<String> {
+        val element = runCatching { JsonParser.parseString(raw) }.getOrNull() ?: return emptyList()
+        if (element.isJsonArray) {
+            return element.asJsonArray.mapNotNull { el ->
+                when {
+                    el.isJsonPrimitive && el.asJsonPrimitive.isString -> el.asString.trim()
+                    el.isJsonObject -> el.asJsonObject.get("id")?.asString?.trim()
+                    else -> null
+                }?.takeIf { it.isNotBlank() }
+            }.distinct()
+        }
+
+        if (!element.isJsonObject) return emptyList()
+        val obj = element.asJsonObject
+
+        // OpenAI style: {"object":"list","data":[{"id":"..."}, ...]}
+        obj.getAsJsonArray("data")?.let { arr ->
+            val ids =
+                arr.mapNotNull { el ->
+                    if (!el.isJsonObject) return@mapNotNull null
+                    el.asJsonObject.get("id")?.asString?.trim()?.takeIf { it.isNotBlank() }
+                }
+            if (ids.isNotEmpty()) return ids.distinct()
+        }
+
+        // Other common shapes: {"models":[...]} or {"items":[...]}
+        listOf("models", "items").forEach { key ->
+            obj.getAsJsonArray(key)?.let { arr ->
+                val ids =
+                    arr.mapNotNull { el ->
+                        when {
+                            el.isJsonPrimitive && el.asJsonPrimitive.isString -> el.asString.trim()
+                            el.isJsonObject -> el.asJsonObject.get("id")?.asString?.trim()
+                            else -> null
+                        }?.takeIf { it.isNotBlank() }
+                    }
+                if (ids.isNotEmpty()) return ids.distinct()
+            }
+        }
+
+        return emptyList()
     }
 
     suspend fun chatCompletions(
@@ -188,6 +280,7 @@ class ChatApiClient {
                 mapOf(
                     "model" to modelId,
                     "stream" to true,
+                    "store" to false,
                     "instructions" to "",
                     "input" to input,
                     "parallel_tool_calls" to true,
@@ -208,9 +301,16 @@ class ChatApiClient {
                 .addHeader("User-Agent", "codex_cli_rs/0.50.0 (Android; ZionChat)")
                 .addHeader("Connection", "Keep-Alive")
 
-        provider.oauthAccountId?.trim()?.takeIf { it.isNotBlank() }?.let { accountId ->
-            requestBuilder.addHeader("Chatgpt-Account-Id", accountId)
+        val isOAuthToken =
+            provider.oauthProvider?.trim()?.equals("codex", ignoreCase = true) == true ||
+                !provider.oauthAccessToken.isNullOrBlank() ||
+                !provider.oauthRefreshToken.isNullOrBlank() ||
+                !provider.oauthIdToken.isNullOrBlank()
+        if (isOAuthToken) {
             requestBuilder.addHeader("Originator", "codex_cli_rs")
+            provider.oauthAccountId?.trim()?.takeIf { it.isNotBlank() }?.let { accountId ->
+                requestBuilder.addHeader("Chatgpt-Account-Id", accountId)
+            }
         }
 
         extraHeaders
