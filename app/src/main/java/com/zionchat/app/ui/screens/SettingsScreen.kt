@@ -253,8 +253,8 @@ fun SettingsTopBar(navController: NavController) {
         // 标题
         Text(
             text = "Settings",
-            fontSize = 17.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
             fontFamily = SourceSans3,
             color = TextPrimary,
             modifier = Modifier.align(Alignment.Center)

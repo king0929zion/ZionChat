@@ -734,7 +734,7 @@ fun ChatScreen(navController: NavController) {
                             .fillMaxWidth()
                             .fillMaxHeight(0.67f)
                             .background(ThinkingBackground)
-                            .padding(horizontal = 20.dp)
+                            .padding(top = 56.dp, start = 20.dp, end = 20.dp)
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
