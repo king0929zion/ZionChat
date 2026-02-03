@@ -615,22 +615,24 @@ fun ChatScreen(navController: NavController) {
 
             // Bottom fade: start at the input bar top and fade into the bar.
             val bottomFadeHeight = 24.dp
-            val bottomMaskHeight = imeBottomPadding + bottomBarHeightDp
+            val bottomMaskHeight = bottomBarHeightDp
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .height(bottomMaskHeight)
+                    .imePadding()
                     .background(ChatBackground)
-                    .zIndex(0.5f)
+                    .zIndex(1f)
             )
             BottomFadeScrim(
                 color = ChatBackground,
                 height = bottomFadeHeight,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .imePadding()
                     .padding(bottom = bottomMaskHeight)
-                    .zIndex(0.5f)
+                    .zIndex(1f)
             )
 
             Column(
@@ -826,7 +828,7 @@ fun MessageItem(
             if (reasoningText.isNotBlank()) {
                 Row(
                     modifier = Modifier
-                        .padding(bottom = 10.dp)
+                        .padding(bottom = 6.dp)
                         .pressableScale(
                             pressedScale = 0.98f,
                             onClick = { onShowReasoning(reasoningText) }
@@ -835,7 +837,7 @@ fun MessageItem(
                 ) {
                     Text(
                         text = "Thinking",
-                        fontSize = 16.sp,
+                        fontSize = 13.sp,
                         fontFamily = SourceSans3,
                         fontWeight = FontWeight.Medium,
                         color = ThinkingLabelColor
@@ -844,7 +846,7 @@ fun MessageItem(
                         imageVector = AppIcons.ChevronRight,
                         contentDescription = null,
                         tint = ThinkingLabelColor,
-                        modifier = Modifier.size(15.dp)
+                        modifier = Modifier.size(12.dp)
                     )
                 }
             }
