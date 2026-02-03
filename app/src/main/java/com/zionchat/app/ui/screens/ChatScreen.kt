@@ -1117,19 +1117,14 @@ fun ToolMenuPanel(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.25f))
+                .background(Color.Black.copy(alpha = 0.5f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = onDismiss
                 )
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .imePadding()
-            ) {
-                Card(
+            Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
@@ -1176,7 +1171,10 @@ fun ToolMenuPanel(
                     elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Surface)
+                            .padding(16.dp)
                     ) {
                     // 拖动条
                     Box(
@@ -1251,12 +1249,9 @@ fun ToolMenuPanel(
                         onClick = { onToolSelect("mcp") }
                     )
                 }
+            }
         }
     }
-}
-
-}
-
 }
 
 @Composable
