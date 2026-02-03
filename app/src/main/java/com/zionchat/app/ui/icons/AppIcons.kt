@@ -1608,4 +1608,112 @@ object AppIcons {
             close()
         }
     }.build()
+
+    // Monitor/Desktop 图标 - System appearance
+    val Monitor = ImageVector.Builder(
+        name = "monitor",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(
+            fill = SolidColor(Color(0xFF1C1C1E)),
+            stroke = null,
+            strokeLineWidth = 1.5f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round
+        ) {
+            // 显示器屏幕
+            moveTo(5f, 3f)
+            horizontalLineTo(19f)
+            curveTo(20.105f, 3f, 21f, 3.895f, 21f, 5f)
+            verticalLineTo(15f)
+            curveTo(21f, 16.105f, 20.105f, 17f, 19f, 17f)
+            horizontalLineTo(5f)
+            curveTo(3.895f, 17f, 3f, 16.105f, 3f, 15f)
+            verticalLineTo(5f)
+            curveTo(3f, 3.895f, 3.895f, 3f, 5f, 3f)
+            close()
+            // 底座
+            moveTo(8f, 21f)
+            horizontalLineTo(16f)
+            moveTo(12f, 17f)
+            verticalLineTo(21f)
+        }
+    }.build()
+
+    // Sun 图标 - Light appearance
+    val Sun = ImageVector.Builder(
+        name = "sun",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(
+            fill = SolidColor(Color(0xFF1C1C1E)),
+            stroke = null,
+            strokeLineWidth = 1.5f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round
+        ) {
+            // 中心圆
+            moveTo(12f, 8f)
+            curveTo(14.209f, 8f, 16f, 9.791f, 16f, 12f)
+            curveTo(16f, 14.209f, 14.209f, 16f, 12f, 16f)
+            curveTo(9.791f, 16f, 8f, 14.209f, 8f, 12f)
+            curveTo(8f, 9.791f, 9.791f, 8f, 12f, 8f)
+            close()
+            // 光线
+            moveTo(12f, 2f)
+            verticalLineTo(4f)
+            moveTo(12f, 20f)
+            verticalLineTo(22f)
+            moveTo(4.22f, 4.22f)
+            lineTo(5.64f, 5.64f)
+            moveTo(18.36f, 18.36f)
+            lineTo(19.78f, 19.78f)
+            moveTo(2f, 12f)
+            horizontalLineTo(4f)
+            moveTo(20f, 12f)
+            horizontalLineTo(22f)
+            moveTo(4.22f, 19.78f)
+            lineTo(5.64f, 18.36f)
+            moveTo(18.36f, 5.64f)
+            lineTo(19.78f, 4.22f)
+        }
+    }.build()
+
+    // Moon 图标 - Dark appearance
+    val Moon = ImageVector.Builder(
+        name = "moon",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(
+            fill = SolidColor(Color(0xFF1C1C1E)),
+            stroke = null,
+            strokeLineWidth = 1.5f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round
+        ) {
+            // 月牙形状
+            moveTo(21f, 12.79f)
+            curveTo(20.843f, 14.492f, 20.097f, 16.083f, 18.89f, 17.29f)
+            curveTo(17.683f, 18.497f, 16.092f, 19.243f, 14.39f, 19.4f)
+            curveTo(12.688f, 19.557f, 10.981f, 19.121f, 9.56f, 18.162f)
+            curveTo(8.139f, 17.203f, 7.086f, 15.779f, 6.575f, 14.131f)
+            curveTo(6.064f, 12.483f, 6.125f, 10.704f, 6.749f, 9.096f)
+            curveTo(7.373f, 7.488f, 8.522f, 6.143f, 10.01f, 5.286f)
+            curveTo(11.498f, 4.429f, 13.235f, 4.111f, 14.93f, 4.385f)
+            curveTo(14.272f, 5.621f, 14.061f, 7.066f, 14.337f, 8.458f)
+            curveTo(14.613f, 9.85f, 15.358f, 11.099f, 16.439f, 11.99f)
+            curveTo(17.521f, 12.881f, 18.87f, 13.357f, 20.26f, 13.34f)
+            curveTo(20.51f, 13.338f, 20.759f, 13.319f, 21f, 12.79f)
+            close()
+        }
+    }.build()
 }

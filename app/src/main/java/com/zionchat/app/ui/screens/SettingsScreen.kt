@@ -20,6 +20,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.layout.onGloballyPositioned
 import coil.compose.AsyncImage
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -75,6 +76,10 @@ fun SettingsScreen(navController: NavController) {
     var selectedAppearance by remember { mutableStateOf("light") }
     var selectedAccentColor by remember { mutableStateOf("default") }
 
+    // 菜单锚点位置
+    var appearanceAnchorY by remember { mutableFloatStateOf(0f) }
+    var accentColorAnchorY by remember { mutableFloatStateOf(0f) }
+
     val defaultChatModelName = remember(models, defaultChatModelId) {
         val id = defaultChatModelId?.trim().orEmpty()
         if (id.isBlank()) null
@@ -129,32 +134,40 @@ fun SettingsScreen(navController: NavController) {
 
                 // Appearance 分组
                 SettingsGroup(title = "Appearance", itemCount = 2) {
-                    SettingsItem(
-                        icon = { Icon(AppIcons.Appearance, null, Modifier.size(22.dp), tint = Color.Unspecified) },
-                        label = "Appearance",
-                        value = when(selectedAppearance) {
-                            "system" -> "System"
-                            "light" -> "Light"
-                            "dark" -> "Dark"
-                            else -> "Light"
-                        },
-                        showChevron = true,
-                        showDivider = true,
-                        onClick = {
-                            showAccentColorMenu = false
-                            showAppearanceMenu = true
-                        }
-                    )
-                    SettingsItem(
-                        icon = { Icon(AppIcons.Accent, null, Modifier.size(22.dp), tint = Color.Unspecified) },
-                        label = "Accent color",
-                        value = selectedAccentColor.replaceFirstChar { it.uppercase() },
-                        showChevron = true,
-                        onClick = {
-                            showAppearanceMenu = false
-                            showAccentColorMenu = true
-                        }
-                    )
+                    Box(modifier = Modifier.onGloballyPositioned { coordinates ->
+                        appearanceAnchorY = coordinates.boundsInWindow().top
+                    }) {
+                        SettingsItem(
+                            icon = { Icon(AppIcons.Appearance, null, Modifier.size(22.dp), tint = Color.Unspecified) },
+                            label = "Appearance",
+                            value = when(selectedAppearance) {
+                                "system" -> "System"
+                                "light" -> "Light"
+                                "dark" -> "Dark"
+                                else -> "Light"
+                            },
+                            showChevron = true,
+                            showDivider = true,
+                            onClick = {
+                                showAccentColorMenu = false
+                                showAppearanceMenu = true
+                            }
+                        )
+                    }
+                    Box(modifier = Modifier.onGloballyPositioned { coordinates ->
+                        accentColorAnchorY = coordinates.boundsInWindow().top
+                    }) {
+                        SettingsItem(
+                            icon = { Icon(AppIcons.Accent, null, Modifier.size(22.dp), tint = Color.Unspecified) },
+                            label = "Accent color",
+                            value = selectedAccentColor.replaceFirstChar { it.uppercase() },
+                            showChevron = true,
+                            onClick = {
+                                showAppearanceMenu = false
+                                showAccentColorMenu = true
+                            }
+                        )
+                    }
                 }
 
                 // General 分组
@@ -243,6 +256,7 @@ fun SettingsScreen(navController: NavController) {
     AppearanceMenu(
         visible = showAppearanceMenu,
         selected = selectedAppearance,
+        anchorY = appearanceAnchorY,
         onDismiss = { showAppearanceMenu = false },
         onSelect = { selectedAppearance = it }
     )
@@ -251,6 +265,7 @@ fun SettingsScreen(navController: NavController) {
     AccentColorMenu(
         visible = showAccentColorMenu,
         selected = selectedAccentColor,
+        anchorY = accentColorAnchorY,
         onDismiss = { showAccentColorMenu = false },
         onSelect = { selectedAccentColor = it }
     )
@@ -768,11 +783,11 @@ fun SettingsItem(
     }
 }
 
-// Appearance 选项数据
+// Appearance 选项数据 - 使用正确图标：System=Monitor, Light=Sun, Dark=Moon
 private val appearanceOptions = listOf(
-    Triple("system", "System", AppIcons.User),
-    Triple("light", "Light", AppIcons.Appearance),
-    Triple("dark", "Dark", AppIcons.User)
+    Triple("system", "System", AppIcons.Monitor),
+    Triple("light", "Light", AppIcons.Sun),
+    Triple("dark", "Dark", AppIcons.Moon)
 )
 
 // Accent Color 选项数据
@@ -791,13 +806,14 @@ private val accentColorOptions = listOf(
 fun AppearanceMenu(
     visible: Boolean,
     selected: String,
+    anchorY: Float,
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit
 ) {
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(animationSpec = tween(150)),
-        exit = fadeOut(animationSpec = tween(150))
+        enter = fadeIn(animationSpec = tween(100)),
+        exit = fadeOut(animationSpec = tween(100))
     ) {
         Box(
             modifier = Modifier
@@ -806,36 +822,40 @@ fun AppearanceMenu(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = onDismiss
-                ),
-            contentAlignment = Alignment.BottomCenter
+                )
         ) {
             AnimatedVisibility(
                 visible = visible,
                 enter = slideInVertically(
-                    initialOffsetY = { it / 2 },
+                    initialOffsetY = { 20 },
                     animationSpec = tween(250, easing = androidx.compose.animation.core.EaseOutCubic)
                 ) + androidx.compose.animation.scaleIn(
                     initialScale = 0.95f,
                     animationSpec = tween(250, easing = androidx.compose.animation.core.EaseOutCubic)
                 ),
                 exit = slideOutVertically(
-                    targetOffsetY = { it / 2 },
+                    targetOffsetY = { 20 },
                     animationSpec = tween(200, easing = androidx.compose.animation.core.EaseInCubic)
                 ) + androidx.compose.animation.scaleOut(
                     targetScale = 0.95f,
                     animationSpec = tween(200, easing = androidx.compose.animation.core.EaseInCubic)
-                )
+                ),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 80.dp)
+                    .graphicsLayer {
+                        translationY = anchorY - 20
+                    }
             ) {
                 Surface(
                     modifier = Modifier
-                        .fillMaxWidth(0.85f)
-                        .padding(bottom = 120.dp),
-                    shape = RoundedCornerShape(20.dp),
+                        .widthIn(max = 200.dp),
+                    shape = RoundedCornerShape(16.dp),
                     color = Color(0xFFF2F2F7),
                     shadowElevation = 16.dp
                 ) {
                     Column(
-                        modifier = Modifier.padding(8.dp),
+                        modifier = Modifier.padding(6.dp),
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         appearanceOptions.forEach { (key, label, icon) ->
@@ -843,13 +863,13 @@ fun AppearanceMenu(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(RoundedCornerShape(10.dp))
                                     .background(Color.Transparent)
                                     .clickable {
                                         onSelect(key)
                                         onDismiss()
                                     }
-                                    .padding(horizontal = 12.dp, vertical = 12.dp)
+                                    .padding(horizontal = 10.dp, vertical = 10.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -858,7 +878,7 @@ fun AppearanceMenu(
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Icon(
                                             imageVector = icon,
@@ -868,14 +888,24 @@ fun AppearanceMenu(
                                         )
                                         Text(
                                             text = label,
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Normal,
+                                            fontSize = 15.sp,
+                                            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
                                             color = TextPrimary
                                         )
                                     }
 
-                                    // 选中打勾
-                                    if (isSelected) {
+                                    // 选中打勾 - 带动画
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = isSelected,
+                                        enter = androidx.compose.animation.scaleIn(
+                                            initialScale = 0f,
+                                            animationSpec = tween(200, easing = androidx.compose.animation.core.EaseOutBack)
+                                        ),
+                                        exit = androidx.compose.animation.scaleOut(
+                                            targetScale = 0f,
+                                            animationSpec = tween(150)
+                                        )
+                                    ) {
                                         Icon(
                                             imageVector = AppIcons.Check,
                                             contentDescription = null,
@@ -898,13 +928,14 @@ fun AppearanceMenu(
 fun AccentColorMenu(
     visible: Boolean,
     selected: String,
+    anchorY: Float,
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit
 ) {
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(animationSpec = tween(150)),
-        exit = fadeOut(animationSpec = tween(150))
+        enter = fadeIn(animationSpec = tween(100)),
+        exit = fadeOut(animationSpec = tween(100))
     ) {
         Box(
             modifier = Modifier
@@ -913,36 +944,40 @@ fun AccentColorMenu(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = onDismiss
-                ),
-            contentAlignment = Alignment.BottomCenter
+                )
         ) {
             AnimatedVisibility(
                 visible = visible,
                 enter = slideInVertically(
-                    initialOffsetY = { it / 2 },
+                    initialOffsetY = { 20 },
                     animationSpec = tween(250, easing = androidx.compose.animation.core.EaseOutCubic)
                 ) + androidx.compose.animation.scaleIn(
                     initialScale = 0.95f,
                     animationSpec = tween(250, easing = androidx.compose.animation.core.EaseOutCubic)
                 ),
                 exit = slideOutVertically(
-                    targetOffsetY = { it / 2 },
+                    targetOffsetY = { 20 },
                     animationSpec = tween(200, easing = androidx.compose.animation.core.EaseInCubic)
                 ) + androidx.compose.animation.scaleOut(
                     targetScale = 0.95f,
                     animationSpec = tween(200, easing = androidx.compose.animation.core.EaseInCubic)
-                )
+                ),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 80.dp)
+                    .graphicsLayer {
+                        translationY = anchorY - 20
+                    }
             ) {
                 Surface(
                     modifier = Modifier
-                        .fillMaxWidth(0.85f)
-                        .padding(bottom = 120.dp),
-                    shape = RoundedCornerShape(20.dp),
+                        .widthIn(max = 200.dp),
+                    shape = RoundedCornerShape(16.dp),
                     color = Color(0xFFF2F2F7),
                     shadowElevation = 16.dp
                 ) {
                     Column(
-                        modifier = Modifier.padding(8.dp),
+                        modifier = Modifier.padding(6.dp),
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         accentColorOptions.forEach { (key, color) ->
@@ -951,13 +986,13 @@ fun AccentColorMenu(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(RoundedCornerShape(10.dp))
                                     .background(Color.Transparent)
                                     .clickable {
                                         onSelect(key)
                                         onDismiss()
                                     }
-                                    .padding(horizontal = 12.dp, vertical = 12.dp)
+                                    .padding(horizontal = 10.dp, vertical = 10.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -966,7 +1001,7 @@ fun AccentColorMenu(
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         // 颜色圆点
                                         Box(
@@ -978,8 +1013,8 @@ fun AccentColorMenu(
 
                                         Text(
                                             text = key.replaceFirstChar { it.uppercase() },
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Normal,
+                                            fontSize = 15.sp,
+                                            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
                                             color = TextPrimary
                                         )
 
@@ -987,14 +1022,24 @@ fun AccentColorMenu(
                                         if (isPurple) {
                                             Text(
                                                 text = "· Plus",
-                                                fontSize = 14.sp,
+                                                fontSize = 13.sp,
                                                 color = TextSecondary
                                             )
                                         }
                                     }
 
-                                    // 选中打勾
-                                    if (isSelected) {
+                                    // 选中打勾 - 带动画
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = isSelected,
+                                        enter = androidx.compose.animation.scaleIn(
+                                            initialScale = 0f,
+                                            animationSpec = tween(200, easing = androidx.compose.animation.core.EaseOutBack)
+                                        ),
+                                        exit = androidx.compose.animation.scaleOut(
+                                            targetScale = 0f,
+                                            animationSpec = tween(150)
+                                        )
+                                    ) {
                                         Icon(
                                             imageVector = AppIcons.Check,
                                             contentDescription = null,
