@@ -805,17 +805,17 @@ fun MessageItem(
             if (reasoningText.isNotBlank()) {
                 Row(
                     modifier = Modifier
-                        .padding(bottom = 10.dp)
+                        .padding(bottom = 6.dp)
                         .pressableScale(
                             pressedScale = 0.98f,
                             onClick = { onShowReasoning(reasoningText) }
                         ),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
                         text = "Thinking",
-                        fontSize = 22.sp,
+                        fontSize = 16.sp,
                         fontFamily = SourceSans3,
                         fontWeight = FontWeight.Medium,
                         color = TextSecondary
@@ -824,7 +824,7 @@ fun MessageItem(
                         imageVector = AppIcons.ChevronRight,
                         contentDescription = null,
                         tint = TextSecondary,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(14.dp)
                     )
                 }
             }
