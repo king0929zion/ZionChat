@@ -140,6 +140,57 @@ class ChatApiClient {
             }
         }
     }.flowOn(Dispatchers.IO)
+
+    /**
+     * 图片生成 - 使用 DALL-E 或其他文生图模型
+     */
+    suspend fun generateImage(
+        provider: ProviderConfig,
+        modelId: String,
+        prompt: String,
+        extraHeaders: List<HttpHeader> = emptyList(),
+        size: String = "1024x1024",
+        quality: String = "standard",
+        n: Int = 1
+    ): Result<String> {
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val url = provider.apiUrl.trimEnd('/') + "/images/generations"
+                val body = gson.toJson(
+                    mapOf(
+                        "model" to modelId,
+                        "prompt" to prompt,
+                        "n" to n,
+                        "size" to size,
+                        "quality" to quality,
+                        "response_format" to "url"
+                    )
+                )
+                val requestBuilder = Request.Builder()
+                    .url(url)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Authorization", "Bearer ${provider.apiKey}")
+                extraHeaders
+                    .filter { it.key.isNotBlank() }
+                    .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
+                val request = requestBuilder
+                    .post(body.toRequestBody(jsonMediaType))
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    val raw = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        error("HTTP ${response.code}: $raw")
+                    }
+
+                    val parsed = gson.fromJson(raw, ImageGenerationResponse::class.java)
+                    parsed.data?.firstOrNull()?.url
+                        ?: parsed.data?.firstOrNull()?.b64_json
+                        ?: error("No image URL in response")
+                }
+            }
+        }
+    }
 }
 
 data class OpenAIChatCompletionsResponse(
@@ -173,4 +224,14 @@ data class OpenAIStreamChoice(
 
 data class OpenAIStreamDelta(
     val content: String?
+)
+
+// 图片生成相关数据类
+data class ImageGenerationResponse(
+    val data: List<ImageData>?
+)
+
+data class ImageData(
+    val url: String?,
+    val b64_json: String?
 )

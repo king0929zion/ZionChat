@@ -90,6 +90,7 @@ fun ChatScreen(navController: NavController) {
     val avatarIndex by repository.avatarIndexFlow.collectAsState(initial = 0)
     val customInstructions by repository.customInstructionsFlow.collectAsState(initial = "")
     val defaultChatModelId by repository.defaultChatModelIdFlow.collectAsState(initial = null)
+    val defaultImageModelId by repository.defaultImageModelIdFlow.collectAsState(initial = null)
 
     // 本地优先的会话选择：避免 DataStore 状态滞后导致“首条消息消失/会话跳回”
     var preferredConversationId by remember { mutableStateOf<String?>(null) }
@@ -341,11 +342,8 @@ fun ChatScreen(navController: NavController) {
             val latestConversation = refreshedConversations.firstOrNull { it.id == safeConversationId }
             val currentMessages = latestConversation?.messages.orEmpty()
 
-            val requestMessages = buildList {
-                if (systemMessage != null) add(systemMessage)
-                addAll(currentMessages)
-                if (currentMessages.lastOrNull()?.id != userMessage.id) add(userMessage)
-            }
+            // 检查是否为图片生成请求
+            val isImageGeneration = selectedTool == "image"
 
             // 流式输出
             val assistantMessage = Message(role = "assistant", content = "")
@@ -367,27 +365,46 @@ fun ChatScreen(navController: NavController) {
             }
 
             try {
-                val fullContent = StringBuilder()
-                var lastUiUpdateMs = 0L
-
-                chatApiClient.chatCompletionsStream(
-                    provider = provider,
-                    modelId = extractRemoteModelId(selectedModel.id),
-                    messages = requestMessages,
-                    extraHeaders = selectedModel.headers
-                ).collect { chunk ->
-                    fullContent.append(chunk)
-                    val now = System.currentTimeMillis()
-                    if (now - lastUiUpdateMs >= 33L || fullContent.length % 80 == 0) {
-                        updateAssistantContent(fullContent.toString())
-                        lastUiUpdateMs = now
+                if (isImageGeneration) {
+                    // 图片生成流程
+                    handleImageGeneration(
+                        repository = repository,
+                        chatApiClient = chatApiClient,
+                        safeConversationId = safeConversationId,
+                        userPrompt = trimmed,
+                        assistantMessage = assistantMessage,
+                        updateAssistantContent = { updateAssistantContent(it) }
+                    )
+                } else {
+                    // 普通聊天流程
+                    val requestMessages = buildList {
+                        if (systemMessage != null) add(systemMessage)
+                        addAll(currentMessages)
+                        if (currentMessages.lastOrNull()?.id != userMessage.id) add(userMessage)
                     }
-                }
 
-                val finalContent = fullContent.toString()
-                updateAssistantContent(finalContent)
-                if (finalContent.isNotBlank()) {
-                    repository.appendMessage(safeConversationId, assistantMessage.copy(content = finalContent))
+                    val fullContent = StringBuilder()
+                    var lastUiUpdateMs = 0L
+
+                    chatApiClient.chatCompletionsStream(
+                        provider = provider,
+                        modelId = extractRemoteModelId(selectedModel.id),
+                        messages = requestMessages,
+                        extraHeaders = selectedModel.headers
+                    ).collect { chunk ->
+                        fullContent.append(chunk)
+                        val now = System.currentTimeMillis()
+                        if (now - lastUiUpdateMs >= 33L || fullContent.length % 80 == 0) {
+                            updateAssistantContent(fullContent.toString())
+                            lastUiUpdateMs = now
+                        }
+                    }
+
+                    val finalContent = fullContent.toString()
+                    updateAssistantContent(finalContent)
+                    if (finalContent.isNotBlank()) {
+                        repository.appendMessage(safeConversationId, assistantMessage.copy(content = finalContent))
+                    }
                 }
             } catch (e: Exception) {
                 val errorMsg = "Request failed: ${e.message ?: e.toString()}"
@@ -397,8 +414,87 @@ fun ChatScreen(navController: NavController) {
                 isStreaming = false
                 streamingMessageId = null
                 streamingConversationId = null
+                selectedTool = null // 清除选中的工具
             }
         }
+    }
+
+    // 图片生成处理函数
+    suspend fun handleImageGeneration(
+        repository: com.zionchat.app.data.AppRepository,
+        chatApiClient: com.zionchat.app.data.ChatApiClient,
+        safeConversationId: String,
+        userPrompt: String,
+        assistantMessage: com.zionchat.app.data.Message,
+        updateAssistantContent: (String) -> Unit
+    ) {
+        // 显示正在生成的提示
+        updateAssistantContent("🎨 Generating image...")
+
+        // 获取生图模型配置
+        val imageModelId = repository.defaultImageModelIdFlow.first()
+        if (imageModelId.isNullOrBlank()) {
+            updateAssistantContent("❌ Please configure Image Model in Settings → Default model before generating images.")
+            repository.appendMessage(
+                safeConversationId,
+                assistantMessage.copy(content = "Please configure Image Model in Settings → Default model before generating images.")
+            )
+            return
+        }
+
+        val allModels = repository.modelsFlow.first()
+        val imageModel = allModels.firstOrNull { it.id == imageModelId }
+            ?: allModels.firstOrNull { extractRemoteModelId(it.id) == imageModelId }
+        if (imageModel == null) {
+            updateAssistantContent("❌ Image model not found: $imageModelId. Enable or add it in Models.")
+            repository.appendMessage(
+                safeConversationId,
+                assistantMessage.copy(content = "Image model not found: $imageModelId. Enable or add it in Models.")
+            )
+            return
+        }
+
+        val providerList = repository.providersFlow.first()
+        val provider = imageModel.providerId?.let { pid -> providerList.firstOrNull { it.id == pid } }
+            ?: providerList.firstOrNull()
+        if (provider == null || provider.apiUrl.isBlank() || provider.apiKey.isBlank()) {
+            updateAssistantContent("❌ Please add a provider with valid API URL and API Key.")
+            repository.appendMessage(
+                safeConversationId,
+                assistantMessage.copy(content = "Please add a provider with valid API URL and API Key.")
+            )
+            return
+        }
+
+        // 调用图片生成API
+        val result = chatApiClient.generateImage(
+            provider = provider,
+            modelId = extractRemoteModelId(imageModel.id),
+            prompt = userPrompt,
+            extraHeaders = imageModel.headers,
+            size = "1024x1024",
+            quality = "standard",
+            n = 1
+        )
+
+        result.fold(
+            onSuccess = { imageUrl ->
+                val markdownImage = "![Generated Image]($imageUrl)"
+                updateAssistantContent(markdownImage)
+                repository.appendMessage(
+                    safeConversationId,
+                    assistantMessage.copy(content = markdownImage)
+                )
+            },
+            onFailure = { error ->
+                val errorMsg = "❌ Image generation failed: ${error.message ?: error.toString()}"
+                updateAssistantContent(errorMsg)
+                repository.appendMessage(
+                    safeConversationId,
+                    assistantMessage.copy(content = errorMsg)
+                )
+            }
+        )
     }
 
     val displayName = nickname.takeIf { it.isNotBlank() } ?: "Kendall Williamson"
