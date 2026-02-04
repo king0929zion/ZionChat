@@ -14,14 +14,12 @@
 ### Phase 1：OAuth 核心可用性与兼容性（优先级最高）
 - 修复 Codex `/responses` 400：严格对齐 `Content-Type: application/json`（不带 charset），并对齐 `CLIProxyAPI` 的请求头行为。
 - 修复 Codex 模型列表：优先遵循 `CLIProxyAPI` 的“静态兜底”策略；动态拉取失败时不应导致列表为空。
-- 修复 Gemini CLI OAuth：目前 token 交换可能要求 `client_secret`（会报 `client_secret is missing!`）。
-  - 方案：**不把 secret 写进仓库**；通过 `BuildConfig` 从 CI 环境变量注入（`GEMINI_CLI_CLIENT_SECRET`），缺失时给出明确错误提示。
 - iFlow 模型列表：兼容更多 `/models` 返回结构；必要时提供静态兜底，避免空列表。
-- 统一 OAuth Provider：Codex / Antigravity / iFlow / Gemini CLI 的 OAuth 流程与存储字段；补齐 token 刷新策略（失败自动刷新并重试，成功后回写本地存储）。
+- 统一 OAuth Provider：Codex / iFlow 的 OAuth 流程与存储字段；补齐 token 刷新策略（失败自动刷新并重试，成功后回写本地存储）。
 
 ### Phase 2：OAuth Provider 与普通 Provider 行为一致（不额外入口）
 - 在“Model services”页去掉单独的 “Connect with OAuth” 入口。
-- 将 Codex / Antigravity / iFlow / Gemini CLI 作为内置供应商展示，右上角显示 “OAuth” 标签。
+- 将 Codex / iFlow 作为内置供应商展示，右上角显示 “OAuth” 标签。
 - 进入 Provider 配置页时：
   - OAuth 供应商显示“已登录/未登录”与“连接/断开”操作；
   - 不再要求选择类型/填写 API Key/URL；

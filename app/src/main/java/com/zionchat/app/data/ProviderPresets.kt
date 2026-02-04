@@ -45,20 +45,6 @@ val DEFAULT_PROVIDER_PRESETS: List<ProviderPreset> = listOf(
         iconAsset = "gemini-color.svg"
     ),
     ProviderPreset(
-        id = "gemini-cli",
-        name = "Gemini CLI",
-        type = "gemini-cli",
-        apiUrl = "https://cloudcode-pa.googleapis.com",
-        iconAsset = "gemini-color.svg"
-    ),
-    ProviderPreset(
-        id = "antigravity",
-        name = "Antigravity",
-        type = "antigravity",
-        apiUrl = "https://daily-cloudcode-pa.googleapis.com",
-        iconAsset = "gemini-color.svg"
-    ),
-    ProviderPreset(
         id = "minimax",
         name = "MiniMax",
         type = "openai",

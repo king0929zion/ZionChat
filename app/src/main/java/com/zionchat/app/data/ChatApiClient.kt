@@ -176,17 +176,13 @@ class ChatApiClient {
 
             requestBuilder
                 .header("Accept", "application/json")
-                .header("Authorization", "Bearer ${provider.apiKey}")
-                .header("Openai-Beta", "responses=experimental")
-                .header("Version", "0.21.0")
-                .header("Session_id", UUID.randomUUID().toString())
+                .header("authorization", "Bearer ${provider.apiKey}")
+                .header("originator", "codex_cli_rs")
                 .header("User-Agent", CODEX_USER_AGENT)
-                .header("Connection", "Keep-Alive")
 
             if (isOAuthToken) {
-                requestBuilder.header("Originator", "codex_cli_rs")
                 provider.oauthAccountId?.trim()?.takeIf { it.isNotBlank() }?.let { accountId ->
-                    requestBuilder.header("Chatgpt-Account-Id", accountId)
+                    requestBuilder.header("chatgpt-account-id", accountId)
                 }
             }
 
@@ -494,8 +490,7 @@ class ChatApiClient {
                 null
             }
 
-        val includeList =
-            if (reasoningPayload != null) listOf("reasoning.encrypted_content") else emptyList()
+        val includeList = listOf("reasoning.encrypted_content")
 
         val supportsParallelToolCalls = meta?.supportsParallelToolCalls ?: false
 
@@ -570,22 +565,15 @@ class ChatApiClient {
 
         requestBuilder
             .header("Content-Type", "application/json")
-            .header("Authorization", "Bearer ${provider.apiKey}")
+            .header("authorization", "Bearer ${provider.apiKey}")
             .header("Accept", "text/event-stream")
-            .header("Openai-Beta", "responses=experimental")
-            .header("Version", "0.21.0")
-            .header("Session_id", conversationId?.trim()?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString())
+            .header("originator", "codex_cli_rs")
+            .header("session_id", conversationId?.trim()?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString())
             .header("User-Agent", CODEX_USER_AGENT)
-            .header("Connection", "Keep-Alive")
-
-        conversationId?.trim()?.takeIf { it.isNotBlank() }?.let { cid ->
-            requestBuilder.header("Conversation_id", cid)
-        }
 
         if (isOAuthToken) {
-            requestBuilder.header("Originator", "codex_cli_rs")
             provider.oauthAccountId?.trim()?.takeIf { it.isNotBlank() }?.let { accountId ->
-                requestBuilder.header("Chatgpt-Account-Id", accountId)
+                requestBuilder.header("chatgpt-account-id", accountId)
             }
         }
 

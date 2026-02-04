@@ -11,65 +11,63 @@ class ProviderAuthManager(
         val oauthProvider = provider.oauthProvider?.trim()?.lowercase().orEmpty()
         if (oauthProvider.isBlank()) return provider
 
-        val refreshToken = provider.oauthRefreshToken?.trim().orEmpty()
-        if (refreshToken.isBlank()) return provider
+        var patched = provider
+        if (oauthProvider == "codex") {
+            val needsAccountId = patched.oauthAccountId.isNullOrBlank()
+            val needsEmail = patched.oauthEmail.isNullOrBlank()
+            if (needsAccountId || needsEmail) {
+                val tokenForFallback = patched.oauthAccessToken ?: patched.apiKey
+                val accountId = oauthClient.extractCodexAccountId(patched.oauthIdToken, tokenForFallback)
+                val email = oauthClient.extractCodexEmail(patched.oauthIdToken, tokenForFallback)
+                val updated =
+                    patched.copy(
+                        oauthAccountId = if (needsAccountId) accountId ?: patched.oauthAccountId else patched.oauthAccountId,
+                        oauthEmail = if (needsEmail) email ?: patched.oauthEmail else patched.oauthEmail
+                    )
+                if (updated != patched) {
+                    patched = updated
+                    withContext(Dispatchers.IO) { repository.upsertProvider(updated) }
+                }
+            }
+        }
 
-        val expiresAtMs = provider.oauthExpiresAtMs ?: Long.MAX_VALUE
+        val refreshToken = patched.oauthRefreshToken?.trim().orEmpty()
+        if (refreshToken.isBlank()) return patched
+
+        val expiresAtMs = patched.oauthExpiresAtMs ?: Long.MAX_VALUE
         val now = System.currentTimeMillis()
         val shouldRefresh = forceRefresh || expiresAtMs <= now + EXPIRY_SKEW_MS
-        if (!shouldRefresh) return provider
+        if (!shouldRefresh) return patched
 
         return withContext(Dispatchers.IO) {
             val updated =
                 when (oauthProvider) {
                     "codex" ->
                         oauthClient.refreshCodex(refreshToken).getOrThrow().let { token ->
-                            provider.copy(
+                            patched.copy(
                                 apiKey = token.accessToken,
                                 oauthAccessToken = token.accessToken,
-                                oauthRefreshToken = token.refreshToken ?: provider.oauthRefreshToken,
-                                oauthIdToken = token.idToken ?: provider.oauthIdToken,
-                                oauthAccountId = token.accountId ?: provider.oauthAccountId,
-                                oauthEmail = token.email ?: provider.oauthEmail,
+                                oauthRefreshToken = token.refreshToken ?: patched.oauthRefreshToken,
+                                oauthIdToken = token.idToken ?: patched.oauthIdToken,
+                                oauthAccountId = token.accountId ?: patched.oauthAccountId,
+                                oauthEmail = token.email ?: patched.oauthEmail,
                                 oauthExpiresAtMs = token.expiresAtMs
                             )
                         }
                     "iflow" ->
                         oauthClient.refreshIFlow(refreshToken).getOrThrow().let { token ->
-                            provider.copy(
+                            patched.copy(
                                 apiKey = token.apiKey,
                                 oauthAccessToken = token.accessToken,
-                                oauthRefreshToken = token.refreshToken ?: provider.oauthRefreshToken,
-                                oauthEmail = token.email ?: provider.oauthEmail,
+                                oauthRefreshToken = token.refreshToken ?: patched.oauthRefreshToken,
+                                oauthEmail = token.email ?: patched.oauthEmail,
                                 oauthExpiresAtMs = token.expiresAtMs
                             )
                         }
-                    "antigravity" ->
-                        oauthClient.refreshAntigravity(refreshToken).getOrThrow().let { token ->
-                            provider.copy(
-                                apiKey = token.accessToken,
-                                oauthAccessToken = token.accessToken,
-                                oauthRefreshToken = token.refreshToken ?: provider.oauthRefreshToken,
-                                oauthEmail = token.email ?: provider.oauthEmail,
-                                oauthProjectId = token.projectId ?: provider.oauthProjectId,
-                                oauthExpiresAtMs = token.expiresAtMs
-                            )
-                        }
-                    "gemini-cli" ->
-                        oauthClient.refreshGeminiCli(refreshToken).getOrThrow().let { token ->
-                            provider.copy(
-                                apiKey = token.accessToken,
-                                oauthAccessToken = token.accessToken,
-                                oauthRefreshToken = token.refreshToken ?: provider.oauthRefreshToken,
-                                oauthEmail = token.email ?: provider.oauthEmail,
-                                oauthProjectId = token.projectId ?: provider.oauthProjectId,
-                                oauthExpiresAtMs = token.expiresAtMs
-                            )
-                        }
-                    else -> provider
+                    else -> patched
                 }
 
-            if (updated != provider) {
+            if (updated != patched) {
                 repository.upsertProvider(updated)
             }
             updated
