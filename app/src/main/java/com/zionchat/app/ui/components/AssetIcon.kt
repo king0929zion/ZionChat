@@ -20,7 +20,6 @@ fun AssetIcon(
     val model = remember(assetFileName, context) {
         ImageRequest.Builder(context)
             .data("file:///android_asset/icons/$assetFileName")
-            .crossfade(false)
             .build()
     }
     SubcomposeAsyncImage(
