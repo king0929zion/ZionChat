@@ -182,7 +182,7 @@ class ChatApiClient {
 
             if (isOAuthToken) {
                 provider.oauthAccountId?.trim()?.takeIf { it.isNotBlank() }?.let { accountId ->
-                    requestBuilder.header("chatgpt-account-id", accountId)
+                    requestBuilder.header("ChatGPT-Account-ID", accountId)
                 }
             }
 
@@ -463,6 +463,7 @@ class ChatApiClient {
         conversationId: String?
     ): Flow<ChatStreamDelta> = flow {
         val url = normalizeCodexBaseUrl(provider) + "/responses"
+        val sessionId = conversationId?.trim()?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
 
         val meta = codexModelCache[modelId] ?: runCatching {
             // Best-effort: refresh cache once if missing.
@@ -490,7 +491,8 @@ class ChatApiClient {
                 null
             }
 
-        val includeList = listOf("reasoning.encrypted_content")
+        val includeList =
+            if (reasoningPayload != null) listOf("reasoning.encrypted_content") else emptyList()
 
         val supportsParallelToolCalls = meta?.supportsParallelToolCalls ?: false
 
@@ -531,22 +533,26 @@ class ChatApiClient {
                 )
             }
 
-        val body =
-            gson.toJson(
-                mapOf(
-                    "model" to modelId,
-                    "instructions" to baseInstructions,
-                    "tools" to emptyList<Any>(),
-                    "tool_choice" to "auto",
-                    "stream" to true,
-                    "store" to false,
-                    "input" to input,
-                    "parallel_tool_calls" to supportsParallelToolCalls,
-                    "reasoning" to reasoningPayload,
-                    "include" to includeList,
-                    "prompt_cache_key" to conversationId?.trim()?.takeIf { it.isNotBlank() }
-                )
-            )
+        val requestPayload = mutableMapOf<String, Any>(
+            "model" to modelId,
+            "instructions" to baseInstructions,
+            "tools" to emptyList<Any>(),
+            "tool_choice" to "auto",
+            "stream" to true,
+            "store" to false,
+            "input" to input,
+            "parallel_tool_calls" to supportsParallelToolCalls,
+            "prompt_cache_key" to sessionId
+        )
+
+        if (reasoningPayload != null) {
+            requestPayload["reasoning"] = reasoningPayload
+        }
+        if (includeList.isNotEmpty()) {
+            requestPayload["include"] = includeList
+        }
+
+        val body = gson.toJson(requestPayload)
 
         val requestBuilder =
             Request.Builder()
@@ -568,12 +574,12 @@ class ChatApiClient {
             .header("authorization", "Bearer ${provider.apiKey}")
             .header("Accept", "text/event-stream")
             .header("originator", "codex_cli_rs")
-            .header("session_id", conversationId?.trim()?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString())
+            .header("session_id", sessionId)
             .header("User-Agent", CODEX_USER_AGENT)
 
         if (isOAuthToken) {
             provider.oauthAccountId?.trim()?.takeIf { it.isNotBlank() }?.let { accountId ->
-                requestBuilder.header("chatgpt-account-id", accountId)
+                requestBuilder.header("ChatGPT-Account-ID", accountId)
             }
         }
 

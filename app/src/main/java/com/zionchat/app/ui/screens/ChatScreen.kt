@@ -1045,16 +1045,16 @@ fun MessageItem(
                 ) {
                     Text(
                         text = "Thinking",
-                        fontSize = 13.sp,
+                        fontSize = 15.sp,
                         fontFamily = SourceSans3,
-                        fontWeight = FontWeight.Medium,
+                        fontWeight = FontWeight.SemiBold,
                         color = ThinkingLabelColor
                     )
                     Icon(
                         imageVector = AppIcons.ChevronRight,
                         contentDescription = null,
                         tint = ThinkingLabelColor,
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(14.dp)
                     )
                 }
             }
@@ -1705,7 +1705,7 @@ fun QuickActionButton(
 ) {
     Column(
         modifier = modifier
-            .background(GrayLighter, RoundedCornerShape(16.dp))
+            .background(ChatBackground, RoundedCornerShape(16.dp))
             .pressableScale(pressedScale = 0.95f, onClick = onClick)
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
