@@ -42,17 +42,28 @@ fun McpDetailScreen(
     val scope = rememberCoroutineScope()
     val mcpClient = remember { McpClient() }
     
-    val mcpList by repository.mcpListFlow.collectAsState(initial = emptyList())
-    val mcp = mcpList.firstOrNull { it.id == mcpId }
+    val mcpListOrNull by produceState<List<McpConfig>?>(initialValue = null, repository) {
+        repository.mcpListFlow.collect { value = it }
+    }
+    val mcp = mcpListOrNull?.firstOrNull { it.id == mcpId }
     
     var showEditModal by remember { mutableStateOf(false) }
     var showToolDetail by remember { mutableStateOf<McpTool?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     
-    if (mcp == null) {
-        LaunchedEffect(Unit) {
+    LaunchedEffect(mcpListOrNull, mcpId) {
+        if (mcpListOrNull != null && mcp == null) {
             navController.navigateUp()
         }
+    }
+
+    if (mcpListOrNull == null) {
+        Box(modifier = Modifier.fillMaxSize().background(Background))
+        return
+    }
+
+    if (mcp == null) {
+        Box(modifier = Modifier.fillMaxSize().background(Background))
         return
     }
     

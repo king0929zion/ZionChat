@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -38,45 +39,44 @@ fun PersonalizationScreen(navController: NavController) {
 
     val storedNickname by repository.nicknameFlow.collectAsState(initial = "")
     val storedInstructions by repository.customInstructionsFlow.collectAsState(initial = "")
+    val memories by repository.memoriesFlow.collectAsState(initial = emptyList())
 
-    var initialized by rememberSaveable { mutableStateOf(false) }
     var nickname by rememberSaveable { mutableStateOf("") }
     var instructions by rememberSaveable { mutableStateOf("") }
+    var nicknameFocused by remember { mutableStateOf(false) }
+    var instructionsFocused by remember { mutableStateOf(false) }
 
     val latestStoredNickname by rememberUpdatedState(storedNickname)
     val latestStoredInstructions by rememberUpdatedState(storedInstructions)
 
-    LaunchedEffect(storedNickname, storedInstructions, initialized) {
-        if (!initialized && (storedNickname.isNotBlank() || storedInstructions.isNotBlank())) {
+    LaunchedEffect(storedNickname, nicknameFocused) {
+        if (!nicknameFocused && nickname != storedNickname) {
             nickname = storedNickname
-            instructions = storedInstructions
-            initialized = true
-        }
-        if (!initialized && storedNickname.isBlank() && storedInstructions.isBlank()) {
-            initialized = true
         }
     }
 
-    LaunchedEffect(initialized) {
-        if (!initialized) return@LaunchedEffect
+    LaunchedEffect(storedInstructions, instructionsFocused) {
+        if (!instructionsFocused && instructions != storedInstructions) {
+            instructions = storedInstructions
+        }
+    }
 
+    LaunchedEffect(Unit) {
         snapshotFlow { nickname }
             .map { it.trimEnd() }
             .distinctUntilChanged()
             .filter { it != latestStoredNickname }
             .onEach { value -> repository.setNickname(value) }
-            .collect { }
+            .collect()
     }
 
-    LaunchedEffect(initialized) {
-        if (!initialized) return@LaunchedEffect
-
+    LaunchedEffect(Unit) {
         snapshotFlow { instructions }
             .map { it.trimEnd() }
             .distinctUntilChanged()
             .filter { it != latestStoredInstructions }
             .onEach { value -> repository.setCustomInstructions(value) }
-            .collect { }
+            .collect()
     }
 
     Column(
@@ -107,7 +107,9 @@ fun PersonalizationScreen(navController: NavController) {
                     BasicTextField(
                         value = nickname,
                         onValueChange = { nickname = it },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { nicknameFocused = it.isFocused },
                         textStyle = TextStyle(fontSize = 16.sp, color = TextPrimary),
                         singleLine = true,
                         cursorBrush = SolidColor(TextPrimary),
@@ -143,7 +145,8 @@ fun PersonalizationScreen(navController: NavController) {
                         onValueChange = { instructions = it },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 280.dp),
+                            .heightIn(min = 280.dp)
+                            .onFocusChanged { instructionsFocused = it.isFocused },
                         textStyle = TextStyle(
                             fontSize = 16.sp,
                             color = TextPrimary,
@@ -200,7 +203,7 @@ fun PersonalizationScreen(navController: NavController) {
                         modifier = Modifier.weight(1f)
                     )
                     Text(
-                        text = "12 memories",
+                        text = "${memories.size} memories",
                         fontSize = 15.sp,
                         color = TextSecondary
                     )

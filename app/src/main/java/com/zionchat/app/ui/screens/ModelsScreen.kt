@@ -84,6 +84,7 @@ import com.zionchat.app.ui.theme.SourceSans3
 import com.zionchat.app.ui.theme.Surface
 import com.zionchat.app.ui.theme.TextPrimary
 import com.zionchat.app.ui.theme.TextSecondary
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import androidx.compose.material3.Surface as M3Surface
@@ -126,16 +127,25 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
             emptyList()
         }
         if (modelIds.isNotEmpty()) {
-            repository.upsertModels(
-                modelIds.map { idValue ->
-                    ModelConfig(
-                        id = buildModelStorageId(provider.id, idValue),
-                        displayName = idValue,
-                        enabled = false,
-                        providerId = provider.id
-                    )
-                }
-            )
+            val existingModels = repository.modelsFlow.first()
+            val existingIds = existingModels.map { it.id }.toSet()
+            val toInsert =
+                modelIds
+                    .map { idValue -> idValue.trim() }
+                    .filter { it.isNotBlank() }
+                    .map { idValue -> buildModelStorageId(provider.id, idValue) to idValue }
+                    .filter { (storageId, _) -> storageId !in existingIds }
+                    .map { (storageId, remoteId) ->
+                        ModelConfig(
+                            id = storageId,
+                            displayName = remoteId,
+                            enabled = false,
+                            providerId = provider.id
+                        )
+                    }
+            if (toInsert.isNotEmpty()) {
+                repository.upsertModels(toInsert)
+            }
         }
 
         fetchedSignature = signature

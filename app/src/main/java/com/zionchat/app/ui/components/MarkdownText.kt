@@ -1,5 +1,9 @@
 package com.zionchat.app.ui.components
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Base64
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -129,18 +134,43 @@ private fun MarkdownParagraph(
             images.forEach { img ->
                 val url = img.destination.orEmpty()
                 if (url.isNotBlank()) {
-                    AsyncImage(
-                        model = url,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp)),
-                        contentScale = ContentScale.FillWidth
-                    )
+                    val modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                    val dataBitmap = remember(url) { decodeBitmapFromDataUrl(url) }
+                    if (dataBitmap != null) {
+                        Image(
+                            bitmap = dataBitmap.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = modifier,
+                            contentScale = ContentScale.FillWidth
+                        )
+                    } else {
+                        AsyncImage(
+                            model = url,
+                            contentDescription = null,
+                            modifier = modifier,
+                            contentScale = ContentScale.FillWidth
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+private fun decodeBitmapFromDataUrl(dataUrl: String): Bitmap? {
+    val url = dataUrl.trim()
+    if (!url.startsWith("data:image", ignoreCase = true)) return null
+    val commaIndex = url.indexOf(',')
+    if (commaIndex < 0) return null
+    val meta = url.substring(0, commaIndex)
+    if (!meta.contains(";base64", ignoreCase = true)) return null
+    val payload = url.substring(commaIndex + 1)
+    if (payload.isBlank()) return null
+    val decoded = runCatching { Base64.decode(payload, Base64.DEFAULT) }.getOrNull() ?: return null
+    if (decoded.isEmpty()) return null
+    return runCatching { BitmapFactory.decodeByteArray(decoded, 0, decoded.size) }.getOrNull()
 }
 
 @Composable

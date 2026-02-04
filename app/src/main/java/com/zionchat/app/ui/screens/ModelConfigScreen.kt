@@ -47,6 +47,7 @@ import androidx.navigation.NavController
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.data.HttpHeader
 import com.zionchat.app.data.ModelConfig
+import com.zionchat.app.data.isCodexProvider
 import com.zionchat.app.ui.components.BottomFadeScrim
 import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.components.pressableScale
@@ -68,8 +69,16 @@ fun ModelConfigScreen(
     val repository = LocalAppRepository.current
     val scope = rememberCoroutineScope()
 
+    val providers by repository.providersFlow.collectAsState(initial = emptyList())
     val models by repository.modelsFlow.collectAsState(initial = emptyList())
     val existingModel = remember(models, modelId) { models.firstOrNull { it.id == modelId } }
+    val provider = remember(existingModel?.providerId, providers) {
+        val pid = existingModel?.providerId?.trim().orEmpty()
+        if (pid.isBlank()) null else providers.firstOrNull { it.id == pid }
+    }
+    val supportsThinkingDepth = remember(provider?.id, provider?.apiUrl, provider?.type, provider?.presetId) {
+        provider?.isCodexProvider() == true
+    }
 
     var modelName by remember(existingModel?.id) { mutableStateOf(existingModel?.displayName.orEmpty()) }
     var selectedModality by remember(existingModel?.id) { mutableStateOf("text-image") }
@@ -99,7 +108,7 @@ fun ModelConfigScreen(
                     headers = headers
                         .filter { it.key.isNotBlank() }
                         .map { HttpHeader(it.key.trim(), it.value.trim()) },
-                    reasoningEffort = reasoningEffort
+                    reasoningEffort = reasoningEffort.takeIf { supportsThinkingDepth }
                 )
             )
             navController.popBackStack()
@@ -210,50 +219,52 @@ fun ModelConfigScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "Thinking Depth",
-                    fontSize = 13.sp,
-                    fontFamily = SourceSans3,
-                    color = TextSecondary
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(GrayLighter, RoundedCornerShape(20.dp))
-                        .padding(6.dp)
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    ReasoningOptionChip(
-                        text = "Auto",
-                        selected = reasoningEffort == null,
-                        onClick = { reasoningEffort = null }
+                if (supportsThinkingDepth) {
+                    Text(
+                        text = "Thinking Depth",
+                        fontSize = 13.sp,
+                        fontFamily = SourceSans3,
+                        color = TextSecondary
                     )
-                    ReasoningOptionChip(
-                        text = "Minimal",
-                        selected = reasoningEffort == "minimal",
-                        onClick = { reasoningEffort = "minimal" }
-                    )
-                    ReasoningOptionChip(
-                        text = "Low",
-                        selected = reasoningEffort == "low",
-                        onClick = { reasoningEffort = "low" }
-                    )
-                    ReasoningOptionChip(
-                        text = "Medium",
-                        selected = reasoningEffort == "medium",
-                        onClick = { reasoningEffort = "medium" }
-                    )
-                    ReasoningOptionChip(
-                        text = "High",
-                        selected = reasoningEffort == "high",
-                        onClick = { reasoningEffort = "high" }
-                    )
-                    ReasoningOptionChip(
-                        text = "XHigh",
-                        selected = reasoningEffort == "xhigh",
-                        onClick = { reasoningEffort = "xhigh" }
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(GrayLighter, RoundedCornerShape(20.dp))
+                            .padding(6.dp)
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        ReasoningOptionChip(
+                            text = "Auto",
+                            selected = reasoningEffort == null,
+                            onClick = { reasoningEffort = null }
+                        )
+                        ReasoningOptionChip(
+                            text = "Minimal",
+                            selected = reasoningEffort == "minimal",
+                            onClick = { reasoningEffort = "minimal" }
+                        )
+                        ReasoningOptionChip(
+                            text = "Low",
+                            selected = reasoningEffort == "low",
+                            onClick = { reasoningEffort = "low" }
+                        )
+                        ReasoningOptionChip(
+                            text = "Medium",
+                            selected = reasoningEffort == "medium",
+                            onClick = { reasoningEffort = "medium" }
+                        )
+                        ReasoningOptionChip(
+                            text = "High",
+                            selected = reasoningEffort == "high",
+                            onClick = { reasoningEffort = "high" }
+                        )
+                        ReasoningOptionChip(
+                            text = "XHigh",
+                            selected = reasoningEffort == "xhigh",
+                            onClick = { reasoningEffort = "xhigh" }
+                        )
+                    }
                 }
             }
 
