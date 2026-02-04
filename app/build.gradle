@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace 'com.zionchat.app'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.zionchat.app"
         minSdk 24
-        targetSdk 34
+        targetSdk 35
         versionCode 94
         versionName "0.18.56"
 
