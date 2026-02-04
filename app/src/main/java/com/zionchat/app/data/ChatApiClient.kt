@@ -22,6 +22,7 @@ class ChatApiClient {
     private val client = OkHttpClient()
     private val gson = Gson()
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+    private val strictJsonMediaType = "application/json".toMediaType()
     private val markdownImageRegex = Regex("!\\[[^\\]]*\\]\\(([^)]+)\\)")
 
     suspend fun webSearch(query: String): Result<String> {
@@ -113,9 +114,9 @@ class ChatApiClient {
     ): Result<List<String>> {
         return withContext(Dispatchers.IO) {
             when (provider.type.trim().lowercase()) {
-                "codex" -> runCatching { listCodexModels(provider) }
-                "antigravity" -> runCatching { listAntigravityModels(provider) }
-                "gemini-cli" -> runCatching { listGeminiCliModels(provider) }
+                "codex" -> runCatching { listCodexModels(provider, extraHeaders) }
+                "antigravity" -> runCatching { listAntigravityModels(provider, extraHeaders) }
+                "gemini-cli" -> runCatching { listGeminiCliModels(provider, extraHeaders) }
                 else ->
                     runCatching {
                         val url = provider.apiUrl.trimEnd('/') + "/models"
@@ -137,15 +138,14 @@ class ChatApiClient {
                             if (!response.isSuccessful) {
                                 error("HTTP ${response.code}: $raw")
                             }
-                            val parsed = gson.fromJson(raw, OpenAIModelsResponse::class.java)
-                            parsed.data?.mapNotNull { it.id?.trim()?.takeIf { id -> id.isNotBlank() } }.orEmpty()
+                            parseModelIdsFromJson(raw)
                         }
                     }
             }
         }
     }
 
-    private fun listCodexModels(provider: ProviderConfig): List<String> {
+    private fun listCodexModels(provider: ProviderConfig, extraHeaders: List<HttpHeader>): List<String> {
         val base = provider.apiUrl.trimEnd('/')
         val endpoints =
             listOf(
@@ -177,6 +177,10 @@ class ChatApiClient {
                     requestBuilder.addHeader("Chatgpt-Account-Id", accountId)
                 }
             }
+
+            extraHeaders
+                .filter { it.key.isNotBlank() }
+                .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
 
             val request = requestBuilder.build()
             val ids =
@@ -331,6 +335,17 @@ class ChatApiClient {
                 throw IllegalStateException("HTTP ${response.code}: $errorBody")
             }
 
+            val contentType = response.header("Content-Type").orEmpty()
+            if (!contentType.contains("text/event-stream", ignoreCase = true)) {
+                val raw = response.body?.string().orEmpty()
+                val parsed = runCatching { gson.fromJson(raw, OpenAIChatCompletionsResponse::class.java) }.getOrNull()
+                val text = parsed?.choices?.firstOrNull()?.message?.content?.trim().orEmpty()
+                if (text.isNotEmpty()) {
+                    emit(ChatStreamDelta(content = text))
+                }
+                return@use
+            }
+
             val source = response.body?.source()
                 ?: throw IllegalStateException("Response body is null")
 
@@ -349,12 +364,30 @@ class ChatApiClient {
                             emit(ChatStreamDelta(content = content, reasoning = reasoning))
                         }
                     } catch (_: Exception) {
-                        // 忽略解析错误，继续处理下一行
+                        parseOpenAIStreamDeltaLenient(data)?.let { emit(it) }
                     }
                 }
             }
         }
     }.flowOn(Dispatchers.IO)
+
+    private fun parseOpenAIStreamDeltaLenient(data: String): ChatStreamDelta? {
+        val json = runCatching { JsonParser.parseString(data).asJsonObject }.getOrNull() ?: return null
+        val choices = runCatching { json.getAsJsonArray("choices") }.getOrNull() ?: return null
+        if (choices.size() == 0) return null
+        val firstChoice = runCatching { choices[0].asJsonObject }.getOrNull() ?: return null
+        val delta = runCatching { firstChoice.getAsJsonObject("delta") }.getOrNull() ?: return null
+
+        val content = delta.get("content")?.takeIf { it.isJsonPrimitive }?.asString?.trim()
+        val reasoning =
+            listOf("reasoning_content", "reasoning", "thinking")
+                .firstNotNullOfOrNull { key ->
+                    delta.get(key)?.takeIf { it.isJsonPrimitive }?.asString?.trim()?.takeIf { it.isNotEmpty() }
+                }
+
+        if (content.isNullOrEmpty() && reasoning.isNullOrEmpty()) return null
+        return ChatStreamDelta(content = content, reasoning = reasoning)
+    }
 
     private fun codexResponsesStream(
         provider: ProviderConfig,
@@ -417,7 +450,7 @@ class ChatApiClient {
             .filter { it.key.isNotBlank() }
             .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
 
-        val request = requestBuilder.post(body.toRequestBody(jsonMediaType)).build()
+        val request = requestBuilder.post(body.toRequestBody(strictJsonMediaType)).build()
 
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
@@ -637,13 +670,13 @@ class ChatApiClient {
         }
     }.flowOn(Dispatchers.IO)
 
-    private fun listAntigravityModels(provider: ProviderConfig): List<String> {
+    private fun listAntigravityModels(provider: ProviderConfig, extraHeaders: List<HttpHeader>): List<String> {
         val baseUrls = antigravityBaseUrlFallbackOrder(provider)
         var lastError: String? = null
 
         baseUrls.forEachIndexed { index, baseUrl ->
             val url = baseUrl.trimEnd('/') + "/v1internal:fetchAvailableModels"
-            val request =
+            val requestBuilder =
                 Request.Builder()
                     .url(url)
                     .post("{}".toRequestBody(jsonMediaType))
@@ -651,7 +684,12 @@ class ChatApiClient {
                     .addHeader("Authorization", "Bearer ${provider.apiKey}")
                     .addHeader("Accept", "application/json")
                     .addHeader("User-Agent", ANTIGRAVITY_USER_AGENT)
-                    .build()
+
+            extraHeaders
+                .filter { it.key.isNotBlank() }
+                .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
+
+            val request = requestBuilder.build()
 
             client.newCall(request).execute().use { response ->
                 val raw = response.body?.string().orEmpty()
@@ -673,9 +711,9 @@ class ChatApiClient {
         return emptyList()
     }
 
-    private fun listGeminiCliModels(provider: ProviderConfig): List<String> {
+    private fun listGeminiCliModels(provider: ProviderConfig, extraHeaders: List<HttpHeader>): List<String> {
         val url = provider.apiUrl.trimEnd('/') + "/v1internal:fetchAvailableModels"
-        val request =
+        val requestBuilder =
             Request.Builder()
                 .url(url)
                 .post("{}".toRequestBody(jsonMediaType))
@@ -685,7 +723,12 @@ class ChatApiClient {
                 .addHeader("User-Agent", GEMINI_CLI_USER_AGENT)
                 .addHeader("X-Goog-Api-Client", GEMINI_CLI_API_CLIENT)
                 .addHeader("Client-Metadata", GEMINI_CLI_CLIENT_METADATA)
-                .build()
+
+        extraHeaders
+            .filter { it.key.isNotBlank() }
+            .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
+
+        val request = requestBuilder.build()
 
         client.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()

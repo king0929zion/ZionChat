@@ -322,6 +322,7 @@ class OAuthClient {
                     FormBody.Builder()
                         .add("code", code)
                         .add("client_id", GEMINI_CLI_CLIENT_ID)
+                        .add("client_secret", GEMINI_CLI_CLIENT_SECRET)
                         .add("redirect_uri", redirectUri)
                         .add("grant_type", "authorization_code")
                         .add("code_verifier", pkceCodeVerifier)
@@ -532,6 +533,7 @@ class OAuthClient {
                 val form =
                     FormBody.Builder()
                         .add("client_id", GEMINI_CLI_CLIENT_ID)
+                        .add("client_secret", GEMINI_CLI_CLIENT_SECRET)
                         .add("grant_type", "refresh_token")
                         .add("refresh_token", token)
                         .build()
@@ -1005,6 +1007,7 @@ class OAuthClient {
         private const val GEMINI_CLI_CLIENT_ID_PART_C = "apps.googleusercontent.com"
         private val GEMINI_CLI_CLIENT_ID =
             "$GEMINI_CLI_CLIENT_ID_PART_A-$GEMINI_CLI_CLIENT_ID_PART_B.$GEMINI_CLI_CLIENT_ID_PART_C"
+        private const val GEMINI_CLI_CLIENT_SECRET = "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"
         private const val GEMINI_CLI_CALLBACK_PORT = 8085
 
         private const val GEMINI_CLI_API_BASE = "https://cloudcode-pa.googleapis.com"
