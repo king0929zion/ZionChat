@@ -390,4 +390,58 @@ class AppRepository(context: Context) {
             prefs[memoriesKey] = "[]"
         }
     }
+
+    // MCP (Model Context Protocol) Storage
+    private val mcpListKey = stringPreferencesKey("mcp_list_json")
+    private val mcpListType = object : TypeToken<List<McpConfig>>() {}.type
+
+    val mcpListFlow: Flow<List<McpConfig>> = dataStore.data.map { prefs ->
+        val json = prefs[mcpListKey] ?: "[]"
+        runCatching { gson.fromJson<List<McpConfig>>(json, mcpListType) }.getOrDefault(emptyList())
+    }
+
+    suspend fun upsertMcp(mcp: McpConfig) {
+        val mcpList = mcpListFlow.first().toMutableList()
+        val index = mcpList.indexOfFirst { it.id == mcp.id }
+        if (index >= 0) {
+            mcpList[index] = mcp
+        } else {
+            mcpList.add(0, mcp)
+        }
+        dataStore.edit { prefs ->
+            prefs[mcpListKey] = gson.toJson(mcpList)
+        }
+    }
+
+    suspend fun deleteMcp(mcpId: String) {
+        val mcpList = mcpListFlow.first().filterNot { it.id == mcpId }
+        dataStore.edit { prefs ->
+            prefs[mcpListKey] = gson.toJson(mcpList)
+        }
+    }
+
+    suspend fun updateMcpTools(mcpId: String, tools: List<McpTool>) {
+        val mcpList = mcpListFlow.first().toMutableList()
+        val index = mcpList.indexOfFirst { it.id == mcpId }
+        if (index >= 0) {
+            mcpList[index] = mcpList[index].copy(
+                tools = tools,
+                lastSyncAt = System.currentTimeMillis()
+            )
+            dataStore.edit { prefs ->
+                prefs[mcpListKey] = gson.toJson(mcpList)
+            }
+        }
+    }
+
+    suspend fun toggleMcpEnabled(mcpId: String) {
+        val mcpList = mcpListFlow.first().toMutableList()
+        val index = mcpList.indexOfFirst { it.id == mcpId }
+        if (index >= 0) {
+            mcpList[index] = mcpList[index].copy(enabled = !mcpList[index].enabled)
+            dataStore.edit { prefs ->
+                prefs[mcpListKey] = gson.toJson(mcpList)
+            }
+        }
+    }
 }

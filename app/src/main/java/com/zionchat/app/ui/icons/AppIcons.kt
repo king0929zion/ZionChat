@@ -1961,4 +1961,68 @@ object AppIcons {
             horizontalLineTo(16f)
         }
     }.build()
+
+    // Stream/SSE 图标
+    val Stream = ImageVector.Builder(
+        name = "stream",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(
+            fill = SolidColor(Color.Transparent),
+            stroke = SolidColor(Color(0xFF1C1C1E)),
+            strokeLineWidth = 1.5f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round
+        ) {
+            moveTo(4f, 22f)
+            horizontalLineTo(18f)
+            arcTo(2f, 2f, 0f, false, False, 20f, 20f)
+            verticalLineTo(7.5f)
+            lineTo(14.5f, 2f)
+            horizontalLineTo(6f)
+            arcTo(2f, 2f, 0f, false, False, 4f, 4f)
+            verticalLineTo(4f)
+            moveTo(14f, 2f)
+            verticalLineTo(6f)
+            horizontalLineTo(20f)
+            moveTo(2f, 15f)
+            horizontalLineTo(12f)
+            moveTo(5f, 12f)
+            verticalLineTo(18f)
+            moveTo(9f, 12f)
+            verticalLineTo(18f)
+        }
+    }.build()
+
+    // Tool 工具图标
+    val Tool = ImageVector.Builder(
+        name = "tool",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(
+            fill = SolidColor(Color.Transparent),
+            stroke = SolidColor(Color(0xFF8E8E93)),
+            strokeLineWidth = 2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round
+        ) {
+            moveTo(3f, 3f)
+            horizontalLineTo(21f)
+            verticalLineTo(21f)
+            horizontalLineTo(3f)
+            close()
+            moveTo(3f, 9f)
+            horizontalLineTo(21f)
+            moveTo(9f, 9f)
+            verticalLineTo(21f)
+            moveTo(15f, 9f)
+            verticalLineTo(21f)
+        }
+    }.build()
 }

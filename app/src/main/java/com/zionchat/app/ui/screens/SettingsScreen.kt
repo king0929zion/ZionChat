@@ -224,7 +224,7 @@ fun SettingsScreen(navController: NavController) {
                         icon = { Icon(AppIcons.MCPTools, null, Modifier.size(22.dp), tint = Color.Unspecified) },
                         label = "MCP Tools",
                         showChevron = true,
-                        onClick = { }
+                        onClick = { navController.navigate("mcp") }
                     )
                 }
 

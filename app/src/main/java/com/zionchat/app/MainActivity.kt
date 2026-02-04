@@ -95,6 +95,14 @@ class MainActivity : ComponentActivity() {
                                 val modelId = backStackEntry.arguments?.getString("id")
                                 ModelConfigScreen(navController, modelId)
                             }
+                            composable("mcp") { McpScreen(navController) }
+                            composable(
+                                route = "mcp_detail/{mcpId}",
+                                arguments = listOf(navArgument("mcpId") { defaultValue = "" })
+                            ) { backStackEntry ->
+                                val mcpId = backStackEntry.arguments?.getString("mcpId") ?: ""
+                                McpDetailScreen(navController, mcpId)
+                            }
                         }
                     }
                 }
