@@ -557,7 +557,7 @@ class ChatApiClient {
         val requestBuilder =
             Request.Builder()
                 .url(url)
-                .post(body.toRequestBody(strictJsonMediaType))
+                .post(body.toByteArray(Charsets.UTF_8).toRequestBody(strictJsonMediaType))
 
         val isOAuthToken =
             provider.oauthProvider?.trim()?.equals("codex", ignoreCase = true) == true ||
@@ -570,7 +570,6 @@ class ChatApiClient {
             .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
 
         requestBuilder
-            .header("Content-Type", "application/json")
             .header("authorization", "Bearer ${provider.apiKey}")
             .header("Accept", "text/event-stream")
             .header("originator", "codex_cli_rs")
@@ -588,8 +587,10 @@ class ChatApiClient {
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 val errorBody = response.body?.string().orEmpty()
-                val sentContentType = request.header("Content-Type").orEmpty()
-                throw IllegalStateException("HTTP ${response.code}: $errorBody (url=$url, content-type=$sentContentType)")
+                val sentContentType = request.body?.contentType()?.toString().orEmpty()
+                throw IllegalStateException(
+                    "HTTP ${response.code}: $errorBody (url=$url, content-type=$sentContentType)"
+                )
             }
 
             val source = response.body?.source() ?: throw IllegalStateException("Response body is null")
