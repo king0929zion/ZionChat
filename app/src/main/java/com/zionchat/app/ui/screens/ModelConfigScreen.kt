@@ -1,6 +1,7 @@
 package com.zionchat.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -72,6 +73,9 @@ fun ModelConfigScreen(
 
     var modelName by remember(existingModel?.id) { mutableStateOf(existingModel?.displayName.orEmpty()) }
     var selectedModality by remember(existingModel?.id) { mutableStateOf("text-image") }
+    var reasoningEffort by remember(existingModel?.id) {
+        mutableStateOf(existingModel?.reasoningEffort?.trim()?.lowercase()?.takeIf { it.isNotBlank() })
+    }
     val headers = remember(existingModel?.id) {
         mutableStateListOf<Header>().apply {
             existingModel?.headers?.forEach { add(Header(it.key, it.value)) }
@@ -89,7 +93,8 @@ fun ModelConfigScreen(
                     providerId = existingModel?.providerId,
                     headers = headers
                         .filter { it.key.isNotBlank() }
-                        .map { HttpHeader(it.key.trim(), it.value.trim()) }
+                        .map { HttpHeader(it.key.trim(), it.value.trim()) },
+                    reasoningEffort = reasoningEffort
                 )
             )
             navController.popBackStack()
@@ -199,6 +204,54 @@ fun ModelConfigScreen(
                 }
             }
 
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Thinking Depth",
+                    fontSize = 13.sp,
+                    fontFamily = SourceSans3,
+                    color = TextSecondary
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(GrayLighter, RoundedCornerShape(20.dp))
+                        .padding(6.dp)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    ReasoningOptionChip(
+                        text = "Auto",
+                        selected = reasoningEffort == null,
+                        onClick = { reasoningEffort = null }
+                    )
+                    ReasoningOptionChip(
+                        text = "Minimal",
+                        selected = reasoningEffort == "minimal",
+                        onClick = { reasoningEffort = "minimal" }
+                    )
+                    ReasoningOptionChip(
+                        text = "Low",
+                        selected = reasoningEffort == "low",
+                        onClick = { reasoningEffort = "low" }
+                    )
+                    ReasoningOptionChip(
+                        text = "Medium",
+                        selected = reasoningEffort == "medium",
+                        onClick = { reasoningEffort = "medium" }
+                    )
+                    ReasoningOptionChip(
+                        text = "High",
+                        selected = reasoningEffort == "high",
+                        onClick = { reasoningEffort = "high" }
+                    )
+                    ReasoningOptionChip(
+                        text = "XHigh",
+                        selected = reasoningEffort == "xhigh",
+                        onClick = { reasoningEffort = "xhigh" }
+                    )
+                }
+            }
+
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = Surface,
@@ -302,6 +355,31 @@ private fun ModalityOption(
                 .size(18.dp)
                 .padding(end = 4.dp)
         )
+        Text(
+            text = text,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            fontFamily = SourceSans3,
+            color = if (selected) Surface else TextPrimary
+        )
+    }
+}
+
+@Composable
+private fun ReasoningOptionChip(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .height(40.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (selected) TextPrimary else Color.Transparent, RoundedCornerShape(16.dp))
+            .pressableScale(pressedScale = 0.95f, onClick = onClick)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
         Text(
             text = text,
             fontSize = 14.sp,

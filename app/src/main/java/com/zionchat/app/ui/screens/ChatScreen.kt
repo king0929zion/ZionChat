@@ -568,7 +568,9 @@ fun ChatScreen(navController: NavController) {
                         provider = resolvedProvider,
                         modelId = extractRemoteModelId(selectedModel.id),
                         messages = requestMessages,
-                        extraHeaders = selectedModel.headers
+                        extraHeaders = selectedModel.headers,
+                        reasoningEffort = selectedModel.reasoningEffort,
+                        conversationId = safeConversationId
                     ).collect { delta ->
                         delta.reasoning?.takeIf { it.isNotBlank() }?.let { thinkingContent.append(it) }
                         delta.content?.let { appendWithThinkExtraction(it) }

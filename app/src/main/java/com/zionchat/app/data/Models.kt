@@ -25,7 +25,8 @@ data class ModelConfig(
     val displayName: String,
     val enabled: Boolean = true,
     val providerId: String? = null,
-    val headers: List<HttpHeader> = emptyList()
+    val headers: List<HttpHeader> = emptyList(),
+    val reasoningEffort: String? = null
 )
 
 private const val MODEL_ID_SEPARATOR = "::"

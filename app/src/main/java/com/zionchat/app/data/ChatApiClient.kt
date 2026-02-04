@@ -15,6 +15,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 import kotlin.random.Random
 
@@ -24,6 +25,7 @@ class ChatApiClient {
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     private val strictJsonMediaType = "application/json".toMediaType()
     private val markdownImageRegex = Regex("!\\[[^\\]]*\\]\\(([^)]+)\\)")
+    private val codexModelCache = ConcurrentHashMap<String, CodexModelMeta>()
 
     suspend fun webSearch(query: String): Result<String> {
         val trimmed = query.trim()
@@ -149,7 +151,9 @@ class ChatApiClient {
         val base = provider.apiUrl.trimEnd('/')
         val endpoints =
             listOf(
+                "$base/models?client_version=$CODEX_CLIENT_VERSION",
                 "$base/models",
+                "$base/v1/models?client_version=$CODEX_CLIENT_VERSION",
                 "$base/v1/models"
             )
 
@@ -188,7 +192,17 @@ class ChatApiClient {
                     client.newCall(request).execute().use { response ->
                         val raw = response.body?.string().orEmpty()
                         if (!response.isSuccessful) return@use emptyList<String>()
-                        parseModelIdsFromJson(raw)
+                        val parsed = parseCodexModelsResponse(raw)
+                        if (parsed.isNotEmpty()) {
+                            parsed.forEach { meta -> codexModelCache[meta.slug] = meta }
+                            parsed
+                                .filter { it.visibility == "list" && it.supportedInApi }
+                                .sortedWith(compareBy<CodexModelMeta> { it.priority }.thenBy { it.slug })
+                                .map { it.slug }
+                                .distinct()
+                        } else {
+                            emptyList()
+                        }
                     }
                 }.getOrElse { emptyList() }
 
@@ -198,13 +212,59 @@ class ChatApiClient {
         return CODEX_DEFAULT_MODELS
     }
 
+    private fun parseCodexModelsResponse(raw: String): List<CodexModelMeta> {
+        val json = runCatching { JsonParser.parseString(raw).asJsonObject }.getOrNull() ?: return emptyList()
+        val models = runCatching { json.getAsJsonArray("models") }.getOrNull() ?: return emptyList()
+        return models.mapNotNull { el ->
+            val obj = runCatching { el.asJsonObject }.getOrNull() ?: return@mapNotNull null
+            val slug = obj.get("slug")?.asString?.trim().orEmpty()
+            if (slug.isBlank()) return@mapNotNull null
+            val visibility = obj.get("visibility")?.asString?.trim()?.lowercase().orEmpty()
+            val supportedInApi = obj.get("supported_in_api")?.asBoolean ?: true
+            val priority = obj.get("priority")?.asInt ?: Int.MAX_VALUE
+            val baseInstructions = obj.get("base_instructions")?.asString?.trim().orEmpty()
+            val supportsReasoningSummaries = obj.get("supports_reasoning_summaries")?.asBoolean ?: false
+            val defaultReasoningEffort = obj.get("default_reasoning_level")?.asString?.trim()?.lowercase()
+            val supportedReasoningEfforts =
+                obj.getAsJsonArray("supported_reasoning_levels")
+                    ?.mapNotNull { itemEl ->
+                        val itemObj = runCatching { itemEl.asJsonObject }.getOrNull() ?: return@mapNotNull null
+                        itemObj.get("effort")?.asString?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
+                    }
+                    ?.distinct()
+                    .orEmpty()
+            val supportsParallelToolCalls = obj.get("supports_parallel_tool_calls")?.asBoolean ?: false
+            val inputModalities =
+                obj.getAsJsonArray("input_modalities")
+                    ?.mapNotNull { modalityEl ->
+                        modalityEl.takeIf { it.isJsonPrimitive }?.asString?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
+                    }
+                    ?.distinct()
+                    .orEmpty()
+            CodexModelMeta(
+                slug = slug,
+                visibility = if (visibility.isBlank()) "list" else visibility,
+                supportedInApi = supportedInApi,
+                priority = priority,
+                baseInstructions = baseInstructions,
+                supportsReasoningSummaries = supportsReasoningSummaries,
+                defaultReasoningEffort = defaultReasoningEffort,
+                supportedReasoningEfforts = supportedReasoningEfforts,
+                supportsParallelToolCalls = supportsParallelToolCalls,
+                inputModalities = inputModalities
+            )
+        }
+    }
+
     private fun parseModelIdsFromJson(raw: String): List<String> {
         val element = runCatching { JsonParser.parseString(raw) }.getOrNull() ?: return emptyList()
         if (element.isJsonArray) {
             return element.asJsonArray.mapNotNull { el ->
                 when {
                     el.isJsonPrimitive && el.asJsonPrimitive.isString -> el.asString.trim()
-                    el.isJsonObject -> el.asJsonObject.get("id")?.asString?.trim()
+                    el.isJsonObject ->
+                        el.asJsonObject.get("id")?.asString?.trim()
+                            ?: el.asJsonObject.get("slug")?.asString?.trim()
                     else -> null
                 }?.takeIf { it.isNotBlank() }
             }.distinct()
@@ -230,7 +290,9 @@ class ChatApiClient {
                     arr.mapNotNull { el ->
                         when {
                             el.isJsonPrimitive && el.asJsonPrimitive.isString -> el.asString.trim()
-                            el.isJsonObject -> el.asJsonObject.get("id")?.asString?.trim()
+                            el.isJsonObject ->
+                                el.asJsonObject.get("id")?.asString?.trim()
+                                    ?: el.asJsonObject.get("slug")?.asString?.trim()
                             else -> null
                         }?.takeIf { it.isNotBlank() }
                     }
@@ -290,10 +352,12 @@ class ChatApiClient {
         provider: ProviderConfig,
         modelId: String,
         messages: List<Message>,
-        extraHeaders: List<HttpHeader> = emptyList()
+        extraHeaders: List<HttpHeader> = emptyList(),
+        reasoningEffort: String? = null,
+        conversationId: String? = null
     ): Flow<ChatStreamDelta> {
         return when (provider.type.trim().lowercase()) {
-            "codex" -> codexResponsesStream(provider, modelId, messages, extraHeaders)
+            "codex" -> codexResponsesStream(provider, modelId, messages, extraHeaders, reasoningEffort, conversationId)
             "antigravity" -> antigravityStream(provider, modelId, messages, extraHeaders)
             "gemini-cli" -> geminiCliStream(provider, modelId, messages, extraHeaders)
             else -> openAIChatCompletionsStream(provider, modelId, messages, extraHeaders)
@@ -393,18 +457,77 @@ class ChatApiClient {
         provider: ProviderConfig,
         modelId: String,
         messages: List<Message>,
-        extraHeaders: List<HttpHeader>
+        extraHeaders: List<HttpHeader>,
+        reasoningEffort: String?,
+        conversationId: String?
     ): Flow<ChatStreamDelta> = flow {
         val url = provider.apiUrl.trimEnd('/') + "/responses"
 
+        val meta = codexModelCache[modelId] ?: runCatching {
+            // Best-effort: refresh cache once if missing.
+            listCodexModels(provider, extraHeaders)
+            codexModelCache[modelId]
+        }.getOrNull()
+
+        val baseInstructions =
+            meta?.baseInstructions?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: "You are a helpful assistant."
+
+        val shouldIncludeReasoning = meta?.supportsReasoningSummaries == true
+        val effectiveReasoningEffort =
+            reasoningEffort?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
+                ?: meta?.defaultReasoningEffort?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
+
+        val reasoningPayload: Map<String, Any>? =
+            if (shouldIncludeReasoning) {
+                buildMap {
+                    effectiveReasoningEffort?.let { put("effort", it) }
+                    put("summary", "auto")
+                }
+            } else {
+                null
+            }
+
+        val includeList =
+            if (reasoningPayload != null) listOf("reasoning.encrypted_content") else emptyList()
+
+        val supportsParallelToolCalls = meta?.supportsParallelToolCalls ?: false
+
         val input =
-            messages.map { message ->
-                val role = if (message.role == "system") "developer" else message.role
-                val partType = if (message.role == "assistant") "output_text" else "input_text"
+            messages.mapNotNull { message ->
+                val role =
+                    when (message.role) {
+                        "system" -> "developer"
+                        "developer" -> "developer"
+                        "assistant" -> "assistant"
+                        "user" -> "user"
+                        else -> message.role.trim()
+                    }.trim()
+                if (role.isBlank()) return@mapNotNull null
+
+                val content =
+                    if (role == "assistant") {
+                        listOf(mapOf("type" to "output_text", "text" to message.content))
+                    } else {
+                        val (text, images) = extractMarkdownImages(message.content)
+                        val parts = mutableListOf<Map<String, Any>>()
+                        if (text.isNotBlank()) {
+                            parts.add(mapOf("type" to "input_text", "text" to text))
+                        }
+                        images.forEach { url ->
+                            parts.add(mapOf("type" to "input_image", "image_url" to url))
+                        }
+                        if (parts.isEmpty()) {
+                            parts.add(mapOf("type" to "input_text", "text" to ""))
+                        }
+                        parts
+                    }
+
                 mapOf(
                     "type" to "message",
                     "role" to role,
-                    "content" to listOf(mapOf("type" to partType, "text" to message.content))
+                    "content" to content
                 )
             }
 
@@ -412,13 +535,16 @@ class ChatApiClient {
             gson.toJson(
                 mapOf(
                     "model" to modelId,
+                    "instructions" to baseInstructions,
+                    "tools" to emptyList<Any>(),
+                    "tool_choice" to "auto",
                     "stream" to true,
                     "store" to false,
-                    "instructions" to "",
                     "input" to input,
-                    "parallel_tool_calls" to true,
-                    "reasoning" to mapOf("effort" to "medium", "summary" to "auto"),
-                    "include" to listOf("reasoning.encrypted_content")
+                    "parallel_tool_calls" to supportsParallelToolCalls,
+                    "reasoning" to reasoningPayload,
+                    "include" to includeList,
+                    "prompt_cache_key" to conversationId?.trim()?.takeIf { it.isNotBlank() }
                 )
             )
 
@@ -430,9 +556,13 @@ class ChatApiClient {
                 .addHeader("Accept", "text/event-stream")
                 .addHeader("Openai-Beta", "responses=experimental")
                 .addHeader("Version", "0.21.0")
-                .addHeader("Session_id", UUID.randomUUID().toString())
+                .addHeader("Session_id", conversationId?.trim()?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString())
                 .addHeader("User-Agent", CODEX_USER_AGENT)
                 .addHeader("Connection", "Keep-Alive")
+
+        conversationId?.trim()?.takeIf { it.isNotBlank() }?.let { cid ->
+            requestBuilder.addHeader("Conversation_id", cid)
+        }
 
         val isOAuthToken =
             provider.oauthProvider?.trim()?.equals("codex", ignoreCase = true) == true ||
@@ -471,6 +601,10 @@ class ChatApiClient {
                     "response.output_text.delta" -> {
                         val delta = json.get("delta")?.asString ?: ""
                         if (delta.isNotEmpty()) emit(ChatStreamDelta(content = delta))
+                    }
+                    "response.reasoning_text.delta" -> {
+                        val delta = json.get("delta")?.asString ?: ""
+                        if (delta.isNotEmpty()) emit(ChatStreamDelta(reasoning = delta))
                     }
                     "response.reasoning_summary_text.delta" -> {
                         val delta = json.get("delta")?.asString ?: ""
@@ -799,6 +933,7 @@ class ChatApiClient {
 
     companion object {
         private const val CODEX_USER_AGENT = "codex_cli_rs/0.50.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464"
+        private const val CODEX_CLIENT_VERSION = "0.50.0"
         private const val ANTIGRAVITY_USER_AGENT = "antigravity/1.104.0 darwin/arm64"
         private const val ANTIGRAVITY_BASE_DAILY = "https://daily-cloudcode-pa.googleapis.com"
         private const val ANTIGRAVITY_BASE_SANDBOX = "https://daily-cloudcode-pa.sandbox.googleapis.com"
@@ -810,14 +945,29 @@ class ChatApiClient {
 
         private val CODEX_DEFAULT_MODELS =
             listOf(
+                "gpt-5.2-codex",
+                "gpt-5.2",
                 "gpt-5.1-codex",
                 "gpt-5.1-codex-mini",
                 "gpt-5.1-codex-max",
                 "gpt-5-codex",
                 "gpt-5-codex-mini",
-                "gpt-5.2-codex"
+                "gpt-5"
             )
     }
+
+    private data class CodexModelMeta(
+        val slug: String,
+        val visibility: String,
+        val supportedInApi: Boolean,
+        val priority: Int,
+        val baseInstructions: String,
+        val supportsReasoningSummaries: Boolean,
+        val defaultReasoningEffort: String?,
+        val supportedReasoningEfforts: List<String>,
+        val supportsParallelToolCalls: Boolean,
+        val inputModalities: List<String>
+    )
 
     private fun isIFlow(provider: ProviderConfig): Boolean {
         if (provider.oauthProvider?.trim()?.equals("iflow", ignoreCase = true) == true) return true
