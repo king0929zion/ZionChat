@@ -1,5 +1,12 @@
 package com.zionchat.app.ui.screens
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.util.Base64
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -9,6 +16,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -34,6 +42,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
@@ -72,6 +81,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.LinearEasing
@@ -80,10 +90,12 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloat
+import java.io.ByteArrayOutputStream
 import kotlin.math.roundToInt
 
 // 颜色常量 - 完全匹配HTML原型
 private data class PendingMessage(val conversationId: String, val message: Message)
+private data class PendingImageAttachment(val uri: Uri? = null, val bitmap: Bitmap? = null)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,13 +105,29 @@ fun ChatScreen(navController: NavController) {
     val providerAuthManager = LocalProviderAuthManager.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
     var showToolMenu by remember { mutableStateOf(false) }
     var selectedTool by remember { mutableStateOf<String?>(null) }
     var messageText by remember { mutableStateOf("") }
+    var imageAttachments by remember { mutableStateOf<List<PendingImageAttachment>>(emptyList()) }
     var showThinkingSheet by remember { mutableStateOf(false) }
     var thinkingSheetText by remember { mutableStateOf<String?>(null) }
     val thinkingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    val photoPickerLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) {
+                imageAttachments = imageAttachments + PendingImageAttachment(uri = uri)
+            }
+        }
+
+    val cameraLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+            if (bitmap != null) {
+                imageAttachments = imageAttachments + PendingImageAttachment(bitmap = bitmap)
+            }
+        }
 
     val conversations by repository.conversationsFlow.collectAsState(initial = emptyList())
     val currentConversationId by repository.currentConversationIdFlow.collectAsState(initial = null)
@@ -264,7 +292,8 @@ fun ChatScreen(navController: NavController) {
 
     fun sendMessage() {
         val trimmed = messageText.trim()
-        if (trimmed.isEmpty() || isStreaming) return
+        val attachmentsSnapshot = imageAttachments
+        if ((trimmed.isEmpty() && attachmentsSnapshot.isEmpty()) || isStreaming) return
 
         scope.launch {
             val nowMs = System.currentTimeMillis()
@@ -286,23 +315,39 @@ fun ChatScreen(navController: NavController) {
             preferredConversationSetAtMs = nowMs
             repository.setCurrentConversationId(safeConversationId)
 
-            val toolPrefixLabel =
-                when (selectedTool) {
-                    "camera" -> "Camera"
-                    "photos" -> "Photos"
-                    "files" -> "Files"
-                    "web" -> "Web search"
-                    "image" -> "Create image"
-                    "mcp" -> "MCP Tools"
-                    else -> null
+            val encodedImages = mutableListOf<String>()
+            for (attachment in attachmentsSnapshot) {
+                val url = encodeImageAttachmentToDataUrl(context, attachment)
+                if (url.isNullOrBlank()) {
+                    repository.appendMessage(
+                        safeConversationId,
+                        Message(
+                            role = "assistant",
+                            content = "Failed to read the selected image. Please try again."
+                        )
+                    )
+                    return@launch
                 }
-            val userContent = if (!toolPrefixLabel.isNullOrBlank()) "[${toolPrefixLabel}] $trimmed" else trimmed
+                encodedImages.add(url)
+            }
+
+            val imageMarkdown = encodedImages.joinToString("\n\n") { url -> "![]($url)" }.trim()
+            val userContent =
+                buildString {
+                    val text = trimmed.trim()
+                    if (text.isNotBlank()) append(text)
+                    if (imageMarkdown.isNotBlank()) {
+                        if (isNotEmpty()) append("\n\n")
+                        append(imageMarkdown)
+                    }
+                }.trim()
             val hasVisionInput =
                 userContent.contains("data:image", ignoreCase = true) ||
                     Regex("!\\[[^\\]]*\\]\\(([^)]+)\\)").containsMatchIn(userContent)
             val userMessage = Message(role = "user", content = userContent)
             pendingMessages = pendingMessages + PendingMessage(safeConversationId, userMessage)
             messageText = ""
+            imageAttachments = emptyList()
             scrollToBottomToken++
             repository.appendMessage(safeConversationId, userMessage)
 
@@ -799,6 +844,13 @@ fun ChatScreen(navController: NavController) {
                 ) {
                     BottomInputArea(
                         selectedTool = selectedTool,
+                        attachments = imageAttachments,
+                        onRemoveAttachment = { index ->
+                            if (index < 0 || index >= imageAttachments.size) return@BottomInputArea
+                            val updated = imageAttachments.toMutableList()
+                            updated.removeAt(index)
+                            imageAttachments = updated.toList()
+                        },
                         onToolToggle = {
                             if (showToolMenu) {
                                 showToolMenu = false
@@ -831,8 +883,22 @@ fun ChatScreen(navController: NavController) {
                 modifier = Modifier.zIndex(20f),
                 onDismiss = { showToolMenu = false },
                 onToolSelect = { tool ->
-                    selectedTool = tool
-                    showToolMenu = false
+                    when (tool) {
+                        "camera" -> {
+                            showToolMenu = false
+                            keyboardController?.hide()
+                            cameraLauncher.launch(null)
+                        }
+                        "photos" -> {
+                            showToolMenu = false
+                            keyboardController?.hide()
+                            photoPickerLauncher.launch("image/*")
+                        }
+                        else -> {
+                            selectedTool = tool
+                            showToolMenu = false
+                        }
+                    }
                 }
             )
 
@@ -942,10 +1008,13 @@ fun MessageItem(
                     )
                     .padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
-                Text(
-                    text = message.content,
-                    fontSize = 16.sp,
-                    color = TextPrimary
+                MarkdownText(
+                    markdown = message.content,
+                    textStyle = TextStyle(
+                        fontSize = 16.sp,
+                        lineHeight = 24.sp,
+                        color = TextPrimary
+                    )
                 )
             }
         }
@@ -1777,6 +1846,8 @@ fun ToolListItem(
 @Composable
 fun BottomInputArea(
     selectedTool: String?,
+    attachments: List<PendingImageAttachment>,
+    onRemoveAttachment: (Int) -> Unit,
     onToolToggle: () -> Unit,
     onClearTool: () -> Unit,
     messageText: String,
@@ -1786,14 +1857,13 @@ fun BottomInputArea(
     imeVisible: Boolean = false
 ) {
     val hasText = messageText.trim().isNotEmpty()
-    val sendEnabled = hasText && sendAllowed
+    val hasAttachments = attachments.isNotEmpty()
+    val sendEnabled = (hasText || hasAttachments) && sendAllowed
     val sendBackground = if (sendEnabled) TextPrimary else GrayLight
     val sendIconTint = if (sendEnabled) Color.White else TextSecondary
     val maxTextHeight = if (selectedTool != null) 140.dp else 120.dp
     val maxLines = if (selectedTool != null) 6 else 5
     val toolLabel = when (selectedTool) {
-        "camera" -> "Camera"
-        "photos" -> "Photos"
         "files" -> "Files"
         "web" -> "Search"
         "image" -> "Image"
@@ -1805,8 +1875,6 @@ fun BottomInputArea(
         else -> null
     }
     val toolIconVector = when (selectedTool) {
-        "camera" -> AppIcons.Camera
-        "photos" -> AppIcons.ChatGPTLogo
         "files" -> null
         "web" -> AppIcons.Globe
         "image" -> AppIcons.CreateImage
@@ -1858,6 +1926,53 @@ fun BottomInputArea(
                         .fillMaxWidth()
                         .padding(start = 12.dp, end = 48.dp, top = 8.dp, bottom = 8.dp)
                 ) {
+                    if (attachments.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            attachments.forEachIndexed { index, attachment ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(92.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(GrayLighter),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    AsyncImage(
+                                        model = attachment.uri ?: attachment.bitmap,
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(6.dp)
+                                            .size(22.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(alpha = 0.92f))
+                                            .pressableScale(
+                                                pressedScale = 0.92f,
+                                                onClick = { onRemoveAttachment(index) }
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = AppIcons.Close,
+                                            contentDescription = "Remove",
+                                            tint = TextPrimary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
                     // 选中的工具标签 - 位于输入框内部，出现时顶起输入框高度
                     if (selectedTool != null) {
                         Row(
@@ -1975,6 +2090,72 @@ fun BottomInputArea(
             }
         }
     }
+}
+
+private suspend fun encodeImageAttachmentToDataUrl(
+    context: Context,
+    attachment: PendingImageAttachment,
+    maxDimension: Int = 1024,
+    jpegQuality: Int = 85
+): String? {
+    return withContext(Dispatchers.IO) {
+        val bitmap =
+            attachment.bitmap
+                ?: attachment.uri?.let { uri -> decodeBitmapFromUri(context, uri, maxDimension) }
+                ?: return@withContext null
+
+        val scaled = scaleBitmapDown(bitmap, maxDimension)
+        val out = ByteArrayOutputStream()
+        scaled.compress(Bitmap.CompressFormat.JPEG, jpegQuality.coerceIn(1, 100), out)
+        val b64 = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+        "data:image/jpeg;base64,$b64"
+    }
+}
+
+private fun decodeBitmapFromUri(context: Context, uri: Uri, maxDimension: Int): Bitmap? {
+    val resolver = context.contentResolver
+    val bounds =
+        BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+
+    resolver.openInputStream(uri)?.use { input ->
+        BitmapFactory.decodeStream(input, null, bounds)
+    }
+
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+    val inSampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight, maxDimension)
+    val opts =
+        BitmapFactory.Options().apply {
+            inJustDecodeBounds = false
+            this.inSampleSize = inSampleSize
+        }
+
+    return resolver.openInputStream(uri)?.use { input ->
+        BitmapFactory.decodeStream(input, null, opts)
+    }
+}
+
+private fun calculateInSampleSize(width: Int, height: Int, maxDimension: Int): Int {
+    val maxDim = maxOf(width, height)
+    if (maxDim <= maxDimension) return 1
+    var sample = 1
+    while (maxDim / sample > maxDimension) {
+        sample *= 2
+    }
+    return sample.coerceAtLeast(1)
+}
+
+private fun scaleBitmapDown(bitmap: Bitmap, maxDimension: Int): Bitmap {
+    val width = bitmap.width.coerceAtLeast(1)
+    val height = bitmap.height.coerceAtLeast(1)
+    val maxDim = maxOf(width, height)
+    if (maxDim <= maxDimension) return bitmap
+    val scale = maxDimension.toFloat() / maxDim.toFloat()
+    val newWidth = (width * scale).roundToInt().coerceAtLeast(1)
+    val newHeight = (height * scale).roundToInt().coerceAtLeast(1)
+    return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
 }
 
 private fun buildConversationTranscript(
