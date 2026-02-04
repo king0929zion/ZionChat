@@ -133,44 +133,6 @@ fun McpScreen(navController: NavController) {
 }
 
 @Composable
-fun FullScreenModal(
-    onDismiss: () -> Unit,
-    content: @Composable () -> Unit
-) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDismiss
-                ),
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { }
-                    )
-            ) {
-                content()
-            }
-        }
-    }
-}
-
-@Composable
 fun McpEmptyState() {
     Column(
         modifier = Modifier
