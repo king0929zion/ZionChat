@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.data.HttpHeader
@@ -88,19 +90,13 @@ fun McpDetailScreen(
                     .padding(top = 12.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // MCP Info Section
                 McpInfoCard(mcp = mcp)
-                
-                // Connection Info
                 McpConnectionCard(mcp = mcp)
-                
-                // Tools Section
                 McpToolsCard(
                     tools = mcp.tools,
                     onToolClick = { showToolDetail = it }
                 )
                 
-                // Delete Button
                 Button(
                     onClick = { showDeleteConfirm = true },
                     modifier = Modifier.fillMaxWidth(),
@@ -120,32 +116,36 @@ fun McpDetailScreen(
             }
         }
         
-        // Edit Modal with full screen scrim
+        // Edit Modal
         if (showEditModal) {
-            McpEditModal(
-                mcp = mcp,
-                onDismiss = { showEditModal = false },
-                onSave = { updatedMcp ->
-                    scope.launch {
-                        repository.upsertMcp(updatedMcp)
-                        runCatching {
-                            val tools = mcpClient.fetchTools(updatedMcp).getOrNull()
-                            if (tools != null) {
-                                repository.updateMcpTools(updatedMcp.id, tools)
+            FullScreenModal(onDismiss = { showEditModal = false }) {
+                McpEditSheetContent(
+                    mcp = mcp,
+                    onDismiss = { showEditModal = false },
+                    onSave = { updatedMcp ->
+                        scope.launch {
+                            repository.upsertMcp(updatedMcp)
+                            runCatching {
+                                val tools = mcpClient.fetchTools(updatedMcp).getOrNull()
+                                if (tools != null) {
+                                    repository.updateMcpTools(updatedMcp.id, tools)
+                                }
                             }
+                            showEditModal = false
                         }
-                        showEditModal = false
                     }
-                }
-            )
+                )
+            }
         }
         
         // Tool Detail Modal
         if (showToolDetail != null) {
-            ToolDetailModal(
-                tool = showToolDetail!!,
-                onDismiss = { showToolDetail = null }
-            )
+            FullScreenModal(onDismiss = { showToolDetail = null }) {
+                ToolDetailSheetContent(
+                    tool = showToolDetail!!,
+                    onDismiss = { showToolDetail = null }
+                )
+            }
         }
         
         // Delete Confirm Dialog
@@ -203,6 +203,44 @@ fun McpDetailScreen(
 }
 
 @Composable
+fun FullScreenModal(
+    onDismiss: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.5f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                ),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { }
+                    )
+            ) {
+                content()
+            }
+        }
+    }
+}
+
+@Composable
 fun McpInfoCard(mcp: McpConfig) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -215,7 +253,6 @@ fun McpInfoCard(mcp: McpConfig) {
                 .padding(vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Protocol Icon
             Box(
                 modifier = Modifier
                     .size(72.dp)
@@ -233,7 +270,6 @@ fun McpInfoCard(mcp: McpConfig) {
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Name
             Text(
                 text = mcp.name,
                 fontSize = 22.sp,
@@ -242,7 +278,6 @@ fun McpInfoCard(mcp: McpConfig) {
                 color = TextPrimary
             )
             
-            // Protocol
             Text(
                 text = mcp.protocol.name,
                 fontSize = 15.sp,
@@ -250,7 +285,6 @@ fun McpInfoCard(mcp: McpConfig) {
                 modifier = Modifier.padding(top = 4.dp)
             )
             
-            // Status badge
             Row(
                 modifier = Modifier
                     .padding(top = 12.dp)
@@ -298,13 +332,11 @@ fun McpConnectionCard(mcp: McpConfig) {
                 color = TextSecondary
             )
             
-            // Server URL
             ConnectionInfoRow(
                 label = "Server URL",
                 value = mcp.url
             )
             
-            // Description (if exists)
             if (mcp.description.isNotBlank()) {
                 Divider(color = GrayLighter, thickness = 1.dp)
                 ConnectionInfoRow(
@@ -479,167 +511,144 @@ fun ToolItem(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ToolDetailModal(
+fun ToolDetailSheetContent(
     tool: McpTool,
     onDismiss: () -> Unit
 ) {
-    Box(
+    Column(
         modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.5f))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onDismiss
-            )
+            .fillMaxWidth()
+            .background(Surface, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+            .padding(bottom = 24.dp)
+            .navigationBarsPadding()
     ) {
-        ModalBottomSheet(
-            onDismissRequest = onDismiss,
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = Surface,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-            dragHandle = {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp, bottom = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(40.dp)
+                    .height(4.dp)
+                    .background(GrayLight, RoundedCornerShape(2.dp))
+            )
+        }
+        
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = tool.name,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = SourceSans3,
+                    color = TextPrimary
+                )
+                
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(GrayLighter)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onDismiss
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Close,
+                        contentDescription = null,
+                        tint = TextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = GrayLighter,
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Description",
+                        fontSize = 13.sp,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                    Text(
+                        text = tool.description,
+                        fontSize = 16.sp,
+                        color = TextPrimary
+                    )
+                }
+            }
+            
+            Text(
+                text = "Parameters",
+                fontSize = 13.sp,
+                fontFamily = SourceSans3,
+                color = TextSecondary,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            
+            if (tool.parameters.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Surface)
-                        .padding(top = 12.dp, bottom = 16.dp),
+                        .padding(vertical = 24.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .width(40.dp)
-                            .height(4.dp)
-                            .background(GrayLight, RoundedCornerShape(2.dp))
+                    Text(
+                        text = "No parameters required",
+                        fontSize = 14.sp,
+                        color = TextSecondary.copy(alpha = 0.7f)
                     )
                 }
-            },
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Surface)
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 24.dp)
-                    .navigationBarsPadding()
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    tool.parameters.forEach { param ->
+                        ParameterItem(param = param)
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TextPrimary,
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = tool.name,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = SourceSans3,
-                        color = TextPrimary
-                    )
-                    
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(GrayLighter)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = onDismiss
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = AppIcons.Close,
-                            contentDescription = null,
-                            tint = TextSecondary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(20.dp))
-                
-                // Description
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = GrayLighter,
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = "Description",
-                            fontSize = 13.sp,
-                            color = TextSecondary,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                        Text(
-                            text = tool.description,
-                            fontSize = 16.sp,
-                            color = TextPrimary
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                // Parameters
                 Text(
-                    text = "Parameters",
-                    fontSize = 13.sp,
-                    fontFamily = SourceSans3,
-                    color = TextSecondary,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    text = "Close",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(vertical = 8.dp)
                 )
-                
-                if (tool.parameters.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No parameters required",
-                            fontSize = 14.sp,
-                            color = TextSecondary.copy(alpha = 0.7f)
-                        )
-                    }
-                } else {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        tool.parameters.forEach { param ->
-                            ParameterItem(param = param)
-                        }
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                // Close button
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = TextPrimary,
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        text = "Close",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
             }
         }
     }

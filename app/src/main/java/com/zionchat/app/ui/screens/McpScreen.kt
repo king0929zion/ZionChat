@@ -27,12 +27,15 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.data.HttpHeader
 import com.zionchat.app.data.McpClient
 import com.zionchat.app.data.McpConfig
 import com.zionchat.app.data.McpProtocol
+import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.*
@@ -49,25 +52,34 @@ fun McpScreen(navController: NavController) {
     
     var showAddModal by remember { mutableStateOf(false) }
     var editingMcp by remember { mutableStateOf<McpConfig?>(null) }
-    var deleteMcpId by remember { mutableStateOf<String?>(null) }
     
-    Scaffold(
-        topBar = {
-            McpTopBar(
-                onBackClick = { navController.navigateUp() },
-                onAddClick = { 
-                    editingMcp = null
-                    showAddModal = true 
+    Box(modifier = Modifier.fillMaxSize().background(Background)) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            PageTopBar(
+                title = "MCP Tools",
+                onBack = { navController.navigateUp() },
+                trailing = {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Surface, CircleShape)
+                            .pressableScale(pressedScale = 0.95f) {
+                                editingMcp = null
+                                showAddModal = true
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Plus,
+                            contentDescription = "Add",
+                            tint = TextPrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
             )
-        },
-        containerColor = Background
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
+            
             if (mcpList.isEmpty()) {
                 McpEmptyState()
             } else {
@@ -75,7 +87,8 @@ fun McpScreen(navController: NavController) {
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 12.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     mcpList.forEach { mcp ->
@@ -91,16 +104,19 @@ fun McpScreen(navController: NavController) {
                     }
                 }
             }
-            
-            // Add/Edit Modal
-            if (showAddModal) {
-                McpEditModal(
+        }
+        
+        // Full screen modal with scrim covering status bar
+        if (showAddModal) {
+            FullScreenModal(
+                onDismiss = { showAddModal = false }
+            ) {
+                McpEditSheetContent(
                     mcp = editingMcp,
                     onDismiss = { showAddModal = false },
                     onSave = { mcp ->
                         scope.launch {
                             repository.upsertMcp(mcp)
-                            // Try to fetch tools
                             runCatching {
                                 val tools = mcpClient.fetchTools(mcp).getOrNull()
                                 if (tools != null) {
@@ -117,67 +133,39 @@ fun McpScreen(navController: NavController) {
 }
 
 @Composable
-fun McpTopBar(
-    onBackClick: () -> Unit,
-    onAddClick: () -> Unit
+fun FullScreenModal(
+    onDismiss: () -> Unit,
+    content: @Composable () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Background)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-    ) {
-        // Back button
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(Surface)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onBackClick
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = AppIcons.Back,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = TextPrimary
-            )
-        }
-        
-        // Title
-        Text(
-            text = "MCP Tools",
-            fontSize = 17.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TextPrimary,
-            modifier = Modifier.align(Alignment.Center)
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
         )
-        
-        // Add button
+    ) {
         Box(
             modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(Surface)
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.5f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = onAddClick
+                    onClick = onDismiss
                 ),
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.BottomCenter
         ) {
-            Icon(
-                imageVector = AppIcons.Plus,
-                contentDescription = null,
-                modifier = Modifier.size(22.dp),
-                tint = TextPrimary
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { }
+                    )
+            ) {
+                content()
+            }
         }
     }
 }
@@ -230,59 +218,62 @@ fun McpListItem(
     onClick: () -> Unit,
     onToggle: () -> Unit
 ) {
-    Row(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(GrayLight)
+            .clip(RoundedCornerShape(16.dp))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick
-            )
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+            ),
+        color = GrayLight,
+        shape = RoundedCornerShape(16.dp)
     ) {
-        // Protocol Icon
-        Box(
+        Row(
             modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(GrayLighter),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = if (mcp.protocol == McpProtocol.HTTP) AppIcons.Globe else AppIcons.Stream,
-                contentDescription = null,
-                modifier = Modifier.size(22.dp),
-                tint = TextPrimary
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(GrayLighter),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (mcp.protocol == McpProtocol.HTTP) AppIcons.Globe else AppIcons.Stream,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = TextPrimary
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = mcp.name,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = if (mcp.enabled) TextPrimary else TextSecondary
+                )
+                Text(
+                    text = mcp.protocol.name,
+                    fontSize = 13.sp,
+                    color = TextSecondary
+                )
+            }
+            
+            McpToggleSwitch(
+                enabled = mcp.enabled,
+                onToggle = onToggle
             )
         }
-        
-        Spacer(modifier = Modifier.width(12.dp))
-        
-        // Info
-        Column(
-            modifier = Modifier.weight(1f)
-        ) {
-            Text(
-                text = mcp.name,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Medium,
-                color = if (mcp.enabled) TextPrimary else TextSecondary
-            )
-            Text(
-                text = mcp.protocol.name,
-                fontSize = 13.sp,
-                color = TextSecondary
-            )
-        }
-        
-        // Toggle switch
-        McpToggleSwitch(
-            enabled = mcp.enabled,
-            onToggle = onToggle
-        )
     }
 }
 
@@ -325,7 +316,7 @@ fun McpToggleSwitch(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun McpEditModal(
+fun McpEditSheetContent(
     mcp: McpConfig?,
     onDismiss: () -> Unit,
     onSave: (McpConfig) -> Unit
@@ -338,32 +329,36 @@ fun McpEditModal(
     var protocol by remember { mutableStateOf(mcp?.protocol ?: McpProtocol.HTTP) }
     var headers by remember { mutableStateOf(mcp?.headers ?: emptyList()) }
     
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Surface,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-        dragHandle = {
+    val scrollState = rememberScrollState()
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Surface, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+            .padding(bottom = 24.dp)
+            .navigationBarsPadding()
+    ) {
+        // Drag handle
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp, bottom = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp, bottom = 16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .width(40.dp)
-                        .height(4.dp)
-                        .background(GrayLight, RoundedCornerShape(2.dp))
-                )
-            }
+                    .width(40.dp)
+                    .height(4.dp)
+                    .background(GrayLight, RoundedCornerShape(2.dp))
+            )
         }
-    ) {
+        
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp)
+                .verticalScroll(scrollState),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Header
             Row(
@@ -373,39 +368,47 @@ fun McpEditModal(
             ) {
                 Text(
                     text = if (isEditing) "Edit MCP" else "Add MCP",
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = SourceSans3,
                     color = TextPrimary
                 )
                 
-                IconButton(onClick = onDismiss) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(GrayLighter)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onDismiss
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(
                         imageVector = AppIcons.Close,
                         contentDescription = null,
-                        tint = TextSecondary
+                        tint = TextSecondary,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
-            
             // Protocol Selection
-            Column(
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = "Protocol",
                     fontSize = 13.sp,
-                    color = TextSecondary,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    fontFamily = SourceSans3,
+                    color = TextSecondary
                 )
                 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(GrayLighter)
-                        .padding(4.dp),
+                        .background(GrayLighter, RoundedCornerShape(20.dp))
+                        .padding(6.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     ProtocolOption(
@@ -423,45 +426,109 @@ fun McpEditModal(
                 }
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
-            
             // Name input
-            McpInputField(
+            McpConfigInputField(
                 label = "Name",
                 value = name,
                 onValueChange = { name = it },
                 placeholder = "Enter MCP name"
             )
             
-            Spacer(modifier = Modifier.height(12.dp))
-            
             // URL input
-            McpInputField(
+            McpConfigInputField(
                 label = "Server URL",
                 value = url,
                 onValueChange = { url = it },
                 placeholder = "https://api.example.com/mcp"
             )
             
-            Spacer(modifier = Modifier.height(12.dp))
-            
             // Description input
-            McpInputField(
+            McpConfigInputField(
                 label = "Description (Optional)",
                 value = description,
                 onValueChange = { description = it },
                 placeholder = "Brief description"
             )
             
-            Spacer(modifier = Modifier.height(16.dp))
-            
             // Headers section
-            McpHeadersSection(
-                headers = headers,
-                onHeadersChange = { headers = it }
-            )
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Surface,
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Custom Headers",
+                            fontSize = 13.sp,
+                            fontFamily = SourceSans3,
+                            color = TextSecondary
+                        )
+                        
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(GrayLighter, CircleShape)
+                                .pressableScale(pressedScale = 0.95f) {
+                                    headers = headers + HttpHeader("", "")
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = AppIcons.Plus,
+                                contentDescription = "Add Header",
+                                tint = TextPrimary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                    
+                    if (headers.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No custom headers",
+                                fontSize = 14.sp,
+                                color = TextSecondary.copy(alpha = 0.7f)
+                            )
+                        }
+                    } else {
+                        headers.forEachIndexed { index, header ->
+                            HeaderInputRow(
+                                key = header.key,
+                                value = header.value,
+                                onKeyChange = { newKey ->
+                                    headers = headers.toMutableList().apply {
+                                        this[index] = header.copy(key = newKey)
+                                    }
+                                },
+                                onValueChange = { newValue ->
+                                    headers = headers.toMutableList().apply {
+                                        this[index] = header.copy(value = newValue)
+                                    }
+                                },
+                                onDelete = {
+                                    headers = headers.filterIndexed { i, _ -> i != index }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
             
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             
             // Buttons
             Row(
@@ -496,7 +563,7 @@ fun McpEditModal(
                                     protocol = protocol,
                                     enabled = mcp?.enabled ?: true,
                                     description = description.trim(),
-                                    headers = headers
+                                    headers = headers.filter { it.key.isNotBlank() && it.value.isNotBlank() }
                                 )
                             )
                         }
@@ -530,7 +597,7 @@ fun ProtocolOption(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(if (selected) TextPrimary else Color.Transparent)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -550,212 +617,139 @@ fun ProtocolOption(
 }
 
 @Composable
-fun McpInputField(
+fun McpConfigInputField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             text = label,
             fontSize = 13.sp,
-            color = TextSecondary,
-            modifier = Modifier.padding(bottom = 6.dp)
+            fontFamily = SourceSans3,
+            color = TextSecondary
         )
         
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
+        Surface(
             modifier = Modifier.fillMaxWidth(),
-            textStyle = TextStyle(
-                fontSize = 17.sp,
-                color = TextPrimary,
-                fontWeight = FontWeight.Normal
-            ),
-            decorationBox = { innerTextField ->
-                if (value.isEmpty()) {
+            color = Surface,
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            TextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
+                placeholder = {
                     Text(
                         text = placeholder,
                         fontSize = 17.sp,
-                        color = TextSecondary.copy(alpha = 0.5f)
+                        color = TextSecondary
                     )
-                }
-                innerTextField()
-            }
-        )
-    }
-}
-
-@Composable
-fun McpHeadersSection(
-    headers: List<HttpHeader>,
-    onHeadersChange: (List<HttpHeader>) -> Unit
-) {
-    var showAddHeader by remember { mutableStateOf(false) }
-    var newHeaderKey by remember { mutableStateOf("") }
-    var newHeaderValue by remember { mutableStateOf("") }
-    
-    Column(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Custom Headers",
-                fontSize = 13.sp,
-                color = TextSecondary
+                },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                ),
+                textStyle = TextStyle(
+                    fontSize = 17.sp,
+                    color = TextPrimary
+                ),
+                singleLine = true
             )
-            
-            IconButton(
-                onClick = { showAddHeader = true }
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(GrayLighter),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = AppIcons.Plus,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                        tint = TextPrimary
-                    )
-                }
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        // Headers list
-        headers.forEachIndexed { index, header ->
-            HeaderItem(
-                header = header,
-                onDelete = {
-                    onHeadersChange(headers.filterIndexed { i, _ -> i != index })
-                }
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-        
-        if (headers.isEmpty() && !showAddHeader) {
-            Text(
-                text = "No custom headers",
-                fontSize = 14.sp,
-                color = TextSecondary.copy(alpha = 0.7f),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-            )
-        }
-        
-        // Add new header
-        if (showAddHeader) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                BasicTextField(
-                    value = newHeaderKey,
-                    onValueChange = { newHeaderKey = it },
-                    modifier = Modifier.weight(1f),
-                    textStyle = TextStyle(fontSize = 15.sp, color = TextPrimary),
-                    decorationBox = { innerTextField ->
-                        if (newHeaderKey.isEmpty()) {
-                            Text(
-                                text = "Key",
-                                fontSize = 15.sp,
-                                color = TextSecondary.copy(alpha = 0.5f)
-                            )
-                        }
-                        innerTextField()
-                    }
-                )
-                
-                Box(
-                    modifier = Modifier
-                        .width(1.dp)
-                        .height(32.dp)
-                        .background(GrayLight)
-                )
-                
-                BasicTextField(
-                    value = newHeaderValue,
-                    onValueChange = { newHeaderValue = it },
-                    modifier = Modifier.weight(1f),
-                    textStyle = TextStyle(fontSize = 15.sp, color = TextPrimary),
-                    decorationBox = { innerTextField ->
-                        if (newHeaderValue.isEmpty()) {
-                            Text(
-                                text = "Value",
-                                fontSize = 15.sp,
-                                color = TextSecondary.copy(alpha = 0.5f)
-                            )
-                        }
-                        innerTextField()
-                    }
-                )
-                
-                IconButton(
-                    onClick = {
-                        if (newHeaderKey.isNotBlank() && newHeaderValue.isNotBlank()) {
-                            onHeadersChange(headers + HttpHeader(newHeaderKey.trim(), newHeaderValue.trim()))
-                            newHeaderKey = ""
-                            newHeaderValue = ""
-                            showAddHeader = false
-                        }
-                    }
-                ) {
-                    Icon(
-                        imageVector = AppIcons.Check,
-                        contentDescription = null,
-                        tint = AccentBlue
-                    )
-                }
-            }
         }
     }
 }
 
 @Composable
-fun HeaderItem(
-    header: HttpHeader,
+fun HeaderInputRow(
+    key: String,
+    value: String,
+    onKeyChange: (String) -> Unit,
+    onValueChange: (String) -> Unit,
     onDelete: () -> Unit
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(GrayLighter)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Column(
-            modifier = Modifier.weight(1f)
+        Surface(
+            modifier = Modifier.weight(1f),
+            color = GrayLighter,
+            shape = RoundedCornerShape(12.dp)
         ) {
-            Text(
-                text = header.key,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-                color = TextPrimary
-            )
-            Text(
-                text = header.value,
-                fontSize = 13.sp,
-                color = TextSecondary,
-                maxLines = 1
+            TextField(
+                value = key,
+                onValueChange = onKeyChange,
+                modifier = Modifier.padding(horizontal = 4.dp),
+                placeholder = {
+                    Text(
+                        text = "Key",
+                        fontSize = 15.sp,
+                        color = TextSecondary.copy(alpha = 0.7f)
+                    )
+                },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                ),
+                textStyle = TextStyle(
+                    fontSize = 15.sp,
+                    color = TextPrimary
+                ),
+                singleLine = true
             )
         }
         
-        IconButton(onClick = onDelete) {
+        Surface(
+            modifier = Modifier.weight(1f),
+            color = GrayLighter,
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            TextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.padding(horizontal = 4.dp),
+                placeholder = {
+                    Text(
+                        text = "Value",
+                        fontSize = 15.sp,
+                        color = TextSecondary.copy(alpha = 0.7f)
+                    )
+                },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                ),
+                textStyle = TextStyle(
+                    fontSize = 15.sp,
+                    color = TextPrimary
+                ),
+                singleLine = true
+            )
+        }
+        
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(GrayLighter)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDelete
+                ),
+            contentAlignment = Alignment.Center
+        ) {
             Icon(
                 imageVector = AppIcons.Close,
                 contentDescription = null,
