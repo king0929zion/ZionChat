@@ -29,6 +29,10 @@ private object NoRippleIndication : IndicationNodeFactory {
         return NoRippleIndicationNode()
     }
 
+    override fun equals(other: Any?): Boolean = other === this
+
+    override fun hashCode(): Int = javaClass.hashCode()
+
     private class NoRippleIndicationNode : Modifier.Node(), DrawModifierNode {
         override fun ContentDrawScope.draw() {
             drawContent()
