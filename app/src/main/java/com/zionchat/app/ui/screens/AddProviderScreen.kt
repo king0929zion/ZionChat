@@ -244,7 +244,7 @@ fun AddProviderScreen(
                     ) {
                         Box(
                             modifier = Modifier
-                                .matchParentSize()
+                                .fillMaxSize()
                                 .clip(RoundedCornerShape(20.dp))
                                 .layerBackdrop(typeBackdrop)
                                 .background(GrayLighter, RoundedCornerShape(20.dp))
