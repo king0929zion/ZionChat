@@ -149,7 +149,7 @@ class ChatApiClient {
     }
 
     private fun listCodexModels(provider: ProviderConfig, extraHeaders: List<HttpHeader>): List<String> {
-        val base = provider.apiUrl.trimEnd('/')
+        val base = normalizeCodexBaseUrl(provider)
         val endpoints =
             listOf(
                 "$base/models?client_version=$CODEX_CLIENT_VERSION",
@@ -466,7 +466,7 @@ class ChatApiClient {
         reasoningEffort: String?,
         conversationId: String?
     ): Flow<ChatStreamDelta> = flow {
-        val url = provider.apiUrl.trimEnd('/') + "/responses"
+        val url = normalizeCodexBaseUrl(provider) + "/responses"
 
         val meta = codexModelCache[modelId] ?: runCatching {
             // Best-effort: refresh cache once if missing.
@@ -594,7 +594,8 @@ class ChatApiClient {
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 val errorBody = response.body?.string().orEmpty()
-                throw IllegalStateException("HTTP ${response.code}: $errorBody")
+                val sentContentType = request.header("Content-Type").orEmpty()
+                throw IllegalStateException("HTTP ${response.code}: $errorBody (url=$url, content-type=$sentContentType)")
             }
 
             val source = response.body?.source() ?: throw IllegalStateException("Response body is null")
@@ -984,6 +985,14 @@ class ChatApiClient {
         if (provider.oauthProvider?.trim()?.equals("codex", ignoreCase = true) == true) return true
         if (provider.apiUrl.contains("/backend-api/codex", ignoreCase = true)) return true
         return false
+    }
+
+    private fun normalizeCodexBaseUrl(provider: ProviderConfig): String {
+        val raw = provider.apiUrl.trim().trimEnd('/')
+        if (raw.endsWith("/v1", ignoreCase = true)) {
+            return raw.dropLast(3)
+        }
+        return raw
     }
 
     private fun isIFlow(provider: ProviderConfig): Boolean {
