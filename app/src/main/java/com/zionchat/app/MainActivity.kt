@@ -17,8 +17,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import coil3.ImageLoader
+import coil3.compose.setSingletonImageLoaderFactory
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import coil3.svg.SvgDecoder
 import com.zionchat.app.ui.screens.*
 import com.zionchat.app.ui.theme.ZionChatTheme
+import okhttp3.OkHttpClient
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,6 +42,15 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             ZionChatTheme {
+                val okHttpClient = remember { OkHttpClient() }
+                setSingletonImageLoaderFactory { context ->
+                    ImageLoader.Builder(context)
+                        .components {
+                            add(OkHttpNetworkFetcherFactory(callFactory = { okHttpClient }))
+                            add(SvgDecoder.Factory())
+                        }
+                        .build()
+                }
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
