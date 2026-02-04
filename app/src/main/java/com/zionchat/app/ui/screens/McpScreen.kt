@@ -183,12 +183,7 @@ fun McpListItem(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            ),
+            .clip(RoundedCornerShape(16.dp)),
         color = GrayLight,
         shape = RoundedCornerShape(16.dp)
     ) {
@@ -198,38 +193,50 @@ fun McpListItem(
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
+            // Icon + Text area - clickable for navigation
+            Row(
                 modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(GrayLighter),
-                contentAlignment = Alignment.Center
+                    .weight(1f)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onClick
+                    ),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = if (mcp.protocol == McpProtocol.HTTP) AppIcons.Globe else AppIcons.Stream,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                    tint = TextPrimary
-                )
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(GrayLighter),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (mcp.protocol == McpProtocol.HTTP) AppIcons.Globe else AppIcons.Stream,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = TextPrimary
+                    )
+                }
+                
+                Spacer(modifier = Modifier.width(12.dp))
+                
+                Column {
+                    Text(
+                        text = mcp.name,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (mcp.enabled) TextPrimary else TextSecondary
+                    )
+                    Text(
+                        text = mcp.protocol.name,
+                        fontSize = 13.sp,
+                        color = TextSecondary
+                    )
+                }
             }
             
             Spacer(modifier = Modifier.width(12.dp))
-            
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = mcp.name,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = if (mcp.enabled) TextPrimary else TextSecondary
-                )
-                Text(
-                    text = mcp.protocol.name,
-                    fontSize = 13.sp,
-                    color = TextSecondary
-                )
-            }
             
             McpToggleSwitch(
                 enabled = mcp.enabled,
@@ -296,15 +303,15 @@ fun McpEditSheetContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(max = 640.dp)
             .background(Surface, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-            .padding(bottom = 24.dp)
             .navigationBarsPadding()
     ) {
         // Drag handle
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp, bottom = 16.dp),
+                .padding(top = 12.dp, bottom = 12.dp),
             contentAlignment = Alignment.Center
         ) {
             Box(
@@ -315,47 +322,53 @@ fun McpEditSheetContent(
             )
         }
         
+        // Header - fixed at top
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (isEditing) "Edit MCP" else "Add MCP",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = SourceSans3,
+                color = TextPrimary
+            )
+            
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(GrayLighter)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onDismiss
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = AppIcons.Close,
+                    contentDescription = null,
+                    tint = TextSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        
+        // Scrollable content
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .weight(1f)
                 .padding(horizontal = 20.dp)
                 .verticalScroll(scrollState),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (isEditing) "Edit MCP" else "Add MCP",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = SourceSans3,
-                    color = TextPrimary
-                )
-                
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(GrayLighter)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onDismiss
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = AppIcons.Close,
-                        contentDescription = null,
-                        tint = TextSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
+            Spacer(modifier = Modifier.height(4.dp))
             
             // Protocol Selection
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -457,7 +470,7 @@ fun McpEditSheetContent(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 24.dp),
+                                .padding(vertical = 16.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -491,60 +504,63 @@ fun McpEditSheetContent(
             }
             
             Spacer(modifier = Modifier.height(8.dp))
-            
-            // Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+        }
+        
+        // Buttons - fixed at bottom
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(top = 12.dp, bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = GrayLight,
+                    contentColor = TextPrimary
+                ),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = GrayLight,
-                        contentColor = TextPrimary
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        text = "Cancel",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
-                
-                Button(
-                    onClick = {
-                        if (name.isNotBlank() && url.isNotBlank()) {
-                            onSave(
-                                McpConfig(
-                                    id = mcp?.id ?: java.util.UUID.randomUUID().toString(),
-                                    name = name.trim(),
-                                    url = url.trim(),
-                                    protocol = protocol,
-                                    enabled = mcp?.enabled ?: true,
-                                    description = description.trim(),
-                                    headers = headers.filter { it.key.isNotBlank() && it.value.isNotBlank() }
-                                )
+                Text(
+                    text = "Cancel",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(vertical = 6.dp)
+                )
+            }
+            
+            Button(
+                onClick = {
+                    if (name.isNotBlank() && url.isNotBlank()) {
+                        onSave(
+                            McpConfig(
+                                id = mcp?.id ?: java.util.UUID.randomUUID().toString(),
+                                name = name.trim(),
+                                url = url.trim(),
+                                protocol = protocol,
+                                enabled = mcp?.enabled ?: true,
+                                description = description.trim(),
+                                headers = headers.filter { it.key.isNotBlank() && it.value.isNotBlank() }
                             )
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = TextPrimary,
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = name.isNotBlank() && url.isNotBlank()
-                ) {
-                    Text(
-                        text = "Save",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
+                        )
+                    }
+                },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TextPrimary,
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(12.dp),
+                enabled = name.isNotBlank() && url.isNotBlank()
+            ) {
+                Text(
+                    text = "Save",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(vertical = 6.dp)
+                )
             }
         }
     }
