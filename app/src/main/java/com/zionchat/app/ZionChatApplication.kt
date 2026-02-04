@@ -1,9 +1,9 @@
 package com.zionchat.app
 
 import android.app.Application
-import coil.ImageLoader
-import coil.ImageLoaderFactory
-import coil.decode.SvgDecoder
+import coil3.ImageLoader
+import coil3.ImageLoaderFactory
+import coil3.decode.SvgDecoder
 
 class ZionChatApplication : Application(), ImageLoaderFactory {
     override fun newImageLoader(): ImageLoader {
@@ -14,4 +14,3 @@ class ZionChatApplication : Application(), ImageLoaderFactory {
             .build()
     }
 }
-
