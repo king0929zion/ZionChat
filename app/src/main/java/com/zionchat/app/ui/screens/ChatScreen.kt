@@ -1557,7 +1557,6 @@ fun ToolMenuPanel(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(bottom = bottomBarHeight)
                     .background(Color.Black.copy(alpha = 0.5f))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -1569,7 +1568,6 @@ fun ToolMenuPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = bottomBarHeight)
                         .offset { IntOffset(0, dragOffsetPx.roundToInt()) }
                         .draggable(
                             orientation = Orientation.Vertical,
