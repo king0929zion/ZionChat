@@ -37,7 +37,18 @@ class AppRepository(context: Context) {
 
     val providersFlow: Flow<List<ProviderConfig>> = dataStore.data.map { prefs ->
         val json = prefs[providersKey] ?: "[]"
-        runCatching { gson.fromJson<List<ProviderConfig>>(json, providerListType) }.getOrDefault(emptyList())
+        runCatching { gson.fromJson<List<ProviderConfig>>(json, providerListType) }
+            .getOrDefault(emptyList())
+            .map { provider ->
+                val safeHeaders =
+                    runCatching { provider.headers }.getOrNull().orEmpty()
+                        .mapNotNull { header ->
+                            val key = runCatching { header.key }.getOrNull()?.trim().orEmpty()
+                            val value = runCatching { header.value }.getOrNull().orEmpty()
+                            if (key.isBlank()) null else HttpHeader(key, value)
+                        }
+                provider.copy(headers = safeHeaders)
+            }
     }
 
     val modelsFlow: Flow<List<ModelConfig>> = dataStore.data.map { prefs ->

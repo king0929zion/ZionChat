@@ -18,6 +18,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.data.ProviderConfig
 import com.zionchat.app.data.DEFAULT_PROVIDER_PRESETS
@@ -25,6 +28,7 @@ import com.zionchat.app.data.findProviderPreset
 import com.zionchat.app.data.resolveProviderIconAsset
 import com.zionchat.app.ui.components.AssetIcon
 import com.zionchat.app.ui.components.PageTopBar
+import com.zionchat.app.ui.components.liquidGlass
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.*
@@ -232,31 +236,48 @@ fun AddProviderScreen(
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
 
-                    Row(
+                    val typeBackdrop = rememberLayerBackdrop()
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(GrayLighter, RoundedCornerShape(20.dp))
-                            .padding(6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            .heightIn(min = 48.dp)
                     ) {
-                        TypeOption(
-                            text = "OpenAI",
-                            selected = selectedType == "openai",
-                            onClick = { selectedType = "openai" },
-                            modifier = Modifier.weight(1f)
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clip(RoundedCornerShape(20.dp))
+                                .layerBackdrop(typeBackdrop)
+                                .background(GrayLighter, RoundedCornerShape(20.dp))
                         )
-                        TypeOption(
-                            text = "Anthropic",
-                            selected = selectedType == "anthropic",
-                            onClick = { selectedType = "anthropic" },
-                            modifier = Modifier.weight(1f)
-                        )
-                        TypeOption(
-                            text = "Google",
-                            selected = selectedType == "google",
-                            onClick = { selectedType = "google" },
-                            modifier = Modifier.weight(1f)
-                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            TypeOption(
+                                text = "OpenAI",
+                                selected = selectedType == "openai",
+                                onClick = { selectedType = "openai" },
+                                modifier = Modifier.weight(1f),
+                                backdrop = typeBackdrop
+                            )
+                            TypeOption(
+                                text = "Anthropic",
+                                selected = selectedType == "anthropic",
+                                onClick = { selectedType = "anthropic" },
+                                modifier = Modifier.weight(1f),
+                                backdrop = typeBackdrop
+                            )
+                            TypeOption(
+                                text = "Google",
+                                selected = selectedType == "google",
+                                onClick = { selectedType = "google" },
+                                modifier = Modifier.weight(1f),
+                                backdrop = typeBackdrop
+                            )
+                        }
                     }
                 }
 
@@ -547,15 +568,30 @@ fun TypeOption(
     text: String,
     selected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    backdrop: Backdrop? = null
 ) {
+    val shape = RoundedCornerShape(16.dp)
     Box(
         modifier = modifier
             .height(36.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                if (selected) TextPrimary else Color.Transparent,
-                RoundedCornerShape(16.dp)
+            .clip(shape)
+            .then(
+                when {
+                    !selected -> Modifier.background(Color.Transparent, shape)
+                    backdrop != null -> Modifier.liquidGlass(
+                        backdrop = backdrop,
+                        shape = shape,
+                        overlayColor = TextPrimary.copy(alpha = 0.88f),
+                        fallbackColor = TextPrimary,
+                        blurRadius = 16.dp,
+                        refractionHeight = 4.dp,
+                        refractionAmount = 8.dp,
+                        highlightAlpha = 0.18f,
+                        shadowAlpha = 0.06f
+                    )
+                    else -> Modifier.background(TextPrimary, shape)
+                }
             )
             .pressableScale(pressedScale = 0.95f, onClick = onClick),
         contentAlignment = Alignment.Center

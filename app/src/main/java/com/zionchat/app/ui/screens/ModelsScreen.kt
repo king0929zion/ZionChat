@@ -74,6 +74,7 @@ import com.zionchat.app.LocalProviderAuthManager
 import com.zionchat.app.data.ModelConfig
 import com.zionchat.app.data.buildModelStorageId
 import com.zionchat.app.ui.components.BottomFadeScrim
+import com.zionchat.app.ui.components.LiquidGlassSwitch
 import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
@@ -345,28 +346,11 @@ private fun ModelToggleSwitch(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(
+    LiquidGlassSwitch(
+        checked = enabled,
+        onCheckedChange = onToggle,
         modifier = modifier
-            .width(48.dp)
-            .height(28.dp)
-            .background(
-                if (enabled) TextPrimary else Color.Transparent,
-                RoundedCornerShape(14.dp)
-            )
-            .border(1.5.dp, if (enabled) TextPrimary else TextSecondary, RoundedCornerShape(14.dp))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onToggle() },
-        contentAlignment = if (enabled) Alignment.CenterEnd else Alignment.CenterStart
-    ) {
-        Box(
-            modifier = Modifier
-                .padding(2.dp)
-                .size(22.dp)
-                .background(if (enabled) Surface else TextSecondary, CircleShape)
-        )
-    }
+    )
 }
 
 @OptIn(ExperimentalAnimationApi::class)

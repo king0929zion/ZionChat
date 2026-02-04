@@ -10,6 +10,7 @@ data class ProviderConfig(
     val type: String,
     val apiUrl: String,
     val apiKey: String,
+    val headers: List<HttpHeader> = emptyList(),
     val oauthProvider: String? = null,
     val oauthAccessToken: String? = null,
     val oauthRefreshToken: String? = null,

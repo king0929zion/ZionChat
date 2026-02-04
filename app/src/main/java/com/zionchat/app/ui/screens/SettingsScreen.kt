@@ -53,12 +53,16 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import com.zionchat.app.data.extractRemoteModelId
 import com.zionchat.app.ui.components.TopFadeScrim
+import com.zionchat.app.ui.components.liquidGlass
 import com.zionchat.app.ui.components.rememberResourceDrawablePainter
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.*
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 @Composable
 fun SettingsScreen(navController: NavController) {
@@ -89,6 +93,7 @@ fun SettingsScreen(navController: NavController) {
     }
 
     val displayName = nickname.takeIf { it.isNotBlank() } ?: "Kendall Williamson"
+    val screenBackdrop = rememberLayerBackdrop()
 
     Scaffold(
         topBar = { SettingsTopBar(navController) },
@@ -98,6 +103,7 @@ fun SettingsScreen(navController: NavController) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .layerBackdrop(screenBackdrop)
         ) {
             Column(
                 modifier = Modifier
@@ -258,6 +264,7 @@ fun SettingsScreen(navController: NavController) {
         visible = showAppearanceMenu,
         selected = selectedAppearance,
         anchorY = appearanceAnchorY,
+        backdrop = screenBackdrop,
         onDismiss = { showAppearanceMenu = false },
         onSelect = { selectedAppearance = it }
     )
@@ -267,6 +274,7 @@ fun SettingsScreen(navController: NavController) {
         visible = showAccentColorMenu,
         selected = selectedAccentColor,
         anchorY = accentColorAnchorY,
+        backdrop = screenBackdrop,
         onDismiss = { showAccentColorMenu = false },
         onSelect = { selectedAccentColor = it }
     )
@@ -808,6 +816,7 @@ fun AppearanceMenu(
     visible: Boolean,
     selected: String,
     anchorY: Float,
+    backdrop: Backdrop,
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit
 ) {
@@ -848,12 +857,22 @@ fun AppearanceMenu(
                         translationY = anchorY - 20
                     }
             ) {
-                Surface(
+                val shape = RoundedCornerShape(16.dp)
+                Box(
                     modifier = Modifier
-                        .widthIn(max = 200.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFFF5F5F5),
-                    shadowElevation = 16.dp
+                        .widthIn(max = 200.dp)
+                        .shadow(elevation = 16.dp, shape = shape, clip = false)
+                        .liquidGlass(
+                            backdrop = backdrop,
+                            shape = shape,
+                            overlayColor = Color(0xFFF5F5F5).copy(alpha = 0.72f),
+                            fallbackColor = Color(0xFFF5F5F5),
+                            blurRadius = 24.dp,
+                            refractionHeight = 6.dp,
+                            refractionAmount = 10.dp,
+                            highlightAlpha = 0.22f,
+                            shadowAlpha = 0f
+                        )
                 ) {
                     Column(
                         modifier = Modifier.padding(6.dp),
@@ -930,6 +949,7 @@ fun AccentColorMenu(
     visible: Boolean,
     selected: String,
     anchorY: Float,
+    backdrop: Backdrop,
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit
 ) {
@@ -970,12 +990,22 @@ fun AccentColorMenu(
                         translationY = anchorY - 20
                     }
             ) {
-                Surface(
+                val shape = RoundedCornerShape(16.dp)
+                Box(
                     modifier = Modifier
-                        .widthIn(max = 200.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFFF5F5F5),
-                    shadowElevation = 16.dp
+                        .widthIn(max = 200.dp)
+                        .shadow(elevation = 16.dp, shape = shape, clip = false)
+                        .liquidGlass(
+                            backdrop = backdrop,
+                            shape = shape,
+                            overlayColor = Color(0xFFF5F5F5).copy(alpha = 0.72f),
+                            fallbackColor = Color(0xFFF5F5F5),
+                            blurRadius = 24.dp,
+                            refractionHeight = 6.dp,
+                            refractionAmount = 10.dp,
+                            highlightAlpha = 0.22f,
+                            shadowAlpha = 0f
+                        )
                 ) {
                     Column(
                         modifier = Modifier.padding(6.dp),

@@ -1,0 +1,130 @@
+package com.zionchat.app.ui.components
+
+import android.os.Build
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.matchParentSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.Shadow
+import com.zionchat.app.ui.theme.Surface
+import com.zionchat.app.ui.theme.TextPrimary
+import com.zionchat.app.ui.theme.TextSecondary
+
+fun Modifier.liquidGlass(
+    backdrop: Backdrop,
+    shape: Shape,
+    overlayColor: Color,
+    fallbackColor: Color = overlayColor.copy(alpha = 1f),
+    blurRadius: Dp = 22.dp,
+    refractionHeight: Dp = 5.dp,
+    refractionAmount: Dp = 10.dp,
+    highlightAlpha: Float = 0.35f,
+    shadowAlpha: Float = 0.10f
+): Modifier {
+    val supportsBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    if (!supportsBlur) {
+        return this
+            .background(fallbackColor, shape)
+            .clip(shape)
+    }
+
+    return this.drawBackdrop(
+        backdrop = backdrop,
+        shape = { shape },
+        effects = {
+            blur(blurRadius.toPx())
+            lens(
+                refractionHeight = refractionHeight.toPx(),
+                refractionAmount = refractionAmount.toPx(),
+                chromaticAberration = true
+            )
+        },
+        highlight = { Highlight.Ambient.copy(alpha = highlightAlpha) },
+        shadow = { Shadow(radius = 24.dp, color = Color.Black.copy(alpha = shadowAlpha)) },
+        onDrawSurface = { drawRect(overlayColor) }
+    )
+}
+
+@Composable
+fun LiquidGlassSwitch(
+    checked: Boolean,
+    onCheckedChange: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val trackShape = RoundedCornerShape(14.dp)
+    val trackBackdrop = rememberLayerBackdrop()
+    val knobAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart
+    val knobOverlay = if (checked) Surface.copy(alpha = 0.92f) else TextSecondary.copy(alpha = 0.32f)
+    val knobFallback = if (checked) Surface else TextSecondary
+
+    Box(
+        modifier = modifier
+            .width(48.dp)
+            .height(28.dp)
+            .semantics { role = Role.Switch }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onCheckedChange
+            )
+    ) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .layerBackdrop(trackBackdrop)
+                .clip(trackShape)
+                .background(if (checked) TextPrimary else Color.Transparent, trackShape)
+                .border(
+                    width = 1.5.dp,
+                    color = if (checked) TextPrimary else TextSecondary,
+                    shape = trackShape
+                )
+        )
+
+        Box(
+            modifier = Modifier
+                .align(knobAlignment)
+                .padding(2.dp)
+                .size(22.dp)
+                .liquidGlass(
+                    backdrop = trackBackdrop,
+                    shape = CircleShape,
+                    overlayColor = knobOverlay,
+                    fallbackColor = knobFallback,
+                    blurRadius = 12.dp,
+                    refractionHeight = 4.dp,
+                    refractionAmount = 8.dp,
+                    highlightAlpha = 0.22f,
+                    shadowAlpha = 0.06f
+                )
+        )
+    }
+}
+
