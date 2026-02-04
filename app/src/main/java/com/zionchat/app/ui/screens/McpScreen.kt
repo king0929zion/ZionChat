@@ -199,7 +199,7 @@ fun McpEmptyState() {
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = AppIcons.Mcp,
+                imageVector = AppIcons.MCPTools,
                 contentDescription = null,
                 modifier = Modifier.size(28.dp),
                 tint = TextSecondary
@@ -623,7 +623,7 @@ fun McpHeadersSection(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = AppIcons.Add,
+                        imageVector = AppIcons.Plus,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                         tint = TextPrimary

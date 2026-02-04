@@ -125,7 +125,7 @@ class McpClient {
                 error("HTTP ${response.code}: $raw")
             }
             
-            parseToolsResponse(raw)
+            return parseToolsResponse(raw)
         }
     }
     
