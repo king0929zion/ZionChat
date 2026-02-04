@@ -44,7 +44,6 @@ import com.zionchat.app.data.ModelConfig
 import com.zionchat.app.data.OAuthClient
 import com.zionchat.app.data.ProviderConfig
 import com.zionchat.app.data.buildModelStorageId
-import com.zionchat.app.data.extractRemoteModelId
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.SourceSans3
 import com.zionchat.app.ui.components.pressableScale
@@ -56,13 +55,6 @@ private enum class OAuthStep {
     STEP_2_CALLBACK,
     STEP_3_COMPLETED
 }
-
-// 模拟模型数据
-private data class ModelItem(
-    val id: String,
-    val name: String,
-    val enabled: Boolean
-)
 
 @Composable
 fun AddOAuthProviderScreen(
@@ -81,7 +73,6 @@ fun AddOAuthProviderScreen(
     }
     val existingProviderId = remember(providerId) { providerId?.trim()?.takeIf { it.isNotBlank() } }
     val providers by repository.providersFlow.collectAsState(initial = emptyList())
-    val allModels by repository.modelsFlow.collectAsState(initial = emptyList())
     val existingProvider = remember(providers, existingProviderId) {
         existingProviderId?.let { id -> providers.firstOrNull { it.id == id } }
     }
@@ -91,16 +82,11 @@ fun AddOAuthProviderScreen(
     var callbackUrl by remember { mutableStateOf("") }
     var showAvatarModal by remember { mutableStateOf(false) }
     var selectedAvatar by remember(lockedProviderId) { mutableStateOf(lockedProviderId ?: "codex") }
-    var showModelsSection by remember { mutableStateOf(false) }
     var isWorking by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
 
     var oauthStart by remember { mutableStateOf<OAuthClient.OAuthStartResult?>(null) }
     var connectedProvider by remember { mutableStateOf<ProviderConfig?>(null) }
-
-    var models by remember { mutableStateOf<List<ModelItem>>(emptyList()) }
-
-    val enabledCount = models.count { it.enabled }
 
     LaunchedEffect(existingProvider?.id) {
         val providerConfig = existingProvider ?: return@LaunchedEffect
@@ -112,27 +98,7 @@ fun AddOAuthProviderScreen(
         oauthStart = null
         callbackUrl = ""
         currentStep = OAuthStep.STEP_3_COMPLETED
-        showModelsSection = true
         errorText = null
-    }
-
-    LaunchedEffect(existingProvider?.id, allModels) {
-        val providerConfig = existingProvider ?: return@LaunchedEffect
-        if (connectedProvider?.id != providerConfig.id) return@LaunchedEffect
-
-        val providerModels =
-            allModels.filter { it.providerId?.trim() == providerConfig.id.trim() }
-        models =
-            providerModels
-                .map { model ->
-                    ModelItem(
-                        id = extractRemoteModelId(model.id),
-                        name = model.displayName,
-                        enabled = model.enabled
-                    )
-                }
-                .sortedBy { it.name.lowercase() }
-        showModelsSection = true
     }
 
     fun resolvedOauthProvider(): OAuthClient.OAuthProvider? {
@@ -362,10 +328,6 @@ fun AddOAuthProviderScreen(
                                         emptyList()
                                     }
                                 val enabledSet = suggestEnabledModels(start.provider, modelIds).toSet()
-                                models =
-                                    modelIds.map { idValue ->
-                                        ModelItem(id = idValue, name = idValue, enabled = enabledSet.contains(idValue))
-                                    }
 
                                 if (modelIds.isNotEmpty()) {
                                     repository.upsertModels(
@@ -381,7 +343,6 @@ fun AddOAuthProviderScreen(
                                 }
 
                                 currentStep = OAuthStep.STEP_3_COMPLETED
-                                showModelsSection = true
                             }.onFailure { throwable ->
                                 errorText = throwable.message ?: throwable.toString()
                             }
@@ -396,9 +357,7 @@ fun AddOAuthProviderScreen(
                             scope.launch { repository.deleteProviderAndModels(providerId) }
                         }
                         currentStep = OAuthStep.STEP_1_CONNECT
-                        showModelsSection = false
                         callbackUrl = ""
-                        models = emptyList()
                         oauthStart = null
                         connectedProvider = null
                     }
@@ -414,34 +373,56 @@ fun AddOAuthProviderScreen(
                     )
                 }
 
-                // Models Section (OAuth完成后显示)
                 AnimatedVisibility(
-                    visible = showModelsSection,
+                    visible = currentStep == OAuthStep.STEP_3_COMPLETED && connectedProvider != null,
                     enter = fadeIn() + slideInVertically(initialOffsetY = { 20 }),
                     exit = fadeOut() + slideOutVertically(targetOffsetY = { 20 })
                 ) {
-                    ModelsSection(
-                        models = models,
-                        enabledCount = enabledCount,
-                        onToggleModel = { modelId ->
-                            val providerId = connectedProvider?.id?.trim().orEmpty()
-                            if (providerId.isBlank()) return@ModelsSection
-                            models = models.map { item ->
-                                if (item.id == modelId) item.copy(enabled = !item.enabled) else item
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color.White, RoundedCornerShape(20.dp))
+                            .pressableScale(pressedScale = 0.98f) {
+                                val providerId = connectedProvider?.id?.trim().orEmpty()
+                                if (providerId.isBlank()) return@pressableScale
+                                scope.launch {
+                                    val trimmedName = providerName.trim()
+                                    val provider = connectedProvider
+                                    if (provider != null && trimmedName.isNotBlank() && provider.name != trimmedName) {
+                                        val updated = provider.copy(name = trimmedName)
+                                        repository.upsertProvider(updated)
+                                        connectedProvider = updated
+                                    }
+                                    navController.navigate("models?providerId=$providerId")
+                                }
                             }
-                            val updated = models.firstOrNull { it.id == modelId } ?: return@ModelsSection
-                            scope.launch {
-                                repository.upsertModel(
-                                    ModelConfig(
-                                        id = buildModelStorageId(providerId, updated.id),
-                                        displayName = updated.name,
-                                        enabled = updated.enabled,
-                                        providerId = providerId
-                                    )
-                                )
-                            }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Models",
+                                fontSize = 13.sp,
+                                fontFamily = SourceSans3,
+                                color = Color(0xFF8E8E93)
+                            )
+                            Text(
+                                text = "Configure models",
+                                fontSize = 17.sp,
+                                fontFamily = SourceSans3,
+                                color = Color(0xFF1C1C1E),
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
                         }
-                    )
+                        Icon(
+                            imageVector = AppIcons.ChevronRight,
+                            contentDescription = "Navigate",
+                            tint = Color(0xFF8E8E93),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
 
@@ -1161,133 +1142,5 @@ private fun Step3Content(onReset: () -> Unit) {
                 fontFamily = SourceSans3
             )
         }
-    }
-}
-
-@Composable
-private fun ModelsSection(
-    models: List<ModelItem>,
-    enabledCount: Int,
-    onToggleModel: (String) -> Unit
-) {
-    Column {
-        // 标题行
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Available Models",
-                fontSize = 13.sp,
-                color = Color(0xFF8E8E93),
-                fontFamily = SourceSans3
-            )
-
-            Text(
-                text = "$enabledCount of ${models.size} enabled",
-                fontSize = 12.sp,
-                color = Color(0xFF8E8E93),
-                fontFamily = SourceSans3
-            )
-        }
-
-        // 模型列表
-        Surface(
-            color = Color.White,
-            shape = RoundedCornerShape(20.dp)
-        ) {
-            Column {
-                models.forEachIndexed { index, model ->
-                    ModelListItem(
-                        model = model,
-                        onToggle = { onToggleModel(model.id) },
-                        showDivider = index < models.size - 1
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ModelListItem(
-    model: ModelItem,
-    onToggle: () -> Unit,
-    showDivider: Boolean
-) {
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onToggle)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = model.name,
-                fontSize = 16.sp,
-                color = Color(0xFF1C1C1E),
-                fontFamily = SourceSans3
-            )
-
-            // 自定义 Toggle Switch
-            CustomToggleSwitch(enabled = model.enabled)
-        }
-
-        if (showDivider) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .height(1.dp)
-                    .background(Color(0xFFF2F2F7))
-            )
-        }
-    }
-}
-
-@Composable
-private fun CustomToggleSwitch(enabled: Boolean) {
-    val width = 50.dp
-    val height = 30.dp
-    val thumbSize = 22.dp
-
-    Box(
-        modifier = Modifier
-            .width(width)
-            .height(height)
-            .clip(RoundedCornerShape(15.dp))
-            .background(
-                if (enabled) Color(0xFF1C1C1E) else Color.Transparent
-            )
-            .border(
-                width = if (enabled) 0.dp else 2.dp,
-                color = if (enabled) Color.Transparent else Color(0xFF9CA3AF),
-                shape = RoundedCornerShape(15.dp)
-            ),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        // Thumb
-        val thumbOffset by animateFloatAsState(
-            targetValue = if (enabled) 1f else 0f,
-            animationSpec = tween(200),
-            label = "thumb"
-        )
-
-        Box(
-            modifier = Modifier
-                .padding(
-                    start = if (enabled) 0.dp else 4.dp,
-                    end = if (enabled) 4.dp else 0.dp
-                )
-                .offset(x = (thumbOffset * ((width - thumbSize - if (enabled) 8.dp else 0.dp).value)).dp)
-                .size(thumbSize)
-                .clip(CircleShape)
-                .background(if (enabled) Color.White else Color(0xFF9CA3AF)),
-        )
     }
 }
