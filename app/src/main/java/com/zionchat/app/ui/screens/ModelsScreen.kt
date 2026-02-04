@@ -285,7 +285,7 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
                     repository.upsertModel(
                         ModelConfig(
                             id = buildModelStorageId(provider.id, id.trim()),
-                            displayName = name.trim(),
+                            displayName = name.trim().ifBlank { id.trim() },
                             enabled = false,
                             providerId = provider.id
                         )

@@ -22,7 +22,7 @@ import kotlin.random.Random
 class ChatApiClient {
     private val client = OkHttpClient()
     private val gson = Gson()
-    private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+    private val jsonMediaType = "application/json".toMediaType()
     private val strictJsonMediaType = "application/json".toMediaType()
     private val markdownImageRegex = Regex("!\\[[^\\]]*\\]\\(([^)]+)\\)")
     private val codexModelCache = ConcurrentHashMap<String, CodexModelMeta>()
@@ -162,29 +162,32 @@ class ChatApiClient {
                 Request.Builder()
                     .url(url)
                     .get()
-                    .addHeader("Accept", "application/json")
-                    .addHeader("Authorization", "Bearer ${provider.apiKey}")
-                    .addHeader("Openai-Beta", "responses=experimental")
-                    .addHeader("Version", "0.21.0")
-                    .addHeader("Session_id", UUID.randomUUID().toString())
-                    .addHeader("User-Agent", CODEX_USER_AGENT)
-                    .addHeader("Connection", "Keep-Alive")
 
             val isOAuthToken =
                 provider.oauthProvider?.trim()?.equals("codex", ignoreCase = true) == true ||
                     !provider.oauthAccessToken.isNullOrBlank() ||
                     !provider.oauthRefreshToken.isNullOrBlank() ||
                     !provider.oauthIdToken.isNullOrBlank()
-            if (isOAuthToken) {
-                requestBuilder.addHeader("Originator", "codex_cli_rs")
-                provider.oauthAccountId?.trim()?.takeIf { it.isNotBlank() }?.let { accountId ->
-                    requestBuilder.addHeader("Chatgpt-Account-Id", accountId)
-                }
-            }
 
             extraHeaders
                 .filter { it.key.isNotBlank() }
                 .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
+
+            requestBuilder
+                .header("Accept", "application/json")
+                .header("Authorization", "Bearer ${provider.apiKey}")
+                .header("Openai-Beta", "responses=experimental")
+                .header("Version", "0.21.0")
+                .header("Session_id", UUID.randomUUID().toString())
+                .header("User-Agent", CODEX_USER_AGENT)
+                .header("Connection", "Keep-Alive")
+
+            if (isOAuthToken) {
+                requestBuilder.header("Originator", "codex_cli_rs")
+                provider.oauthAccountId?.trim()?.takeIf { it.isNotBlank() }?.let { accountId ->
+                    requestBuilder.header("Chatgpt-Account-Id", accountId)
+                }
+            }
 
             val request = requestBuilder.build()
             val ids =
@@ -551,36 +554,40 @@ class ChatApiClient {
         val requestBuilder =
             Request.Builder()
                 .url(url)
-                .addHeader("Content-Type", "application/json")
-                .addHeader("Authorization", "Bearer ${provider.apiKey}")
-                .addHeader("Accept", "text/event-stream")
-                .addHeader("Openai-Beta", "responses=experimental")
-                .addHeader("Version", "0.21.0")
-                .addHeader("Session_id", conversationId?.trim()?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString())
-                .addHeader("User-Agent", CODEX_USER_AGENT)
-                .addHeader("Connection", "Keep-Alive")
-
-        conversationId?.trim()?.takeIf { it.isNotBlank() }?.let { cid ->
-            requestBuilder.addHeader("Conversation_id", cid)
-        }
+                .post(body.toRequestBody(strictJsonMediaType))
 
         val isOAuthToken =
             provider.oauthProvider?.trim()?.equals("codex", ignoreCase = true) == true ||
                 !provider.oauthAccessToken.isNullOrBlank() ||
                 !provider.oauthRefreshToken.isNullOrBlank() ||
                 !provider.oauthIdToken.isNullOrBlank()
-        if (isOAuthToken) {
-            requestBuilder.addHeader("Originator", "codex_cli_rs")
-            provider.oauthAccountId?.trim()?.takeIf { it.isNotBlank() }?.let { accountId ->
-                requestBuilder.addHeader("Chatgpt-Account-Id", accountId)
-            }
-        }
 
         extraHeaders
             .filter { it.key.isNotBlank() }
             .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
 
-        val request = requestBuilder.post(body.toRequestBody(strictJsonMediaType)).build()
+        requestBuilder
+            .header("Content-Type", "application/json")
+            .header("Authorization", "Bearer ${provider.apiKey}")
+            .header("Accept", "text/event-stream")
+            .header("Openai-Beta", "responses=experimental")
+            .header("Version", "0.21.0")
+            .header("Session_id", conversationId?.trim()?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString())
+            .header("User-Agent", CODEX_USER_AGENT)
+            .header("Connection", "Keep-Alive")
+
+        conversationId?.trim()?.takeIf { it.isNotBlank() }?.let { cid ->
+            requestBuilder.header("Conversation_id", cid)
+        }
+
+        if (isOAuthToken) {
+            requestBuilder.header("Originator", "codex_cli_rs")
+            provider.oauthAccountId?.trim()?.takeIf { it.isNotBlank() }?.let { accountId ->
+                requestBuilder.header("Chatgpt-Account-Id", accountId)
+            }
+        }
+
+        val request = requestBuilder.build()
 
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {

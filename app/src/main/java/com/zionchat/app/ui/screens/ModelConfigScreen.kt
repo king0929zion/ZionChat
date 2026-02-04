@@ -84,11 +84,16 @@ fun ModelConfigScreen(
 
     fun save() {
         val id = existingModel?.id ?: modelId ?: return
+        val fallbackName =
+            existingModel?.displayName?.trim()?.takeIf { it.isNotBlank() }
+                ?: com.zionchat.app.data.extractRemoteModelId(id)
+
+        val finalDisplayName = modelName.trim().ifBlank { fallbackName }
         scope.launch {
             repository.upsertModel(
                 ModelConfig(
                     id = id,
-                    displayName = modelName.trim().ifBlank { existingModel?.displayName ?: id },
+                    displayName = finalDisplayName,
                     enabled = existingModel?.enabled ?: true,
                     providerId = existingModel?.providerId,
                     headers = headers
