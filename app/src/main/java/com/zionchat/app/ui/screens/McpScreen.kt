@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -172,7 +173,7 @@ fun McpTopBar(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = AppIcons.Add,
+                imageVector = AppIcons.Plus,
                 contentDescription = null,
                 modifier = Modifier.size(22.dp),
                 tint = TextPrimary

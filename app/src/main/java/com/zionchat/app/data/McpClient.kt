@@ -12,9 +12,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.sse.EventSource
-import okhttp3.sse.EventSourceListener
-import okhttp3.sse.EventSources
 import java.util.concurrent.TimeUnit
 
 class McpClient {
@@ -133,8 +130,6 @@ class McpClient {
     }
     
     private fun fetchToolsSse(config: McpConfig): List<McpTool> {
-        // SSE implementation for streaming tool updates
-        // For now, fall back to HTTP endpoint
         return fetchToolsHttp(config)
     }
     

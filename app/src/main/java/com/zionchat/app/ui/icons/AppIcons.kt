@@ -1979,11 +1979,11 @@ object AppIcons {
         ) {
             moveTo(4f, 22f)
             horizontalLineTo(18f)
-            arcTo(2f, 2f, 0f, false, False, 20f, 20f)
+            arcTo(2f, 2f, 0f, false, false, 20f, 20f)
             verticalLineTo(7.5f)
             lineTo(14.5f, 2f)
             horizontalLineTo(6f)
-            arcTo(2f, 2f, 0f, false, False, 4f, 4f)
+            arcTo(2f, 2f, 0f, false, false, 4f, 4f)
             verticalLineTo(4f)
             moveTo(14f, 2f)
             verticalLineTo(6f)
