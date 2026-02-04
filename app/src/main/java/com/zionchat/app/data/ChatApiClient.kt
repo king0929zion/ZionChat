@@ -571,6 +571,7 @@ class ChatApiClient {
 
         requestBuilder
             .header("authorization", "Bearer ${provider.apiKey}")
+            .header("Content-Type", "application/json")
             .header("Accept", "text/event-stream")
             .header("originator", "codex_cli_rs")
             .header("session_id", sessionId)
@@ -578,7 +579,7 @@ class ChatApiClient {
 
         if (isOAuthToken) {
             provider.oauthAccountId?.trim()?.takeIf { it.isNotBlank() }?.let { accountId ->
-                requestBuilder.header("ChatGPT-Account-ID", accountId)
+                requestBuilder.header("ChatGPT-Account-Id", accountId)
             }
         }
 
