@@ -1844,7 +1844,7 @@ fun ToolListItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BottomInputArea(
+private fun BottomInputArea(
     selectedTool: String?,
     attachments: List<PendingImageAttachment>,
     onRemoveAttachment: (Int) -> Unit,
