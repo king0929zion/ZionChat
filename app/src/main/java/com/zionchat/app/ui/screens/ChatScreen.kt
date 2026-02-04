@@ -936,39 +936,51 @@ fun ChatScreen(navController: NavController) {
                         }
                     }
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(0.67f)
-                            .background(ThinkingBackground)
-                            .padding(horizontal = 20.dp)
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // 标题 Thinking
-                        Text(
-                            text = "Thinking",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextPrimary
+                    Box(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.67f)) {
+                        // Status bar background - gray like the rest
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .windowInsetsPadding(WindowInsets.statusBars)
+                                .background(ThinkingBackground)
+                                .align(Alignment.TopCenter)
+                                .zIndex(1f)
                         )
-
-                        // 内容区域
+                        
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
+                                .fillMaxHeight()
+                                .background(ThinkingBackground)
+                                .padding(horizontal = 20.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            MarkdownText(
-                                markdown = displayThinkingText.orEmpty(),
-                                textStyle = TextStyle(
-                                    fontSize = 14.sp,
-                                    lineHeight = 22.sp,
-                                    color = TextPrimary
-                                )
+                            // 标题 Thinking
+                            Text(
+                                text = "Thinking",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary
                             )
+
+                            // 内容区域
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                MarkdownText(
+                                    markdown = displayThinkingText.orEmpty(),
+                                    textStyle = TextStyle(
+                                        fontSize = 14.sp,
+                                        lineHeight = 22.sp,
+                                        color = TextPrimary
+                                    )
+                                )
+                            }
                         }
                     }
                 }
