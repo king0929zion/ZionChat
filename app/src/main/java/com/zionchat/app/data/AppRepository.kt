@@ -119,7 +119,7 @@ class AppRepository(context: Context) {
         val content = message.content.orEmpty()
         val timestamp = message.timestamp.takeIf { it > 0 } ?: System.currentTimeMillis()
         val id = safeTrim(message.id).ifBlank {
-            UUID.nameUUIDFromBytes("${timestamp}_$role_${content}".toByteArray()).toString()
+            UUID.nameUUIDFromBytes("${timestamp}_${role}_${content}".toByteArray()).toString()
         }
 
         val tags = message.tags.orEmpty().mapNotNull(::sanitizeTag).takeIf { it.isNotEmpty() }
