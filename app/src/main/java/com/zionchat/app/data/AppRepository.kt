@@ -1,6 +1,7 @@
 package com.zionchat.app.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.google.gson.Gson
@@ -22,6 +23,8 @@ class AppRepository(context: Context) {
     private val memoriesKey = stringPreferencesKey("memories_json")
     private val currentConversationIdKey = stringPreferencesKey("current_conversation_id")
     private val nicknameKey = stringPreferencesKey("nickname")
+    private val personalNicknameKey = stringPreferencesKey("personal_nickname")
+    private val personalNicknameMigratedKey = booleanPreferencesKey("personal_nickname_migrated_v1")
     private val handleKey = stringPreferencesKey("handle")
     private val avatarUriKey = stringPreferencesKey("avatar_uri")
     private val customInstructionsKey = stringPreferencesKey("custom_instructions")
@@ -77,6 +80,10 @@ class AppRepository(context: Context) {
         prefs[nicknameKey].orEmpty()
     }
 
+    val personalNicknameFlow: Flow<String> = dataStore.data.map { prefs ->
+        prefs[personalNicknameKey].orEmpty()
+    }
+
     val handleFlow: Flow<String> = dataStore.data.map { prefs ->
         prefs[handleKey].orEmpty()
     }
@@ -122,6 +129,17 @@ class AppRepository(context: Context) {
     suspend fun setNickname(value: String) {
         dataStore.edit { prefs ->
             prefs[nicknameKey] = value
+        }
+    }
+
+    suspend fun setPersonalNickname(value: String) {
+        dataStore.edit { prefs ->
+            val trimmed = value.trimEnd()
+            if (trimmed.isBlank()) {
+                prefs.remove(personalNicknameKey)
+            } else {
+                prefs[personalNicknameKey] = trimmed
+            }
         }
     }
 
@@ -179,6 +197,20 @@ class AppRepository(context: Context) {
     suspend fun setDefaultTitleModelId(modelId: String?) {
         dataStore.edit { prefs ->
             if (modelId.isNullOrBlank()) prefs.remove(defaultTitleModelIdKey) else prefs[defaultTitleModelIdKey] = modelId
+        }
+    }
+
+    suspend fun migratePersonalNicknameIfNeeded() {
+        dataStore.edit { prefs ->
+            val migrated = prefs[personalNicknameMigratedKey] ?: false
+            if (migrated) return@edit
+
+            val legacy = prefs[nicknameKey].orEmpty().trim()
+            if (prefs[personalNicknameKey].isNullOrBlank() && legacy.isNotBlank()) {
+                prefs[personalNicknameKey] = legacy
+            }
+
+            prefs[personalNicknameMigratedKey] = true
         }
     }
 

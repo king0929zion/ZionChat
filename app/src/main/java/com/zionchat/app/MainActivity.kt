@@ -78,6 +78,9 @@ class MainActivity : ComponentActivity() {
                                 }
                             AppCompatDelegate.setApplicationLocales(locales)
                         }
+                        LaunchedEffect(Unit) {
+                            appContainer.repository.migratePersonalNicknameIfNeeded()
+                        }
                         NavHost(
                             navController = navController,
                             startDestination = "chat"
@@ -132,6 +135,13 @@ class MainActivity : ComponentActivity() {
                             ) { backStackEntry ->
                                 val mcpId = backStackEntry.arguments?.getString("mcpId") ?: ""
                                 McpDetailScreen(navController, mcpId)
+                            }
+                            composable(
+                                route = "mcp_tools/{mcpId}",
+                                arguments = listOf(navArgument("mcpId") { defaultValue = "" })
+                            ) { backStackEntry ->
+                                val mcpId = backStackEntry.arguments?.getString("mcpId") ?: ""
+                                McpToolsScreen(navController, mcpId)
                             }
                         }
                     }

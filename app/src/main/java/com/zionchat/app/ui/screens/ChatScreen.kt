@@ -56,6 +56,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import androidx.navigation.NavController
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.zionchat.app.R
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.LocalChatApiClient
@@ -72,9 +74,9 @@ import com.zionchat.app.data.McpToolCall
 import com.zionchat.app.data.ProviderConfig
 import com.zionchat.app.data.extractRemoteModelId
 import com.zionchat.app.ui.components.TopFadeScrim
-import com.zionchat.app.ui.components.BottomFadeScrim
 import com.zionchat.app.ui.components.AppSheetDragHandle
 import com.zionchat.app.ui.components.MarkdownText
+import com.zionchat.app.ui.components.liquidGlass
 import com.zionchat.app.ui.components.rememberResourceDrawablePainter
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
@@ -204,6 +206,7 @@ fun ChatScreen(navController: NavController) {
     val bottomBarHeightDp = with(density) { bottomBarHeightPx.toDp() }
     val bottomContentPadding = maxOf(80.dp, bottomBarHeightDp + 12.dp + bottomSystemPadding)
     val imeVisible = WindowInsets.ime.getBottom(density) > 0
+    val screenBackdrop = rememberLayerBackdrop()
 
     // Pending 消息：在 DataStore 落盘前立即显示，彻底修复“首条消息消失”
     var pendingMessages by remember { mutableStateOf<List<PendingMessage>>(emptyList()) }
@@ -423,7 +426,7 @@ fun ChatScreen(navController: NavController) {
             }
 
             val systemMessage = run {
-                val latestNickname = repository.nicknameFlow.first().trim()
+                val latestNickname = repository.personalNicknameFlow.first().trim()
                 val latestInstructions = repository.customInstructionsFlow.first().trim()
                 val latestMemories =
                     repository.memoriesFlow.first()
@@ -489,6 +492,14 @@ fun ChatScreen(navController: NavController) {
                 updateAssistantPending { it.copy(tags = assistantTags) }
             }
 
+            fun updateAssistantTag(tagId: String, update: (MessageTag) -> MessageTag) {
+                assistantTags =
+                    assistantTags.map { tag ->
+                        if (tag.id == tagId) update(tag) else tag
+                    }
+                updateAssistantPending { it.copy(tags = assistantTags) }
+            }
+
             try {
                 val resolvedProvider = providerAuthManager.ensureValidProvider(provider)
                 if (isImageGeneration) {
@@ -516,16 +527,20 @@ fun ChatScreen(navController: NavController) {
                                 }
                             }
 
-                            "mcp" -> {
+                            "mcp", null -> run {
+                                val explicitMcp = selectedTool == "mcp"
                                 val enabledServers = repository.mcpListFlow.first().filter { it.enabled }
                                 if (enabledServers.isEmpty()) {
-                                    val msg = "No MCP servers enabled. Configure one in Settings → MCP Tools."
-                                    updateAssistantContent(msg, null)
-                                    repository.appendMessage(
-                                        safeConversationId,
-                                        assistantMessage.copy(content = msg)
-                                    )
-                                    return@launch
+                                    if (explicitMcp) {
+                                        val msg = "No MCP servers enabled. Configure one in Settings → MCP Tools."
+                                        updateAssistantContent(msg, null)
+                                        repository.appendMessage(
+                                            safeConversationId,
+                                            assistantMessage.copy(content = msg)
+                                        )
+                                        return@launch
+                                    }
+                                    return@run null
                                 }
 
                                 val serversWithTools =
@@ -540,13 +555,16 @@ fun ChatScreen(navController: NavController) {
 
                                 val allToolsCount = serversWithTools.sumOf { it.tools.size }
                                 if (allToolsCount == 0) {
-                                    val msg = "No MCP tools available. Sync tools in MCP Tools first."
-                                    updateAssistantContent(msg, null)
-                                    repository.appendMessage(
-                                        safeConversationId,
-                                        assistantMessage.copy(content = msg)
-                                    )
-                                    return@launch
+                                    if (explicitMcp) {
+                                        val msg = "No MCP tools available. Sync tools in MCP Tools first."
+                                        updateAssistantContent(msg, null)
+                                        repository.appendMessage(
+                                            safeConversationId,
+                                            assistantMessage.copy(content = msg)
+                                        )
+                                        return@launch
+                                    }
+                                    return@run null
                                 }
 
                                 val plannerPrompt = buildMcpToolPlannerPrompt(serversWithTools)
@@ -565,13 +583,6 @@ fun ChatScreen(navController: NavController) {
 
                                 val plannedCalls = parseMcpPlannedToolCalls(plannerOutput).take(3)
                                 if (plannedCalls.isEmpty()) {
-                                    appendAssistantTag(
-                                        MessageTag(
-                                            kind = "mcp",
-                                            title = "MCP Tools",
-                                            content = "No tool call selected."
-                                        )
-                                    )
                                     null
                                 } else {
                                     val prettyGson = GsonBuilder().setPrettyPrinting().create()
@@ -604,6 +615,22 @@ fun ChatScreen(navController: NavController) {
 
                                         val argsJson = prettyGson.toJson(args)
                                         val tagTitle = "MCP: ${call.toolName}"
+                                        val pendingTag =
+                                            MessageTag(
+                                                kind = "mcp",
+                                                title = tagTitle,
+                                                content =
+                                                    buildString {
+                                                        append("**Tool**: ")
+                                                        append(call.toolName)
+                                                        append("\n\n")
+                                                        append("**Arguments**\n```json\n")
+                                                        append(argsJson)
+                                                        append("\n```\n\n")
+                                                        append("**Status**\nRunning...")
+                                                    }
+                                            )
+                                        appendAssistantTag(pendingTag)
 
                                         if (server == null) {
                                             val tagContent =
@@ -617,7 +644,7 @@ fun ChatScreen(navController: NavController) {
                                                     append("**Error**\n")
                                                     append("Server not found for tool call.")
                                                 }
-                                            appendAssistantTag(MessageTag(kind = "mcp", title = tagTitle, content = tagContent))
+                                            updateAssistantTag(pendingTag.id) { it.copy(content = tagContent) }
                                             toolResultsText.append("- ")
                                             toolResultsText.append(call.toolName)
                                             toolResultsText.append(": error (server not found)\n")
@@ -655,7 +682,7 @@ fun ChatScreen(navController: NavController) {
                                                     append(callResult.error ?: callResult.content)
                                                 }
                                             }
-                                        appendAssistantTag(MessageTag(kind = "mcp", title = tagTitle, content = tagContent))
+                                        updateAssistantTag(pendingTag.id) { it.copy(content = tagContent) }
 
                                         toolResultsText.append("- ")
                                         toolResultsText.append(server.name)
@@ -805,23 +832,13 @@ fun ChatScreen(navController: NavController) {
                                 }
 
                             val candidates = result.getOrDefault(emptyList())
+                            if (result.isFailure || candidates.isEmpty()) return@launch
+
                             candidates.forEach { repository.addMemory(it) }
 
                             val detail =
                                 buildString {
-                                    if (result.isFailure) {
-                                        append("Memory extraction failed.\n\n")
-                                        append("Error: ")
-                                        append(result.exceptionOrNull()?.message.orEmpty().ifBlank { "Unknown error" })
-                                        return@buildString
-                                    }
-
-                                    if (candidates.isEmpty()) {
-                                        append("No memories extracted.")
-                                        return@buildString
-                                    }
-
-                                    append("Extracted memories:\n")
+                                    append("Saved memories:\n")
                                     candidates.forEach { item ->
                                         append("- ")
                                         append(item)
@@ -942,6 +959,7 @@ fun ChatScreen(navController: NavController) {
             modifier = Modifier
                 .fillMaxSize()
                 .background(ChatBackground)
+                .layerBackdrop(screenBackdrop)
         ) {
             // Chat content (behind the top bar), so messages can scroll into the fade region.
             if (localMessages.isEmpty()) {
@@ -1021,17 +1039,30 @@ fun ChatScreen(navController: NavController) {
                     .zIndex(1f)
             )
 
-            // Bottom fade: start at the input bar top and fade into the bar.
-            val bottomFadeHeight = 24.dp
-            val bottomOffset = bottomBarHeightDp + bottomSystemPadding
-            BottomFadeScrim(
-                color = ChatBackground,
-                height = bottomFadeHeight,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = bottomOffset)
-                    .zIndex(1f)
-            )
+            // Bottom glass mask: blur the safe-area gap under the input row (without affecting tool menu).
+            val bottomGlassHeight = remember(imeVisible, bottomSystemPadding) {
+                if (imeVisible) 0.dp else bottomSystemPadding + bottomInputBottomPadding(false)
+            }
+            if (bottomGlassHeight > 0.dp) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(bottomGlassHeight)
+                        .zIndex(2f)
+                        .liquidGlass(
+                            backdrop = screenBackdrop,
+                            shape = RoundedCornerShape(0.dp),
+                            overlayColor = ChatBackground.copy(alpha = 0.72f),
+                            fallbackColor = ChatBackground,
+                            blurRadius = 24.dp,
+                            refractionHeight = 6.dp,
+                            refractionAmount = 10.dp,
+                            highlightAlpha = 0.18f,
+                            shadowAlpha = 0f
+                        )
+                )
+            }
 
             Column(
                 modifier = Modifier
@@ -1096,7 +1127,6 @@ fun ChatScreen(navController: NavController) {
             // 底部工具面板（覆盖在输入框上方）
             ToolMenuPanel(
                 visible = showToolMenu,
-                bottomBarHeight = bottomBarHeightDp,
                 modifier = Modifier.zIndex(20f),
                 onDismiss = { showToolMenu = false },
                 onToolSelect = { tool ->
@@ -1801,7 +1831,6 @@ fun ActionButton(
 @Composable
 fun ToolMenuPanel(
     visible: Boolean,
-    bottomBarHeight: Dp,
     modifier: Modifier = Modifier,
     onDismiss: () -> Unit,
     onToolSelect: (String) -> Unit
@@ -1810,7 +1839,9 @@ fun ToolMenuPanel(
     val density = LocalDensity.current
     var dragOffsetPx by remember { mutableFloatStateOf(0f) }
     val dismissThresholdPx = remember(density) { with(density) { 120.dp.toPx() } }
-    val navBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val panelBottomPadding = WindowInsets.navigationBars.union(WindowInsets.ime)
+        .asPaddingValues()
+        .calculateBottomPadding()
 
     LaunchedEffect(visible) {
         if (!visible) dragOffsetPx = 0f
@@ -1840,7 +1871,7 @@ fun ToolMenuPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = bottomBarHeight + navBottomPadding)
+                        .padding(bottom = panelBottomPadding)
                         .offset { IntOffset(0, dragOffsetPx.roundToInt()) }
                         .draggable(
                             orientation = Orientation.Vertical,
@@ -2113,6 +2144,10 @@ fun ToolListItem(
     }
 }
 
+private fun bottomInputBottomPadding(imeVisible: Boolean): Dp {
+    return if (imeVisible) 14.dp else 10.dp
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BottomInputArea(
@@ -2152,13 +2187,12 @@ private fun BottomInputArea(
         "mcp" -> AppIcons.MCPTools
         else -> AppIcons.Globe
     }
-    val bottomPadding = if (imeVisible) 4.dp else 24.dp
+    val bottomPadding = bottomInputBottomPadding(imeVisible)
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .padding(top = 6.dp, bottom = bottomPadding)
-            .background(ChatBackground)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

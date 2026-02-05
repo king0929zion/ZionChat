@@ -406,16 +406,16 @@ fun UserProfileSection(
         // 编辑资料按钮
         Button(
             onClick = onEditClick,
-            modifier = Modifier.height(40.dp),
-            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.height(34.dp),
+            shape = RoundedCornerShape(17.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Surface
             ),
-            contentPadding = PaddingValues(horizontal = 24.dp)
+            contentPadding = PaddingValues(horizontal = 18.dp)
         ) {
             Text(
                 text = "Edit profile",
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 color = TextPrimary
             )
@@ -496,7 +496,7 @@ fun EditProfileModal(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
+                    .windowInsetsPadding(WindowInsets.ime)
             ) {
                 Surface(
                     modifier = Modifier
@@ -540,8 +540,9 @@ fun EditProfileModal(
                 ) {
                     Column(
                         modifier = Modifier
-                            .padding(24.dp)
-                            .padding(bottom = 16.dp),
+                            .padding(horizontal = 24.dp, top = 24.dp)
+                            .navigationBarsPadding()
+                            .padding(bottom = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {

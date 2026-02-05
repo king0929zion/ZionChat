@@ -37,7 +37,7 @@ import kotlinx.coroutines.flow.onEach
 fun PersonalizationScreen(navController: NavController) {
     val repository = LocalAppRepository.current
 
-    val storedNickname by repository.nicknameFlow.collectAsState(initial = "")
+    val storedNickname by repository.personalNicknameFlow.collectAsState(initial = "")
     val storedInstructions by repository.customInstructionsFlow.collectAsState(initial = "")
     val memories by repository.memoriesFlow.collectAsState(initial = emptyList())
 
@@ -66,7 +66,7 @@ fun PersonalizationScreen(navController: NavController) {
             .map { it.trimEnd() }
             .distinctUntilChanged()
             .filter { it != latestStoredNickname }
-            .onEach { value -> repository.setNickname(value) }
+            .onEach { value -> repository.setPersonalNickname(value) }
             .collect()
     }
 

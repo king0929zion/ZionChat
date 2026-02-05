@@ -49,10 +49,7 @@ fun McpDetailScreen(
     val mcp = mcpListOrNull?.firstOrNull { it.id == mcpId }
     
     var showEditModal by remember { mutableStateOf(false) }
-    var showToolDetail by remember { mutableStateOf<McpTool?>(null) }
-    var showDeleteConfirm by remember { mutableStateOf(false) }
     var syncingTools by remember { mutableStateOf(false) }
-    var syncError by remember { mutableStateOf<String?>(null) }
     
     LaunchedEffect(mcpListOrNull, mcpId) {
         if (mcpListOrNull != null && mcp == null) {
@@ -101,51 +98,94 @@ fun McpDetailScreen(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp)
-                    .padding(top = 12.dp, bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(top = 12.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                McpInfoCard(
-                    mcp = mcp,
-                    onToggleEnabled = { scope.launch { repository.toggleMcpEnabled(mcp.id) } }
-                )
-                McpConnectionCard(mcp = mcp)
-                McpToolsCard(
-                    tools = mcp.tools,
-                    lastSyncAt = mcp.lastSyncAt,
-                    syncing = syncingTools,
-                    syncError = syncError,
-                    onSync = {
-                        if (syncingTools) return@McpToolsCard
-                        syncingTools = true
-                        syncError = null
-                        scope.launch {
-                            mcpClient.fetchTools(mcp)
-                                .onSuccess { tools -> repository.updateMcpTools(mcp.id, tools) }
-                                .onFailure { error ->
-                                    syncError = error.message?.takeIf { it.isNotBlank() } ?: "Sync failed"
-                                }
-                            syncingTools = false
-                        }
+                McpDetailItem(
+                    icon = {
+                        Icon(
+                            imageVector = if (mcp.protocol == McpProtocol.HTTP) AppIcons.Globe else AppIcons.Stream,
+                            contentDescription = null,
+                            tint = TextPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
                     },
-                    onToolClick = { showToolDetail = it }
+                    title = "Server URL",
+                    subtitle = mcp.url.trim().ifBlank { "Not set" },
+                    onClick = { showEditModal = true }
                 )
-                
-                Button(
-                    onClick = { showDeleteConfirm = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFFF3B30),
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        text = "Delete MCP",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
+
+                McpDetailItem(
+                    icon = {
+                        Icon(
+                            imageVector = AppIcons.Tool,
+                            contentDescription = null,
+                            tint = TextPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    title = "Headers",
+                    subtitle = if (mcp.headers.isEmpty()) "None" else "${mcp.headers.size} headers",
+                    onClick = { showEditModal = true }
+                )
+
+                McpDetailItem(
+                    icon = {
+                        Icon(
+                            imageVector = AppIcons.Tool,
+                            contentDescription = null,
+                            tint = TextPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    title = "Available tools",
+                    subtitle = "${mcp.tools.size} tools",
+                    onClick = { navController.navigate("mcp_tools/${mcp.id}") },
+                    trailing = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(Surface)
+                                    .pressableScale(
+                                        enabled = !syncingTools,
+                                        pressedScale = 0.95f,
+                                        onClick = {
+                                            if (syncingTools) return@pressableScale
+                                            syncingTools = true
+                                            scope.launch {
+                                                try {
+                                                    mcpClient.fetchTools(mcp)
+                                                        .onSuccess { tools -> repository.updateMcpTools(mcp.id, tools) }
+                                                } finally {
+                                                    syncingTools = false
+                                                }
+                                            }
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = AppIcons.Refresh,
+                                    contentDescription = "Sync",
+                                    tint = if (syncingTools) TextSecondary else TextPrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+
+                            Icon(
+                                imageVector = AppIcons.ChevronRight,
+                                contentDescription = null,
+                                tint = TextSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                )
             }
         }
         
@@ -174,70 +214,62 @@ fun McpDetailScreen(
                 )
             }
         }
-        
-        // Tool Detail Modal
-        if (showToolDetail != null) {
-            val toolSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-            AppModalBottomSheet(
-                onDismissRequest = { showToolDetail = null },
-                sheetState = toolSheetState
-            ) {
-                ToolDetailSheetContent(
-                    tool = showToolDetail!!,
-                    onDismiss = { showToolDetail = null }
-                )
-            }
+    }
+}
+
+@Composable
+private fun McpDetailItem(
+    icon: @Composable () -> Unit,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    trailing: (@Composable () -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .background(GrayLight, RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(20.dp))
+            .pressableScale(pressedScale = 0.98f, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Surface),
+            contentAlignment = Alignment.Center
+        ) {
+            icon()
         }
-        
-        // Delete Confirm Dialog
-        if (showDeleteConfirm) {
-            AlertDialog(
-                onDismissRequest = { showDeleteConfirm = false },
-                title = {
-                    Text(
-                        text = "Delete MCP?",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                },
-                text = {
-                    Text(
-                        text = "This action cannot be undone.",
-                        fontSize = 15.sp,
-                        color = TextSecondary
-                    )
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                repository.deleteMcp(mcpId)
-                                showDeleteConfirm = false
-                                navController.navigateUp()
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFFF3B30)
-                        ),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("Delete")
-                    }
-                },
-                dismissButton = {
-                    Button(
-                        onClick = { showDeleteConfirm = false },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = GrayLight,
-                            contentColor = TextPrimary
-                        ),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("Cancel")
-                    }
-                },
-                containerColor = Surface,
-                shape = RoundedCornerShape(20.dp)
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontSize = 16.sp,
+                fontFamily = SourceSans3,
+                color = TextPrimary,
+                maxLines = 1
+            )
+            Text(
+                text = subtitle,
+                fontSize = 13.sp,
+                color = TextSecondary,
+                maxLines = 1
+            )
+        }
+
+        if (trailing != null) {
+            trailing()
+        } else {
+            Icon(
+                imageVector = AppIcons.ChevronRight,
+                contentDescription = null,
+                tint = TextSecondary,
+                modifier = Modifier.size(16.dp)
             )
         }
     }
