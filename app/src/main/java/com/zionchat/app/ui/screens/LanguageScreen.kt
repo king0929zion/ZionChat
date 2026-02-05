@@ -3,6 +3,7 @@ package com.zionchat.app.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,11 +13,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.material3.Box
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,19 +34,18 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.R
-import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.Background
-import com.zionchat.app.ui.theme.GrayLight
-import com.zionchat.app.ui.theme.GrayLighter
+import com.zionchat.app.ui.theme.SourceSans3
+import com.zionchat.app.ui.theme.Surface
 import com.zionchat.app.ui.theme.TextPrimary
 import com.zionchat.app.ui.theme.TextSecondary
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 private data class LanguageOption(
     val code: String,
-    val titleRes: Int,
-    val subtitleRes: Int
+    val titleRes: Int
 )
 
 @Composable
@@ -58,10 +57,19 @@ fun LanguageScreen(navController: NavController) {
     val options =
         remember {
             listOf(
-                LanguageOption(code = "system", titleRes = R.string.language_option_system, subtitleRes = R.string.language_option_system_subtitle),
-                LanguageOption(code = "en", titleRes = R.string.language_option_en, subtitleRes = R.string.language_option_en_subtitle),
-                LanguageOption(code = "zh", titleRes = R.string.language_option_zh, subtitleRes = R.string.language_option_zh_subtitle),
+                LanguageOption(code = "en", titleRes = R.string.language_option_en),
+                LanguageOption(code = "zh", titleRes = R.string.language_option_zh),
             )
+        }
+    val selectedCode =
+        remember(current) {
+            when (current.trim().lowercase()) {
+                "en", "zh" -> current.trim().lowercase()
+                else -> {
+                    val localeTag = Locale.getDefault().toLanguageTag().lowercase()
+                    if (localeTag.startsWith("zh")) "zh" else "en"
+                }
+            }
         }
 
     Column(
@@ -69,10 +77,7 @@ fun LanguageScreen(navController: NavController) {
             .fillMaxSize()
             .background(Background)
     ) {
-        PageTopBar(
-            title = stringResource(R.string.language_title),
-            onBack = { navController.navigateUp() }
-        )
+        SettingsTopBar(navController = navController)
 
         Column(
             modifier = Modifier
@@ -83,66 +88,83 @@ fun LanguageScreen(navController: NavController) {
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = GrayLighter)
+            SettingsGroup(
+                title = stringResource(R.string.settings_item_language),
+                itemCount = options.size
             ) {
                 options.forEachIndexed { index, option ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = {
-                                    scope.launch {
-                                        repository.setAppLanguage(option.code)
-                                        navController.navigateUp()
-                                    }
-                                }
-                            )
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(option.titleRes),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = TextPrimary
-                            )
-                            Text(
-                                text = stringResource(option.subtitleRes),
-                                fontSize = 13.sp,
-                                color = TextSecondary
-                            )
+                    LanguageOptionItem(
+                        title = stringResource(option.titleRes),
+                        selected = selectedCode == option.code,
+                        showDivider = index != options.lastIndex,
+                        onClick = {
+                            scope.launch { repository.setAppLanguage(option.code) }
                         }
-
-                        val selected = current.trim().lowercase() == option.code
-                        Icon(
-                            imageVector = AppIcons.Check,
-                            contentDescription = null,
-                            tint = TextPrimary,
-                            modifier = Modifier
-                                .padding(start = 12.dp)
-                                .alpha(if (selected) 1f else 0f)
-                        )
-                    }
-
-                    if (index != options.lastIndex) {
-                        Divider(color = GrayLight)
-                    }
+                    )
                 }
             }
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(8.dp))
+@Composable
+private fun LanguageOptionItem(
+    title: String,
+    selected: Boolean,
+    showDivider: Boolean,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        label = "language_item_scale"
+    )
 
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(if (isPressed) Background.copy(alpha = 0.4f) else Surface)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
-                text = stringResource(R.string.language_note),
-                fontSize = 13.sp,
-                color = TextSecondary,
-                modifier = Modifier.padding(start = 8.dp, bottom = 24.dp)
+                text = title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                fontFamily = SourceSans3,
+                color = TextPrimary,
+                modifier = Modifier.weight(1f)
+            )
+
+            Icon(
+                imageVector = AppIcons.Check,
+                contentDescription = null,
+                tint = TextPrimary,
+                modifier = Modifier.alpha(if (selected) 1f else 0f)
+            )
+        }
+
+        if (showDivider) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .height(1.dp)
+                    .background(TextSecondary.copy(alpha = 0.12f))
             )
         }
     }

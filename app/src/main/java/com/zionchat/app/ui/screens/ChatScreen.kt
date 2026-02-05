@@ -567,29 +567,106 @@ fun ChatScreen(navController: NavController) {
                                     return@run null
                                 }
 
-                                val plannerPrompt = buildMcpToolPlannerPrompt(serversWithTools)
-                                val plannerOutput =
-                                    collectStreamContent(
-                                        chatApiClient = chatApiClient,
-                                        provider = resolvedProvider,
-                                        modelId = extractRemoteModelId(selectedModel.id),
-                                        messages = buildList {
-                                            if (systemMessage != null) add(systemMessage)
-                                            add(Message(role = "system", content = plannerPrompt))
-                                            add(Message(role = "user", content = trimmed))
-                                        },
-                                        extraHeaders = selectedModel.headers
-                                    )
+                                updateAssistantContent("Running MCP tools...", null)
 
-                                val plannedCalls = parseMcpPlannedToolCalls(plannerOutput).take(3)
-                                if (plannedCalls.isEmpty()) {
-                                    null
-                                } else {
-                                    val prettyGson = GsonBuilder().setPrettyPrinting().create()
-                                    val byId = serversWithTools.associateBy { it.id }
+                                val prettyGson = GsonBuilder().setPrettyPrinting().create()
+                                val byId = serversWithTools.associateBy { it.id }
+                                val maxRounds = if (explicitMcp) 3 else 2
+                                val maxCallsPerRound = if (explicitMcp) 3 else 2
+                                val executedSignatures = linkedSetOf<String>()
+                                val toolResultsText = StringBuilder("MCP tool results:\n\n")
+                                var previousRoundResults = ""
+                                var executedCallCount = 0
 
-                                    val toolResultsText = StringBuilder()
-                                    toolResultsText.append("MCP tool results:\n\n")
+                                for (roundIndex in 1..maxRounds) {
+                                    val plannerTag =
+                                        MessageTag(
+                                            kind = "mcp",
+                                            title = "MCP Planner (Round $roundIndex)",
+                                            content = "Planning tool calls..."
+                                        )
+                                    appendAssistantTag(plannerTag)
+
+                                    val plannerPrompt =
+                                        buildMcpToolPlannerPrompt(
+                                            servers = serversWithTools,
+                                            roundIndex = roundIndex,
+                                            previousRoundResults = previousRoundResults
+                                        )
+                                    val plannerOutput =
+                                        collectStreamContent(
+                                            chatApiClient = chatApiClient,
+                                            provider = resolvedProvider,
+                                            modelId = extractRemoteModelId(selectedModel.id),
+                                            messages = buildList {
+                                                if (systemMessage != null) add(systemMessage)
+                                                add(Message(role = "system", content = plannerPrompt))
+                                                add(Message(role = "user", content = trimmed))
+                                            },
+                                            extraHeaders = selectedModel.headers
+                                        )
+
+                                    val plannedCalls =
+                                        parseMcpPlannedToolCalls(plannerOutput)
+                                            .map { call ->
+                                                call.copy(
+                                                    serverId = call.serverId.trim(),
+                                                    toolName = call.toolName.trim(),
+                                                    arguments =
+                                                        call.arguments.mapNotNull { (k, v) ->
+                                                            val key = k.trim()
+                                                            if (key.isBlank()) return@mapNotNull null
+                                                            key to v
+                                                        }.toMap()
+                                                )
+                                            }
+                                            .filter { call -> call.toolName.isNotBlank() }
+                                            .filter { call ->
+                                                val signature = buildMcpCallSignature(call)
+                                                if (executedSignatures.contains(signature)) {
+                                                    false
+                                                } else {
+                                                    executedSignatures.add(signature)
+                                                    true
+                                                }
+                                            }
+                                            .take(maxCallsPerRound)
+
+                                    val plannerTagContent =
+                                        if (plannedCalls.isEmpty()) {
+                                            buildString {
+                                                append("**Round**: ")
+                                                append(roundIndex)
+                                                append("\n\n")
+                                                append("**Planner status**\nNo additional MCP tool calls.")
+                                            }
+                                        } else {
+                                            buildString {
+                                                append("**Round**: ")
+                                                append(roundIndex)
+                                                append("\n\n")
+                                                append("**Planned calls**\n```json\n")
+                                                append(
+                                                    prettyGson.toJson(
+                                                        plannedCalls.map { call ->
+                                                            mapOf(
+                                                                "serverId" to call.serverId,
+                                                                "toolName" to call.toolName,
+                                                                "arguments" to call.arguments
+                                                            )
+                                                        }
+                                                    )
+                                                )
+                                                append("\n```")
+                                            }
+                                        }
+                                    updateAssistantTag(plannerTag.id) { it.copy(content = plannerTagContent) }
+
+                                    if (plannedCalls.isEmpty()) {
+                                        break
+                                    }
+
+                                    val roundSummary = StringBuilder()
 
                                     plannedCalls.forEach { call ->
                                         fun resolveServer(): McpConfig? {
@@ -612,22 +689,24 @@ fun ChatScreen(navController: NavController) {
                                                     key to value
                                                 }
                                                 .toMap()
-
                                         val argsJson = prettyGson.toJson(args)
-                                        val tagTitle = "MCP: ${call.toolName}"
+                                        val tagTitle = "MCP R$roundIndex: ${call.toolName}"
                                         val pendingTag =
                                             MessageTag(
                                                 kind = "mcp",
                                                 title = tagTitle,
                                                 content =
                                                     buildString {
+                                                        append("**Round**: ")
+                                                        append(roundIndex)
+                                                        append("\n\n")
                                                         append("**Tool**: ")
                                                         append(call.toolName)
                                                         append("\n\n")
                                                         append("**Arguments**\n```json\n")
                                                         append(argsJson)
                                                         append("\n```\n\n")
-                                                        append("**Status**\nRunning...")
+                                                        append("**Status**\nRunning (attempt 1)...")
                                                     }
                                             )
                                         appendAssistantTag(pendingTag)
@@ -635,6 +714,9 @@ fun ChatScreen(navController: NavController) {
                                         if (server == null) {
                                             val tagContent =
                                                 buildString {
+                                                    append("**Round**: ")
+                                                    append(roundIndex)
+                                                    append("\n\n")
                                                     append("**Tool**: ")
                                                     append(call.toolName)
                                                     append("\n\n")
@@ -645,24 +727,57 @@ fun ChatScreen(navController: NavController) {
                                                     append("Server not found for tool call.")
                                                 }
                                             updateAssistantTag(pendingTag.id) { it.copy(content = tagContent) }
-                                            toolResultsText.append("- ")
+                                            toolResultsText.append("- [Round ")
+                                            toolResultsText.append(roundIndex)
+                                            toolResultsText.append("] ")
                                             toolResultsText.append(call.toolName)
                                             toolResultsText.append(": error (server not found)\n")
+                                            roundSummary.append("- ")
+                                            roundSummary.append(call.toolName)
+                                            roundSummary.append(": server not found\n")
                                             return@forEach
                                         }
 
-                                        val callResult =
+                                        val toolCall = McpToolCall(toolName = call.toolName, arguments = args)
+                                        var attempts = 1
+                                        var callResult =
                                             mcpClient.callTool(
-                                                server,
-                                                McpToolCall(toolName = call.toolName, arguments = args)
-                                            ).getOrElse { e ->
-                                                com.zionchat.app.data.McpToolResult(
-                                                    success = false,
-                                                    content = e.message.orEmpty().ifBlank { "Tool call failed." },
-                                                    error = e.message
+                                                config = server,
+                                                toolCall = toolCall,
+                                                timeoutSeconds = 45L
+                                            ).getOrElse(::toMcpFailureResult)
+
+                                        val firstErrorText = (callResult.error ?: callResult.content).trim()
+                                        if (!callResult.success && shouldRetryMcpCall(firstErrorText)) {
+                                            attempts = 2
+                                            updateAssistantTag(pendingTag.id) {
+                                                it.copy(
+                                                    content =
+                                                        buildString {
+                                                            append("**Server**: ")
+                                                            append(server.name)
+                                                            append("\n\n")
+                                                            append("**Tool**: ")
+                                                            append(call.toolName)
+                                                            append("\n\n")
+                                                            append("**Arguments**\n```json\n")
+                                                            append(argsJson)
+                                                            append("\n```\n\n")
+                                                            append("**Status**\nRetrying with extended timeout...")
+                                                        }
                                                 )
                                             }
+                                            callResult =
+                                                mcpClient.callTool(
+                                                    config = server,
+                                                    toolCall = toolCall,
+                                                    timeoutSeconds = 90L
+                                                ).getOrElse(::toMcpFailureResult)
+                                        }
 
+                                        executedCallCount += 1
+                                        val compactContent = callResult.content.trim().take(1800)
+                                        val finalError = (callResult.error ?: callResult.content).trim()
                                         val tagContent =
                                             buildString {
                                                 append("**Server**: ")
@@ -671,28 +786,66 @@ fun ChatScreen(navController: NavController) {
                                                 append("**Tool**: ")
                                                 append(call.toolName)
                                                 append("\n\n")
+                                                append("**Attempts**: ")
+                                                append(attempts)
+                                                append("\n\n")
                                                 append("**Arguments**\n```json\n")
                                                 append(argsJson)
                                                 append("\n```\n\n")
                                                 if (callResult.success) {
                                                     append("**Result**\n")
-                                                    append(callResult.content)
+                                                    append(compactContent.ifBlank { "(empty result)" })
                                                 } else {
                                                     append("**Error**\n")
-                                                    append(callResult.error ?: callResult.content)
+                                                    append(finalError.ifBlank { "Tool call failed." })
                                                 }
                                             }
                                         updateAssistantTag(pendingTag.id) { it.copy(content = tagContent) }
 
-                                        toolResultsText.append("- ")
+                                        toolResultsText.append("- [Round ")
+                                        toolResultsText.append(roundIndex)
+                                        toolResultsText.append("] ")
                                         toolResultsText.append(server.name)
                                         toolResultsText.append("/")
                                         toolResultsText.append(call.toolName)
                                         toolResultsText.append(":\n")
-                                        toolResultsText.append(callResult.content.trim())
+                                        toolResultsText.append(compactContent.ifBlank { finalError.ifBlank { "Tool call returned empty content." } })
                                         toolResultsText.append("\n\n")
+
+                                        roundSummary.append("- ")
+                                        roundSummary.append(server.name)
+                                        roundSummary.append("/")
+                                        roundSummary.append(call.toolName)
+                                        roundSummary.append(": ")
+                                        roundSummary.append(
+                                            if (callResult.success) {
+                                                compactContent.take(220)
+                                            } else {
+                                                finalError.take(220).ifBlank { "failed" }
+                                            }
+                                        )
+                                        roundSummary.append('\n')
                                     }
 
+                                    previousRoundResults = roundSummary.toString().trim().take(2000)
+                                    if (previousRoundResults.isBlank()) {
+                                        break
+                                    }
+                                }
+
+                                if (executedCallCount == 0) {
+                                    if (!explicitMcp) {
+                                        updateAssistantContent("", null)
+                                        null
+                                    } else {
+                                        Message(
+                                            role = "system",
+                                            content =
+                                                "MCP tool results:\n\nNo MCP tool calls were executed.\n\n" +
+                                                    "If the user request requires tools, explain what is missing and how to fix it."
+                                        )
+                                    }
+                                } else {
                                     Message(
                                         role = "system",
                                         content =
@@ -818,39 +971,53 @@ fun ChatScreen(navController: NavController) {
                         val assistantTextForMemory = finalContent
                         val assistantMessageIdForTags = assistantMessage.id
 
-                        scope.launch(Dispatchers.IO) {
-                            val result =
-                                runCatching {
-                                    extractMemoryCandidatesFromTurn(
-                                        chatApiClient = chatApiClient,
-                                        provider = resolvedProvider,
-                                        modelId = chatModelId,
-                                        userText = userTextForMemory,
-                                        assistantText = assistantTextForMemory,
-                                        extraHeaders = chatExtraHeaders
-                                    )
-                                }
-
-                            val candidates = result.getOrDefault(emptyList())
-                            if (result.isFailure || candidates.isEmpty()) return@launch
-
-                            candidates.forEach { repository.addMemory(it) }
-
-                            val detail =
-                                buildString {
-                                    append("Saved memories:\n")
-                                    candidates.forEach { item ->
-                                        append("- ")
-                                        append(item)
-                                        append('\n')
+                        if (shouldAttemptMemoryExtraction(userTextForMemory)) {
+                            scope.launch(Dispatchers.IO) {
+                                val result =
+                                    runCatching {
+                                        extractMemoryCandidatesFromTurn(
+                                            chatApiClient = chatApiClient,
+                                            provider = resolvedProvider,
+                                            modelId = chatModelId,
+                                            userText = userTextForMemory,
+                                            assistantText = assistantTextForMemory,
+                                            extraHeaders = chatExtraHeaders
+                                        )
                                     }
-                                }.trim()
 
-                            repository.appendMessageTag(
-                                conversationId = safeConversationId,
-                                messageId = assistantMessageIdForTags,
-                                tag = MessageTag(kind = "memory", title = "Memory", content = detail)
-                            )
+                                if (result.isFailure) return@launch
+
+                                val candidates =
+                                    filterMemoryCandidates(
+                                        candidates = result.getOrDefault(emptyList()),
+                                        userText = userTextForMemory
+                                    )
+                                if (candidates.isEmpty()) return@launch
+
+                                val saved = mutableListOf<String>()
+                                candidates.forEach { candidate ->
+                                    repository.addMemory(candidate)?.let { added ->
+                                        saved.add(added.content)
+                                    }
+                                }
+                                if (saved.isEmpty()) return@launch
+
+                                val detail =
+                                    buildString {
+                                        append("Saved memories:\n")
+                                        saved.forEach { item ->
+                                            append("- ")
+                                            append(item)
+                                            append('\n')
+                                        }
+                                    }.trim()
+
+                                repository.appendMessageTag(
+                                    conversationId = safeConversationId,
+                                    messageId = assistantMessageIdForTags,
+                                    tag = MessageTag(kind = "memory", title = "Memory", content = detail)
+                                )
+                            }
                         }
 
                         scope.launch(Dispatchers.IO) {
@@ -1039,9 +1206,13 @@ fun ChatScreen(navController: NavController) {
                     .zIndex(1f)
             )
 
-            // Bottom glass mask: blur the safe-area gap under the input row (without affecting tool menu).
-            val bottomGlassHeight = remember(imeVisible, bottomSystemPadding) {
-                if (imeVisible) 0.dp else bottomSystemPadding + bottomInputBottomPadding(false)
+            // Bottom glass mask: cover the input zone + safe-area while staying behind input/tools.
+            val bottomGlassHeight = remember(imeVisible, bottomSystemPadding, bottomBarHeightDp) {
+                if (imeVisible) {
+                    bottomBarHeightDp + 8.dp
+                } else {
+                    bottomBarHeightDp + bottomSystemPadding + 18.dp
+                }
             }
             if (bottomGlassHeight > 0.dp) {
                 Box(
@@ -1049,11 +1220,11 @@ fun ChatScreen(navController: NavController) {
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .height(bottomGlassHeight)
-                        .zIndex(2f)
+                        .zIndex(3f)
                         .liquidGlass(
                             backdrop = screenBackdrop,
                             shape = RoundedCornerShape(0.dp),
-                            overlayColor = ChatBackground.copy(alpha = 0.72f),
+                            overlayColor = ChatBackground.copy(alpha = 0.66f),
                             fallbackColor = ChatBackground,
                             blurRadius = 24.dp,
                             refractionHeight = 6.dp,
@@ -1839,10 +2010,6 @@ fun ToolMenuPanel(
     val density = LocalDensity.current
     var dragOffsetPx by remember { mutableFloatStateOf(0f) }
     val dismissThresholdPx = remember(density) { with(density) { 120.dp.toPx() } }
-    val panelBottomPadding = WindowInsets.navigationBars.union(WindowInsets.ime)
-        .asPaddingValues()
-        .calculateBottomPadding()
-
     LaunchedEffect(visible) {
         if (!visible) dragOffsetPx = 0f
     }
@@ -1871,7 +2038,6 @@ fun ToolMenuPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = panelBottomPadding)
                         .offset { IntOffset(0, dragOffsetPx.roundToInt()) }
                         .draggable(
                             orientation = Orientation.Vertical,
@@ -2007,14 +2173,14 @@ fun QuickActionButton(
 ) {
     Column(
         modifier = modifier
-            .background(ChatBackground, RoundedCornerShape(16.dp))
+            .background(ChatBackground, RoundedCornerShape(14.dp))
             .pressableScale(pressedScale = 0.95f, onClick = onClick)
-            .padding(16.dp),
+            .padding(horizontal = 14.dp, vertical = 11.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Box(
-            modifier = Modifier.size(40.dp),
+            modifier = Modifier.size(36.dp),
             contentAlignment = Alignment.Center
         ) {
             icon()
@@ -2545,19 +2711,74 @@ private data class PlannedMcpToolCall(
     val arguments: Map<String, Any?>
 )
 
-private fun buildMcpToolPlannerPrompt(servers: List<McpConfig>): String {
+private fun buildMcpCallSignature(call: PlannedMcpToolCall): String {
+    val normalizedServer = call.serverId.trim().lowercase()
+    val normalizedTool = call.toolName.trim().lowercase()
+    val argsPart =
+        call.arguments.entries
+            .sortedBy { it.key }
+            .joinToString("&") { (k, v) ->
+                val key = k.trim().lowercase()
+                val value = v?.toString()?.trim().orEmpty().lowercase()
+                "$key=$value"
+            }
+    return "$normalizedServer|$normalizedTool|$argsPart"
+}
+
+private fun toMcpFailureResult(error: Throwable): com.zionchat.app.data.McpToolResult {
+    val message = error.message.orEmpty().trim().ifBlank { "Tool call failed." }
+    return com.zionchat.app.data.McpToolResult(
+        success = false,
+        content = message,
+        error = message
+    )
+}
+
+private fun shouldRetryMcpCall(errorText: String): Boolean {
+    val text = errorText.trim().lowercase()
+    if (text.isBlank()) return false
+    val retryableMarkers =
+        listOf(
+            "timeout",
+            "timed out",
+            "deadline",
+            "temporarily",
+            "connection reset",
+            "connectexception",
+            "socket",
+            "stream closed",
+            "gateway",
+            "503",
+            "504"
+        )
+    return retryableMarkers.any { marker -> text.contains(marker) }
+}
+
+private fun buildMcpToolPlannerPrompt(
+    servers: List<McpConfig>,
+    roundIndex: Int,
+    previousRoundResults: String
+): String {
     val maxToolsPerServer = 24
 
     return buildString {
         appendLine("You are a tool router. Choose MCP tool calls to help answer the user's request.")
+        appendLine("Current round: $roundIndex")
         appendLine("Return ONLY JSON in this schema:")
         appendLine("{\"calls\":[{\"serverId\":\"...\",\"toolName\":\"...\",\"arguments\":{}}]}")
-        appendLine("If no tool is needed, return {\"calls\":[]}.")
+        appendLine("If no additional tool call is needed, return {\"calls\":[]}.")
         appendLine()
         appendLine("Rules:")
         appendLine("- Use ONLY the tools listed below.")
+        appendLine("- At most 3 calls in one round.")
         appendLine("- toolName must match exactly.")
         appendLine("- arguments must be a JSON object.")
+        appendLine("- Avoid repeating the same call unless the previous result was clearly insufficient.")
+        if (previousRoundResults.isNotBlank()) {
+            appendLine()
+            appendLine("Previous MCP round results summary:")
+            appendLine(previousRoundResults.take(2000))
+        }
         appendLine()
         appendLine("Available MCP servers and tools:")
 
@@ -2697,18 +2918,25 @@ private suspend fun extractMemoryCandidatesFromTurn(
 ): List<String> {
     val u = userText.trim()
     val a = assistantText.trim()
-    if (u.isBlank() || a.isBlank()) return emptyList()
+    if (u.isBlank()) return emptyList()
 
     val systemPrompt =
-        "Extract stable user-specific facts that could help in future conversations. Return ONLY a JSON array of strings. " +
-            "If there is nothing worth saving, return []. Do not include temporary requests or task-specific details."
+        buildString {
+            append("Extract memory candidates from the user message. Return ONLY a JSON array of strings. ")
+            append("Keep only explicit user-stated stable preferences or factual profile details. ")
+            append("Never infer, guess, or rewrite speculative statements. ")
+            append("Do not save temporary tasks, one-off requests, moods, assumptions, or assistant-generated claims. ")
+            append("If there is nothing safe to save, return []. Keep at most 2 short items.")
+        }
 
     val userPrompt =
         buildString {
             append("User message:\n")
             append(u.take(900))
-            append("\n\nAssistant reply:\n")
-            append(a.take(1400))
+            if (a.isNotBlank()) {
+                append("\n\nAssistant reply (context only, not a source of truth):\n")
+                append(a.take(1200))
+            }
             append("\n\nReturn JSON array only.")
         }
 
@@ -2728,7 +2956,121 @@ private suspend fun extractMemoryCandidatesFromTurn(
         .map { it.trim() }
         .filter { it.isNotBlank() }
         .distinct()
-        .take(3)
+        .take(2)
+}
+
+private fun shouldAttemptMemoryExtraction(userText: String): Boolean {
+    val text = userText.trim()
+    if (text.isBlank()) return false
+
+    val lower = text.lowercase()
+    val explicitMarkersEn =
+        listOf(
+            "please remember",
+            "remember that",
+            "for future reference",
+            "i prefer",
+            "i like",
+            "i love",
+            "i dislike",
+            "i don't like",
+            "my favorite",
+            "i am ",
+            "i'm ",
+            "my name is",
+            "call me",
+            "i usually",
+            "i always",
+            "i never"
+        )
+    val explicitMarkersZh =
+        listOf(
+            "请记住",
+            "记住",
+            "以后",
+            "从现在开始",
+            "我喜欢",
+            "我偏好",
+            "我更喜欢",
+            "我不喜欢",
+            "我讨厌",
+            "我是",
+            "我叫",
+            "叫我",
+            "我通常",
+            "我总是",
+            "我从不"
+        )
+
+    val hasSignal =
+        explicitMarkersEn.any { marker -> lower.contains(marker) } ||
+            explicitMarkersZh.any { marker -> text.contains(marker) }
+    if (!hasSignal) return false
+
+    if (lower.endsWith("?") && !lower.contains("remember")) return false
+    return true
+}
+
+private fun filterMemoryCandidates(
+    candidates: List<String>,
+    userText: String
+): List<String> {
+    if (candidates.isEmpty()) return emptyList()
+
+    val blockedMarkers =
+        listOf(
+            "maybe",
+            "probably",
+            "guess",
+            "not sure",
+            "uncertain",
+            "unknown",
+            "seems",
+            "assistant",
+            "chatgpt",
+            "model",
+            "可能",
+            "也许",
+            "大概",
+            "猜测",
+            "不确定",
+            "似乎"
+        )
+
+    return candidates
+        .map { it.trim().replace(Regex("\\s+"), " ") }
+        .filter { it.length in 3..180 }
+        .filter { candidate ->
+            val lower = candidate.lowercase()
+            blockedMarkers.none { marker -> lower.contains(marker) || candidate.contains(marker) }
+        }
+        .filter { candidate -> memoryCandidateIsGrounded(candidate, userText) }
+        .distinct()
+        .take(2)
+}
+
+private fun memoryCandidateIsGrounded(candidate: String, userText: String): Boolean {
+    val candidateLower = candidate.lowercase()
+    val userLower = userText.lowercase()
+    if (userLower.contains(candidateLower) || candidateLower.contains(userLower.take(36))) {
+        return true
+    }
+
+    val englishTokens =
+        Regex("[a-zA-Z]{4,}")
+            .findAll(candidateLower)
+            .map { it.value }
+            .toSet()
+    if (englishTokens.any { token -> userLower.contains(token) }) {
+        return true
+    }
+
+    val chineseFragments =
+        Regex("[\\u4e00-\\u9fa5]{2,}")
+            .findAll(candidate)
+            .map { it.value }
+            .toSet()
+    return chineseFragments.any { frag -> userText.contains(frag) }
 }
 
 private suspend fun generateConversationTitle(

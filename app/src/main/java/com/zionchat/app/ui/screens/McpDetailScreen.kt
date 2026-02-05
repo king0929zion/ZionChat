@@ -50,6 +50,8 @@ fun McpDetailScreen(
     
     var showEditModal by remember { mutableStateOf(false) }
     var syncingTools by remember { mutableStateOf(false) }
+    var syncError by remember { mutableStateOf<String?>(null) }
+    var showToolDetail by remember { mutableStateOf<McpTool?>(null) }
     
     LaunchedEffect(mcpListOrNull, mcpId) {
         if (mcpListOrNull != null && mcp == null) {
@@ -101,90 +103,53 @@ fun McpDetailScreen(
                     .padding(top = 12.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                McpDetailItem(
-                    icon = {
-                        Icon(
-                            imageVector = if (mcp.protocol == McpProtocol.HTTP) AppIcons.Globe else AppIcons.Stream,
-                            contentDescription = null,
-                            tint = TextPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    },
-                    title = "Server URL",
-                    subtitle = mcp.url.trim().ifBlank { "Not set" },
-                    onClick = { showEditModal = true }
-                )
-
-                McpDetailItem(
-                    icon = {
-                        Icon(
-                            imageVector = AppIcons.Tool,
-                            contentDescription = null,
-                            tint = TextPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    },
-                    title = "Headers",
-                    subtitle = if (mcp.headers.isEmpty()) "None" else "${mcp.headers.size} headers",
-                    onClick = { showEditModal = true }
-                )
-
-                McpDetailItem(
-                    icon = {
-                        Icon(
-                            imageVector = AppIcons.Tool,
-                            contentDescription = null,
-                            tint = TextPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    },
-                    title = "Available tools",
-                    subtitle = "${mcp.tools.size} tools",
-                    onClick = { navController.navigate("mcp_tools/${mcp.id}") },
-                    trailing = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(Surface)
-                                    .pressableScale(
-                                        enabled = !syncingTools,
-                                        pressedScale = 0.95f,
-                                        onClick = {
-                                            if (syncingTools) return@pressableScale
-                                            syncingTools = true
-                                            scope.launch {
-                                                try {
-                                                    mcpClient.fetchTools(mcp)
-                                                        .onSuccess { tools -> repository.updateMcpTools(mcp.id, tools) }
-                                                } finally {
-                                                    syncingTools = false
-                                                }
-                                            }
-                                        }
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = AppIcons.Refresh,
-                                    contentDescription = "Sync",
-                                    tint = if (syncingTools) TextSecondary else TextPrimary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-
-                            Icon(
-                                imageVector = AppIcons.ChevronRight,
-                                contentDescription = null,
-                                tint = TextSecondary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
+                McpInfoCard(
+                    mcp = mcp,
+                    onToggleEnabled = {
+                        scope.launch { repository.toggleMcpEnabled(mcp.id) }
                     }
+                )
+
+                McpConnectionCard(mcp = mcp)
+
+                McpToolsCard(
+                    tools = mcp.tools,
+                    lastSyncAt = mcp.lastSyncAt,
+                    syncing = syncingTools,
+                    syncError = syncError,
+                    onSync = {
+                        if (syncingTools) return@McpToolsCard
+                        syncingTools = true
+                        syncError = null
+                        scope.launch {
+                            try {
+                                mcpClient.fetchTools(mcp)
+                                    .onSuccess { tools ->
+                                        repository.updateMcpTools(mcp.id, tools)
+                                    }
+                                    .onFailure { error ->
+                                        syncError = error.message.orEmpty().ifBlank { "Sync failed" }
+                                    }
+                            } finally {
+                                syncingTools = false
+                            }
+                        }
+                    },
+                    onToolClick = { tool -> showToolDetail = tool }
+                )
+
+                McpDetailItem(
+                    icon = {
+                        Icon(
+                            imageVector = AppIcons.Tool,
+                            contentDescription = null,
+                            tint = TextPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    title = "All tools",
+                    subtitle = "Open full tools list page",
+                    onClick = { navController.navigate("mcp_tools/${mcp.id}") }
                 )
             }
         }
@@ -211,6 +176,19 @@ fun McpDetailScreen(
                             showEditModal = false
                         }
                     }
+                )
+            }
+        }
+
+        showToolDetail?.let { tool ->
+            val toolSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            AppModalBottomSheet(
+                onDismissRequest = { showToolDetail = null },
+                sheetState = toolSheetState
+            ) {
+                ToolDetailSheetContent(
+                    tool = tool,
+                    onDismiss = { showToolDetail = null }
                 )
             }
         }

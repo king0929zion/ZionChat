@@ -74,11 +74,16 @@ class McpClient {
         }
     }
 
-    suspend fun callTool(config: McpConfig, toolCall: McpToolCall): Result<McpToolResult> {
+    suspend fun callTool(
+        config: McpConfig,
+        toolCall: McpToolCall,
+        timeoutSeconds: Long = 60L
+    ): Result<McpToolResult> {
         return withContext(Dispatchers.IO) {
             runCatching {
                 withConnectedClient(config) { client ->
                     val argsJson = toolCall.arguments.toJsonObject()
+                    val effectiveTimeoutSeconds = timeoutSeconds.coerceIn(15L, 180L)
                     val result =
                         client.callTool(
                             request = CallToolRequest(
@@ -87,7 +92,7 @@ class McpClient {
                                     arguments = argsJson,
                                 ),
                             ),
-                            options = RequestOptions(timeout = 120.seconds),
+                            options = RequestOptions(timeout = effectiveTimeoutSeconds.seconds),
                         )
 
                     val isError = result.isError == true
