@@ -58,7 +58,16 @@ data class Message(
     val role: String,
     val content: String,
     val reasoning: String? = null,
+    val tags: List<MessageTag>? = null,
     val timestamp: Long = System.currentTimeMillis()
+)
+
+data class MessageTag(
+    val id: String = UUID.randomUUID().toString(),
+    val kind: String,
+    val title: String,
+    val content: String,
+    val createdAt: Long = System.currentTimeMillis()
 )
 
 data class MemoryItem(

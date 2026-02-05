@@ -351,6 +351,36 @@ class AppRepository(context: Context) {
         }
     }
 
+    suspend fun appendMessageTag(conversationId: String, messageId: String, tag: MessageTag) {
+        val conversations = conversationsFlow.first().toMutableList()
+        val index = conversations.indexOfFirst { it.id == conversationId }
+        if (index < 0) return
+
+        val conversation = conversations[index]
+        val updatedMessages =
+            conversation.messages.map { msg ->
+                if (msg.id == messageId) {
+                    val tags = msg.tags.orEmpty() + tag
+                    msg.copy(tags = tags)
+                } else {
+                    msg
+                }
+            }
+
+        val updatedConversation =
+            conversation.copy(
+                messages = updatedMessages,
+                updatedAt = System.currentTimeMillis()
+            )
+
+        conversations.removeAt(index)
+        conversations.add(0, updatedConversation)
+
+        dataStore.edit { prefs ->
+            prefs[conversationsKey] = gson.toJson(conversations)
+        }
+    }
+
     suspend fun deleteMessage(conversationId: String, messageId: String) {
         val conversations = conversationsFlow.first().toMutableList()
         val index = conversations.indexOfFirst { it.id == conversationId }

@@ -65,6 +65,10 @@ import com.zionchat.app.data.ChatApiClient
 import com.zionchat.app.data.Conversation
 import com.zionchat.app.data.HttpHeader
 import com.zionchat.app.data.Message
+import com.zionchat.app.data.MessageTag
+import com.zionchat.app.data.McpClient
+import com.zionchat.app.data.McpConfig
+import com.zionchat.app.data.McpToolCall
 import com.zionchat.app.data.ProviderConfig
 import com.zionchat.app.data.extractRemoteModelId
 import com.zionchat.app.ui.components.TopFadeScrim
@@ -75,6 +79,7 @@ import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.*
 import coil3.compose.AsyncImage
+import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -103,6 +108,7 @@ fun ChatScreen(navController: NavController) {
     val repository = LocalAppRepository.current
     val chatApiClient = LocalChatApiClient.current
     val providerAuthManager = LocalProviderAuthManager.current
+    val mcpClient = remember { McpClient() }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -114,6 +120,8 @@ fun ChatScreen(navController: NavController) {
     var showThinkingSheet by remember { mutableStateOf(false) }
     var thinkingSheetText by remember { mutableStateOf<String?>(null) }
     val thinkingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var tagSheetTag by remember { mutableStateOf<MessageTag?>(null) }
+    val tagSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val photoPickerLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -451,21 +459,31 @@ fun ChatScreen(navController: NavController) {
 
             // 流式输出
             val assistantMessage = Message(role = "assistant", content = "")
+            var assistantTags = emptyList<MessageTag>()
             pendingMessages = pendingMessages + PendingMessage(safeConversationId, assistantMessage)
             isStreaming = true
             streamingMessageId = assistantMessage.id
             streamingConversationId = safeConversationId
             scrollToBottomToken++
 
-            fun updateAssistantContent(content: String, reasoning: String?) {
+            fun updateAssistantPending(update: (Message) -> Message) {
                 pendingMessages =
                     pendingMessages.map { pending ->
                         if (pending.conversationId == safeConversationId && pending.message.id == assistantMessage.id) {
-                            pending.copy(message = pending.message.copy(content = content, reasoning = reasoning))
+                            pending.copy(message = update(pending.message))
                         } else {
                             pending
                         }
                     }
+            }
+
+            fun updateAssistantContent(content: String, reasoning: String?) {
+                updateAssistantPending { it.copy(content = content, reasoning = reasoning) }
+            }
+
+            fun appendAssistantTag(tag: MessageTag) {
+                assistantTags = assistantTags + tag
+                updateAssistantPending { it.copy(tags = assistantTags) }
             }
 
             try {
@@ -483,17 +501,178 @@ fun ChatScreen(navController: NavController) {
                 } else {
                     // 普通聊天流程
                     val toolContextMessage =
-                        if (selectedTool == "web") {
-                            val webContext = chatApiClient.webSearch(trimmed).getOrDefault("")
-                            webContext.takeIf { it.isNotBlank() }?.let { content ->
-                                Message(
-                                    role = "system",
-                                    content =
-                                        "Use the following web search results as reference. If they are insufficient, answer based on best effort.\n\n$content"
-                                )
+                        when (selectedTool) {
+                            "web" -> {
+                                val webContext = chatApiClient.webSearch(trimmed).getOrDefault("")
+                                webContext.takeIf { it.isNotBlank() }?.let { content ->
+                                    Message(
+                                        role = "system",
+                                        content =
+                                            "Use the following web search results as reference. If they are insufficient, answer based on best effort.\n\n$content"
+                                    )
+                                }
                             }
-                        } else {
-                            null
+
+                            "mcp" -> {
+                                val enabledServers = repository.mcpListFlow.first().filter { it.enabled }
+                                if (enabledServers.isEmpty()) {
+                                    val msg = "No MCP servers enabled. Configure one in Settings → MCP Tools."
+                                    updateAssistantContent(msg, null)
+                                    repository.appendMessage(
+                                        safeConversationId,
+                                        assistantMessage.copy(content = msg)
+                                    )
+                                    return@launch
+                                }
+
+                                val serversWithTools =
+                                    enabledServers.map { server ->
+                                        if (server.tools.isNotEmpty()) return@map server
+                                        val fetched = mcpClient.fetchTools(server).getOrNull().orEmpty()
+                                        if (fetched.isNotEmpty()) {
+                                            repository.updateMcpTools(server.id, fetched)
+                                        }
+                                        server.copy(tools = fetched)
+                                    }
+
+                                val allToolsCount = serversWithTools.sumOf { it.tools.size }
+                                if (allToolsCount == 0) {
+                                    val msg = "No MCP tools available. Sync tools in MCP Tools first."
+                                    updateAssistantContent(msg, null)
+                                    repository.appendMessage(
+                                        safeConversationId,
+                                        assistantMessage.copy(content = msg)
+                                    )
+                                    return@launch
+                                }
+
+                                val plannerPrompt = buildMcpToolPlannerPrompt(serversWithTools)
+                                val plannerOutput =
+                                    collectStreamContent(
+                                        chatApiClient = chatApiClient,
+                                        provider = resolvedProvider,
+                                        modelId = extractRemoteModelId(selectedModel.id),
+                                        messages = buildList {
+                                            if (systemMessage != null) add(systemMessage)
+                                            add(Message(role = "system", content = plannerPrompt))
+                                            add(Message(role = "user", content = trimmed))
+                                        },
+                                        extraHeaders = selectedModel.headers
+                                    )
+
+                                val plannedCalls = parseMcpPlannedToolCalls(plannerOutput).take(3)
+                                if (plannedCalls.isEmpty()) {
+                                    appendAssistantTag(
+                                        MessageTag(
+                                            kind = "mcp",
+                                            title = "MCP Tools",
+                                            content = "No tool call selected."
+                                        )
+                                    )
+                                    null
+                                } else {
+                                    val prettyGson = GsonBuilder().setPrettyPrinting().create()
+                                    val byId = serversWithTools.associateBy { it.id }
+
+                                    val toolResultsText = StringBuilder()
+                                    toolResultsText.append("MCP tool results:\n\n")
+
+                                    plannedCalls.forEach { call ->
+                                        fun resolveServer(): McpConfig? {
+                                            val id = call.serverId.trim()
+                                            if (id.isNotBlank()) {
+                                                byId[id]?.let { return it }
+                                                serversWithTools.firstOrNull { it.name.trim().equals(id, ignoreCase = true) }?.let { return it }
+                                            }
+                                            val candidates = serversWithTools.filter { s -> s.tools.any { it.name == call.toolName } }
+                                            return if (candidates.size == 1) candidates.first() else null
+                                        }
+
+                                        val server = resolveServer()
+                                        val args: Map<String, Any> =
+                                            call.arguments
+                                                .mapNotNull { (k, v) ->
+                                                    val key = k.trim()
+                                                    if (key.isBlank()) return@mapNotNull null
+                                                    val value = v ?: return@mapNotNull null
+                                                    key to value
+                                                }
+                                                .toMap()
+
+                                        val argsJson = prettyGson.toJson(args)
+                                        val tagTitle = "MCP: ${call.toolName}"
+
+                                        if (server == null) {
+                                            val tagContent =
+                                                buildString {
+                                                    append("**Tool**: ")
+                                                    append(call.toolName)
+                                                    append("\n\n")
+                                                    append("**Arguments**\n```json\n")
+                                                    append(argsJson)
+                                                    append("\n```\n\n")
+                                                    append("**Error**\n")
+                                                    append("Server not found for tool call.")
+                                                }
+                                            appendAssistantTag(MessageTag(kind = "mcp", title = tagTitle, content = tagContent))
+                                            toolResultsText.append("- ")
+                                            toolResultsText.append(call.toolName)
+                                            toolResultsText.append(": error (server not found)\n")
+                                            return@forEach
+                                        }
+
+                                        val callResult =
+                                            mcpClient.callTool(
+                                                server,
+                                                McpToolCall(toolName = call.toolName, arguments = args)
+                                            ).getOrElse { e ->
+                                                com.zionchat.app.data.McpToolResult(
+                                                    success = false,
+                                                    content = e.message.orEmpty().ifBlank { "Tool call failed." },
+                                                    error = e.message
+                                                )
+                                            }
+
+                                        val tagContent =
+                                            buildString {
+                                                append("**Server**: ")
+                                                append(server.name)
+                                                append("\n\n")
+                                                append("**Tool**: ")
+                                                append(call.toolName)
+                                                append("\n\n")
+                                                append("**Arguments**\n```json\n")
+                                                append(argsJson)
+                                                append("\n```\n\n")
+                                                if (callResult.success) {
+                                                    append("**Result**\n")
+                                                    append(callResult.content)
+                                                } else {
+                                                    append("**Error**\n")
+                                                    append(callResult.error ?: callResult.content)
+                                                }
+                                            }
+                                        appendAssistantTag(MessageTag(kind = "mcp", title = tagTitle, content = tagContent))
+
+                                        toolResultsText.append("- ")
+                                        toolResultsText.append(server.name)
+                                        toolResultsText.append("/")
+                                        toolResultsText.append(call.toolName)
+                                        toolResultsText.append(":\n")
+                                        toolResultsText.append(callResult.content.trim())
+                                        toolResultsText.append("\n\n")
+                                    }
+
+                                    Message(
+                                        role = "system",
+                                        content =
+                                            toolResultsText.toString().trim() +
+                                                "\n\nUse the MCP tool results above to answer the user."
+                                    )
+                                }
+                            }
+
+                            else -> null
                         }
 
                     val requestMessages = buildList {
@@ -594,7 +773,11 @@ fun ChatScreen(navController: NavController) {
                     if (finalContent.isNotBlank() || !finalReasoning.isNullOrBlank()) {
                         repository.appendMessage(
                             safeConversationId,
-                            assistantMessage.copy(content = finalContent, reasoning = finalReasoning)
+                            assistantMessage.copy(
+                                content = finalContent,
+                                reasoning = finalReasoning,
+                                tags = assistantTags.takeIf { it.isNotEmpty() }
+                            )
                         )
                     }
 
@@ -603,10 +786,11 @@ fun ChatScreen(navController: NavController) {
                         val chatExtraHeaders = selectedModel.headers
                         val userTextForMemory = trimmed
                         val assistantTextForMemory = finalContent
+                        val assistantMessageIdForTags = assistantMessage.id
 
                         scope.launch(Dispatchers.IO) {
-                            runCatching {
-                                val candidates =
+                            val result =
+                                runCatching {
                                     extractMemoryCandidatesFromTurn(
                                         chatApiClient = chatApiClient,
                                         provider = resolvedProvider,
@@ -615,8 +799,38 @@ fun ChatScreen(navController: NavController) {
                                         assistantText = assistantTextForMemory,
                                         extraHeaders = chatExtraHeaders
                                     )
-                                candidates.forEach { repository.addMemory(it) }
-                            }
+                                }
+
+                            val candidates = result.getOrDefault(emptyList())
+                            candidates.forEach { repository.addMemory(it) }
+
+                            val detail =
+                                buildString {
+                                    if (result.isFailure) {
+                                        append("Memory extraction failed.\n\n")
+                                        append("Error: ")
+                                        append(result.exceptionOrNull()?.message.orEmpty().ifBlank { "Unknown error" })
+                                        return@buildString
+                                    }
+
+                                    if (candidates.isEmpty()) {
+                                        append("No memories extracted.")
+                                        return@buildString
+                                    }
+
+                                    append("Extracted memories:\n")
+                                    candidates.forEach { item ->
+                                        append("- ")
+                                        append(item)
+                                        append('\n')
+                                    }
+                                }.trim()
+
+                            repository.appendMessageTag(
+                                conversationId = safeConversationId,
+                                messageId = assistantMessageIdForTags,
+                                tag = MessageTag(kind = "memory", title = "Memory", content = detail)
+                            )
                         }
 
                         scope.launch(Dispatchers.IO) {
@@ -761,8 +975,16 @@ fun ChatScreen(navController: NavController) {
                             onShowReasoning = { reasoning ->
                                 keyboardController?.hide()
                                 showToolMenu = false
+                                tagSheetTag = null
                                 thinkingSheetText = reasoning
                                 showThinkingSheet = true
+                            },
+                            onShowTag = { tag ->
+                                keyboardController?.hide()
+                                showToolMenu = false
+                                showThinkingSheet = false
+                                thinkingSheetText = null
+                                tagSheetTag = tag
                             },
                             onEdit = { /* TODO */ },
                             onDelete = { convoId, messageId ->
@@ -985,6 +1207,76 @@ fun ChatScreen(navController: NavController) {
                     }
                 }
             }
+
+            tagSheetTag?.let { tag ->
+                ModalBottomSheet(
+                    onDismissRequest = { tagSheetTag = null },
+                    sheetState = tagSheetState,
+                    containerColor = ThinkingBackground,
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                    dragHandle = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(ThinkingBackground)
+                                .padding(top = 12.dp, bottom = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(40.dp)
+                                    .height(4.dp)
+                                    .background(GrayLight, RoundedCornerShape(2.dp))
+                            )
+                        }
+                    }
+                ) {
+                    Box(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.67f)) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .windowInsetsPadding(WindowInsets.statusBars)
+                                .background(ThinkingBackground)
+                                .align(Alignment.TopCenter)
+                                .zIndex(1f)
+                        )
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight()
+                                .background(ThinkingBackground)
+                                .padding(horizontal = 20.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = tag.title,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary
+                            )
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                MarkdownText(
+                                    markdown = tag.content,
+                                    textStyle = TextStyle(
+                                        fontSize = 14.sp,
+                                        lineHeight = 22.sp,
+                                        color = TextPrimary
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -997,6 +1289,7 @@ fun MessageItem(
     isStreaming: Boolean = false,
     showToolbar: Boolean = true,
     onShowReasoning: (String) -> Unit,
+    onShowTag: (MessageTag) -> Unit,
     onEdit: () -> Unit,
     onDelete: (conversationId: String, messageId: String) -> Unit
 ) {
@@ -1057,6 +1350,32 @@ fun MessageItem(
                 ) {
                     Text(
                         text = "Thinking",
+                        fontSize = 15.sp,
+                        fontFamily = SourceSans3,
+                        fontWeight = FontWeight.SemiBold,
+                        color = ThinkingLabelColor
+                    )
+                    Icon(
+                        imageVector = AppIcons.ChevronRight,
+                        contentDescription = null,
+                        tint = ThinkingLabelColor,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+
+            message.tags.orEmpty().forEach { tag ->
+                Row(
+                    modifier = Modifier
+                        .padding(bottom = 6.dp)
+                        .pressableScale(
+                            pressedScale = 0.98f,
+                            onClick = { onShowTag(tag) }
+                        ),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = tag.title,
                         fontSize = 15.sp,
                         fontFamily = SourceSans3,
                         fontWeight = FontWeight.SemiBold,
@@ -2243,6 +2562,154 @@ private fun parseJsonStringArray(text: String): List<String> {
 
     return array.mapNotNull { el ->
         runCatching { el.asString }.getOrNull()?.trim()?.takeIf { it.isNotBlank() }
+    }
+}
+
+private data class PlannedMcpToolCall(
+    val serverId: String,
+    val toolName: String,
+    val arguments: Map<String, Any?>
+)
+
+private fun buildMcpToolPlannerPrompt(servers: List<McpConfig>): String {
+    val maxToolsPerServer = 24
+
+    return buildString {
+        appendLine("You are a tool router. Choose MCP tool calls to help answer the user's request.")
+        appendLine("Return ONLY JSON in this schema:")
+        appendLine("{\"calls\":[{\"serverId\":\"...\",\"toolName\":\"...\",\"arguments\":{}}]}")
+        appendLine("If no tool is needed, return {\"calls\":[]}.")
+        appendLine()
+        appendLine("Rules:")
+        appendLine("- Use ONLY the tools listed below.")
+        appendLine("- toolName must match exactly.")
+        appendLine("- arguments must be a JSON object.")
+        appendLine()
+        appendLine("Available MCP servers and tools:")
+
+        servers.forEach { server ->
+            append("- Server: ")
+            append(server.name.trim().ifBlank { "Unnamed" })
+            append(" (id=")
+            append(server.id)
+            appendLine(")")
+
+            server.tools.take(maxToolsPerServer).forEach { tool ->
+                append("  - Tool: ")
+                appendLine(tool.name)
+
+                val desc = tool.description.trim()
+                if (desc.isNotBlank()) {
+                    append("    Description: ")
+                    appendLine(desc.take(240))
+                }
+
+                if (tool.parameters.isNotEmpty()) {
+                    appendLine("    Parameters:")
+                    tool.parameters.forEach { param ->
+                        append("      - ")
+                        append(param.name)
+                        append(" (")
+                        append(param.type)
+                        append(")")
+                        if (param.required) append(" [required]")
+                        val pDesc = param.description.trim()
+                        if (pDesc.isNotBlank()) {
+                            append(": ")
+                            append(pDesc.take(200))
+                        }
+                        appendLine()
+                    }
+                }
+            }
+        }
+    }.trim()
+}
+
+private fun parseMcpPlannedToolCalls(text: String): List<PlannedMcpToolCall> {
+    val cleaned = stripMarkdownCodeFences(text).trim()
+    if (cleaned.isBlank()) return emptyList()
+
+    val candidate = extractFirstJsonCandidate(cleaned) ?: return emptyList()
+    val root = runCatching { JsonParser.parseString(candidate) }.getOrNull() ?: return emptyList()
+
+    val callsElement =
+        when {
+            root.isJsonObject && root.asJsonObject.has("calls") -> root.asJsonObject.get("calls")
+            else -> root
+        }
+
+    val callsArray =
+        when {
+            callsElement.isJsonArray -> callsElement.asJsonArray
+            callsElement.isJsonObject -> com.google.gson.JsonArray().apply { add(callsElement) }
+            else -> return emptyList()
+        }
+
+    fun getString(obj: com.google.gson.JsonObject, vararg keys: String): String? {
+        return keys.asSequence().mapNotNull { key ->
+            val el = runCatching { obj.get(key) }.getOrNull() ?: return@mapNotNull null
+            if (!el.isJsonPrimitive || !el.asJsonPrimitive.isString) return@mapNotNull null
+            el.asString.trim().takeIf { it.isNotBlank() }
+        }.firstOrNull()
+    }
+
+    fun getArgsObject(obj: com.google.gson.JsonObject): com.google.gson.JsonObject {
+        return runCatching { obj.getAsJsonObject("arguments") }.getOrNull()
+            ?: runCatching { obj.getAsJsonObject("args") }.getOrNull()
+            ?: runCatching { obj.getAsJsonObject("input") }.getOrNull()
+            ?: com.google.gson.JsonObject()
+    }
+
+    return callsArray.mapNotNull { el ->
+        val obj = runCatching { el.asJsonObject }.getOrNull() ?: return@mapNotNull null
+        val toolName = getString(obj, "toolName", "tool_name", "tool", "name").orEmpty()
+        if (toolName.isBlank()) return@mapNotNull null
+
+        val serverId = getString(obj, "serverId", "server_id", "server", "mcpId", "mcp_id", "id").orEmpty()
+        val args = getArgsObject(obj).entrySet().associate { entry ->
+            entry.key to entry.value.toKotlinAny()
+        }
+
+        PlannedMcpToolCall(serverId = serverId, toolName = toolName, arguments = args)
+    }
+}
+
+private fun extractFirstJsonCandidate(text: String): String? {
+    val raw = text.trim()
+    if (raw.isBlank()) return null
+
+    val idxObj = raw.indexOf('{')
+    val idxArr = raw.indexOf('[')
+    val start =
+        listOf(idxObj, idxArr)
+            .filter { it >= 0 }
+            .minOrNull()
+            ?: return null
+
+    val open = raw[start]
+    val close = if (open == '{') '}' else ']'
+    val end = raw.lastIndexOf(close)
+    if (end <= start) return null
+
+    return raw.substring(start, end + 1)
+}
+
+private fun com.google.gson.JsonElement.toKotlinAny(): Any? {
+    return when {
+        isJsonNull -> null
+        isJsonPrimitive -> {
+            val p = asJsonPrimitive
+            when {
+                p.isBoolean -> p.asBoolean
+                p.isNumber -> p.asNumber
+                else -> p.asString
+            }
+        }
+
+        isJsonArray -> asJsonArray.map { it.toKotlinAny() }
+        isJsonObject -> asJsonObject.entrySet().associate { it.key to it.value.toKotlinAny() }
+        else -> null
     }
 }
 
