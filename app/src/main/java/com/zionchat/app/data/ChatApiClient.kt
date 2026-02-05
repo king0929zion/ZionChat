@@ -25,6 +25,7 @@ class ChatApiClient {
     private val jsonMediaType = "application/json".toMediaType()
     private val strictJsonMediaType = "application/json".toMediaType()
     private val markdownImageRegex = Regex("!\\[[^\\]]*\\]\\(([^)]+)\\)")
+    private val dataUrlRegex = Regex("^data:([^;]+);base64,(.+)$", RegexOption.IGNORE_CASE)
     private val codexModelCache = ConcurrentHashMap<String, CodexModelMeta>()
 
     private fun buildEffectiveHeaders(
@@ -692,7 +693,7 @@ class ChatApiClient {
                             "user" -> "user"
                             else -> null
                         } ?: return@mapNotNull null
-                    mapOf("role" to role, "parts" to listOf(mapOf("text" to message.content)))
+                    mapOf("role" to role, "parts" to toGeminiParts(message.content))
                 }
 
         val requestPayload =
@@ -805,7 +806,7 @@ class ChatApiClient {
                             "user" -> "user"
                             else -> null
                         } ?: return@mapNotNull null
-                    mapOf("role" to role, "parts" to listOf(mapOf("text" to message.content)))
+                    mapOf("role" to role, "parts" to toGeminiParts(message.content))
                 }
 
         val requestPayload = mutableMapOf<String, Any>("contents" to contents)
@@ -1148,6 +1149,39 @@ class ChatApiClient {
         if (urls.isEmpty()) return raw to emptyList()
         val text = raw.replace(markdownImageRegex, "").trim()
         return text to urls
+    }
+
+    private fun toGeminiParts(content: String): List<Map<String, Any>> {
+        val (text, images) = extractMarkdownImages(content)
+        val parts = mutableListOf<Map<String, Any>>()
+
+        if (text.isNotBlank()) {
+            parts.add(mapOf("text" to text))
+        }
+
+        images.forEach { url ->
+            val inline = parseInlineDataPart(url)
+            if (inline != null) {
+                parts.add(inline)
+            } else {
+                // Best-effort fallback: keep the URL in text form.
+                parts.add(mapOf("text" to url))
+            }
+        }
+
+        if (parts.isEmpty()) {
+            parts.add(mapOf("text" to ""))
+        }
+
+        return parts
+    }
+
+    private fun parseInlineDataPart(url: String): Map<String, Any>? {
+        val match = dataUrlRegex.matchEntire(url.trim()) ?: return null
+        val mimeType = match.groupValues.getOrNull(1)?.trim().orEmpty()
+        val b64 = match.groupValues.getOrNull(2)?.trim().orEmpty()
+        if (mimeType.isBlank() || b64.isBlank()) return null
+        return mapOf("inlineData" to mapOf("mimeType" to mimeType, "data" to b64))
     }
 }
 
