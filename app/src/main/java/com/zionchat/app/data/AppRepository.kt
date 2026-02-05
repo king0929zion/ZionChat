@@ -2,12 +2,14 @@ package com.zionchat.app.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.zionchat.app.data.extractRemoteModelId
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.util.UUID
@@ -16,6 +18,7 @@ class AppRepository(context: Context) {
     private val appContext = context.applicationContext
     private val dataStore = appContext.zionDataStore
     private val gson = Gson()
+    private val prefsFlow = dataStore.data.catch { emit(emptyPreferences()) }
 
     private val providersKey = stringPreferencesKey("providers_json")
     private val modelsKey = stringPreferencesKey("models_json")
@@ -39,80 +42,248 @@ class AppRepository(context: Context) {
     private val conversationListType = object : TypeToken<List<Conversation>>() {}.type
     private val memoryListType = object : TypeToken<List<MemoryItem>>() {}.type
 
-    val providersFlow: Flow<List<ProviderConfig>> = dataStore.data.map { prefs ->
+    private fun safeTrim(value: String?): String = value?.trim().orEmpty()
+
+    private fun safeTrimOrNull(value: String?): String? = value?.trim()?.takeIf { it.isNotBlank() }
+
+    private fun sanitizeHeaders(headers: List<HttpHeader>?): List<HttpHeader> {
+        return headers.orEmpty().mapNotNull { header ->
+            val h: HttpHeader? = header
+            val key = safeTrim(h?.key)
+            if (key.isBlank()) null else HttpHeader(key, h?.value.orEmpty())
+        }
+    }
+
+    private fun sanitizeProvider(provider: ProviderConfig?): ProviderConfig? {
+        if (provider == null) return null
+        val id = safeTrim(provider.id)
+        if (id.isBlank()) return null
+
+        return ProviderConfig(
+            id = id,
+            presetId = safeTrimOrNull(provider.presetId),
+            iconAsset = safeTrimOrNull(provider.iconAsset),
+            name = safeTrim(provider.name),
+            type = safeTrim(provider.type),
+            apiUrl = safeTrim(provider.apiUrl),
+            apiKey = safeTrim(provider.apiKey),
+            headers = sanitizeHeaders(provider.headers),
+            oauthProvider = safeTrimOrNull(provider.oauthProvider),
+            oauthAccessToken = safeTrimOrNull(provider.oauthAccessToken),
+            oauthRefreshToken = safeTrimOrNull(provider.oauthRefreshToken),
+            oauthIdToken = safeTrimOrNull(provider.oauthIdToken),
+            oauthAccountId = safeTrimOrNull(provider.oauthAccountId),
+            oauthEmail = safeTrimOrNull(provider.oauthEmail),
+            oauthProjectId = safeTrimOrNull(provider.oauthProjectId),
+            oauthExpiresAtMs = provider.oauthExpiresAtMs
+        )
+    }
+
+    private fun sanitizeModel(model: ModelConfig?): ModelConfig? {
+        if (model == null) return null
+        val id = safeTrim(model.id)
+        if (id.isBlank()) return null
+
+        val displayName = safeTrim(model.displayName).ifBlank { id }
+        return ModelConfig(
+            id = id,
+            displayName = displayName,
+            enabled = model.enabled,
+            providerId = safeTrimOrNull(model.providerId),
+            headers = sanitizeHeaders(model.headers),
+            reasoningEffort = safeTrimOrNull(model.reasoningEffort)
+        )
+    }
+
+    private fun sanitizeTag(tag: MessageTag?): MessageTag? {
+        if (tag == null) return null
+        val kind = safeTrim(tag.kind)
+        val title = safeTrim(tag.title)
+        val content = tag.content.orEmpty()
+        if (kind.isBlank() && title.isBlank() && content.isBlank()) return null
+
+        val id = safeTrim(tag.id).ifBlank { UUID.randomUUID().toString() }
+        val createdAt = tag.createdAt.takeIf { it > 0 } ?: System.currentTimeMillis()
+        return MessageTag(
+            id = id,
+            kind = kind.ifBlank { "tag" },
+            title = title,
+            content = content,
+            createdAt = createdAt
+        )
+    }
+
+    private fun sanitizeMessage(message: Message?): Message? {
+        if (message == null) return null
+        val role = safeTrim(message.role).ifBlank { "assistant" }
+        val content = message.content.orEmpty()
+        val timestamp = message.timestamp.takeIf { it > 0 } ?: System.currentTimeMillis()
+        val id = safeTrim(message.id).ifBlank {
+            UUID.nameUUIDFromBytes("${timestamp}_$role_${content}".toByteArray()).toString()
+        }
+
+        val tags = message.tags.orEmpty().mapNotNull(::sanitizeTag).takeIf { it.isNotEmpty() }
+        val reasoning = message.reasoning?.takeIf { it.isNotBlank() }
+        return Message(
+            id = id,
+            role = role,
+            content = content,
+            reasoning = reasoning,
+            tags = tags,
+            timestamp = timestamp
+        )
+    }
+
+    private fun sanitizeConversation(conversation: Conversation?): Conversation? {
+        if (conversation == null) return null
+        val id = safeTrim(conversation.id)
+        if (id.isBlank()) return null
+
+        val title = safeTrim(conversation.title).ifBlank { "New chat" }
+        val createdAt = conversation.createdAt.takeIf { it > 0 } ?: System.currentTimeMillis()
+        val updatedAt = conversation.updatedAt.takeIf { it > 0 } ?: createdAt
+        val messages = conversation.messages.orEmpty().mapNotNull(::sanitizeMessage)
+        return Conversation(
+            id = id,
+            title = title,
+            messages = messages,
+            createdAt = createdAt,
+            updatedAt = updatedAt
+        )
+    }
+
+    private fun sanitizeMemory(item: MemoryItem?): MemoryItem? {
+        if (item == null) return null
+        val content = safeTrim(item.content)
+        if (content.isBlank()) return null
+
+        val id = safeTrim(item.id).ifBlank { UUID.randomUUID().toString() }
+        val createdAt = item.createdAt.takeIf { it > 0 } ?: System.currentTimeMillis()
+        return MemoryItem(id = id, content = content, createdAt = createdAt)
+    }
+
+    private fun sanitizeMcpToolParameter(param: McpToolParameter?): McpToolParameter? {
+        if (param == null) return null
+        val name = safeTrim(param.name)
+        val type = safeTrim(param.type)
+        if (name.isBlank() || type.isBlank()) return null
+        return McpToolParameter(
+            name = name,
+            type = type,
+            required = param.required,
+            description = safeTrim(param.description)
+        )
+    }
+
+    private fun sanitizeMcpTool(tool: McpTool?): McpTool? {
+        if (tool == null) return null
+        val name = safeTrim(tool.name)
+        if (name.isBlank()) return null
+        val description = safeTrim(tool.description)
+        val parameters = tool.parameters.orEmpty().mapNotNull(::sanitizeMcpToolParameter)
+        return McpTool(name = name, description = description, parameters = parameters)
+    }
+
+    private fun sanitizeMcpConfig(mcp: McpConfig?): McpConfig? {
+        if (mcp == null) return null
+        val name = safeTrim(mcp.name)
+        val url = safeTrim(mcp.url)
+        if (name.isBlank() && url.isBlank()) return null
+
+        val idSeed = "${name}_$url"
+        val id = safeTrim(mcp.id).ifBlank { UUID.nameUUIDFromBytes(idSeed.toByteArray()).toString() }
+        val protocol: McpProtocol = (mcp.protocol as McpProtocol?) ?: McpProtocol.HTTP
+        val headers = sanitizeHeaders(mcp.headers).distinctBy { it.key.trim().lowercase() }
+        val tools = mcp.tools.orEmpty().mapNotNull(::sanitizeMcpTool)
+
+        return McpConfig(
+            id = id,
+            name = name,
+            url = url,
+            protocol = protocol,
+            enabled = mcp.enabled,
+            description = safeTrim(mcp.description),
+            headers = headers,
+            tools = tools,
+            lastSyncAt = mcp.lastSyncAt
+        )
+    }
+
+    val providersFlow: Flow<List<ProviderConfig>> = prefsFlow.map { prefs ->
         val json = prefs[providersKey] ?: "[]"
         runCatching { gson.fromJson<List<ProviderConfig>>(json, providerListType) }
-            .getOrDefault(emptyList())
-            .map { provider ->
-                val safeHeaders =
-                    runCatching { provider.headers }.getOrNull().orEmpty()
-                        .mapNotNull { header ->
-                            val key = runCatching { header.key }.getOrNull()?.trim().orEmpty()
-                            val value = runCatching { header.value }.getOrNull().orEmpty()
-                            if (key.isBlank()) null else HttpHeader(key, value)
-                        }
-                provider.copy(headers = safeHeaders)
-            }
+            .getOrNull()
+            .orEmpty()
+            .mapNotNull(::sanitizeProvider)
     }
 
-    val modelsFlow: Flow<List<ModelConfig>> = dataStore.data.map { prefs ->
+    val modelsFlow: Flow<List<ModelConfig>> = prefsFlow.map { prefs ->
         val json = prefs[modelsKey] ?: "[]"
-        runCatching { gson.fromJson<List<ModelConfig>>(json, modelListType) }.getOrDefault(emptyList())
+        runCatching { gson.fromJson<List<ModelConfig>>(json, modelListType) }
+            .getOrNull()
+            .orEmpty()
+            .mapNotNull(::sanitizeModel)
     }
 
-    val conversationsFlow: Flow<List<Conversation>> = dataStore.data.map { prefs ->
+    val conversationsFlow: Flow<List<Conversation>> = prefsFlow.map { prefs ->
         val json = prefs[conversationsKey] ?: "[]"
-        runCatching { gson.fromJson<List<Conversation>>(json, conversationListType) }.getOrDefault(emptyList())
+        runCatching { gson.fromJson<List<Conversation>>(json, conversationListType) }
+            .getOrNull()
+            .orEmpty()
+            .mapNotNull(::sanitizeConversation)
             .sortedByDescending { it.updatedAt }
     }
 
-    val memoriesFlow: Flow<List<MemoryItem>> = dataStore.data.map { prefs ->
+    val memoriesFlow: Flow<List<MemoryItem>> = prefsFlow.map { prefs ->
         val json = prefs[memoriesKey] ?: "[]"
-        runCatching { gson.fromJson<List<MemoryItem>>(json, memoryListType) }.getOrDefault(emptyList())
+        runCatching { gson.fromJson<List<MemoryItem>>(json, memoryListType) }
+            .getOrNull()
+            .orEmpty()
+            .mapNotNull(::sanitizeMemory)
             .sortedByDescending { it.createdAt }
     }
 
-    val currentConversationIdFlow: Flow<String?> = dataStore.data.map { prefs ->
+    val currentConversationIdFlow: Flow<String?> = prefsFlow.map { prefs ->
         prefs[currentConversationIdKey]
     }
 
-    val nicknameFlow: Flow<String> = dataStore.data.map { prefs ->
+    val nicknameFlow: Flow<String> = prefsFlow.map { prefs ->
         prefs[nicknameKey].orEmpty()
     }
 
-    val personalNicknameFlow: Flow<String> = dataStore.data.map { prefs ->
+    val personalNicknameFlow: Flow<String> = prefsFlow.map { prefs ->
         prefs[personalNicknameKey].orEmpty()
     }
 
-    val handleFlow: Flow<String> = dataStore.data.map { prefs ->
+    val handleFlow: Flow<String> = prefsFlow.map { prefs ->
         prefs[handleKey].orEmpty()
     }
 
-    val avatarUriFlow: Flow<String> = dataStore.data.map { prefs ->
+    val avatarUriFlow: Flow<String> = prefsFlow.map { prefs ->
         prefs[avatarUriKey].orEmpty()
     }
 
-    val customInstructionsFlow: Flow<String> = dataStore.data.map { prefs ->
+    val customInstructionsFlow: Flow<String> = prefsFlow.map { prefs ->
         prefs[customInstructionsKey].orEmpty()
     }
 
-    val appLanguageFlow: Flow<String> = dataStore.data.map { prefs ->
+    val appLanguageFlow: Flow<String> = prefsFlow.map { prefs ->
         prefs[appLanguageKey]?.trim()?.takeIf { it.isNotBlank() } ?: "system"
     }
 
-    val defaultChatModelIdFlow: Flow<String?> = dataStore.data.map { prefs ->
+    val defaultChatModelIdFlow: Flow<String?> = prefsFlow.map { prefs ->
         prefs[defaultChatModelIdKey]
     }
 
-    val defaultVisionModelIdFlow: Flow<String?> = dataStore.data.map { prefs ->
+    val defaultVisionModelIdFlow: Flow<String?> = prefsFlow.map { prefs ->
         prefs[defaultVisionModelIdKey]
     }
 
-    val defaultImageModelIdFlow: Flow<String?> = dataStore.data.map { prefs ->
+    val defaultImageModelIdFlow: Flow<String?> = prefsFlow.map { prefs ->
         prefs[defaultImageModelIdKey]
     }
 
-    val defaultTitleModelIdFlow: Flow<String?> = dataStore.data.map { prefs ->
+    val defaultTitleModelIdFlow: Flow<String?> = prefsFlow.map { prefs ->
         prefs[defaultTitleModelIdKey]
     }
 
@@ -484,27 +655,12 @@ class AppRepository(context: Context) {
     private val mcpListKey = stringPreferencesKey("mcp_list_json")
     private val mcpListType = object : TypeToken<List<McpConfig>>() {}.type
 
-    val mcpListFlow: Flow<List<McpConfig>> = dataStore.data.map { prefs ->
+    val mcpListFlow: Flow<List<McpConfig>> = prefsFlow.map { prefs ->
         val json = prefs[mcpListKey] ?: "[]"
-        runCatching { gson.fromJson<List<McpConfig>>(json, mcpListType) }.getOrDefault(emptyList())
-            .map { mcp ->
-                val safeHeaders =
-                    runCatching { mcp.headers }.getOrNull().orEmpty()
-                        .mapNotNull { header ->
-                            val key = runCatching { header.key }.getOrNull()?.trim().orEmpty()
-                            val value = runCatching { header.value }.getOrNull().orEmpty()
-                            if (key.isBlank()) null else HttpHeader(key, value)
-                        }
-                        .distinctBy { it.key.trim().lowercase() }
-
-                val safeProtocol = runCatching { mcp.protocol }.getOrNull() ?: McpProtocol.HTTP
-                mcp.copy(
-                    name = runCatching { mcp.name }.getOrNull().orEmpty(),
-                    url = runCatching { mcp.url }.getOrNull().orEmpty(),
-                    protocol = safeProtocol,
-                    headers = safeHeaders
-                )
-            }
+        runCatching { gson.fromJson<List<McpConfig>>(json, mcpListType) }
+            .getOrNull()
+            .orEmpty()
+            .mapNotNull(::sanitizeMcpConfig)
     }
 
     suspend fun upsertMcp(mcp: McpConfig) {

@@ -70,16 +70,18 @@ class MainActivity : ComponentActivity() {
                     ) {
                         val appLanguage by appContainer.repository.appLanguageFlow.collectAsState(initial = "system")
                         LaunchedEffect(appLanguage) {
-                            val locales =
-                                when (appLanguage.trim().lowercase()) {
-                                    "en" -> LocaleListCompat.forLanguageTags("en")
-                                    "zh" -> LocaleListCompat.forLanguageTags("zh-CN")
-                                    else -> LocaleListCompat.getEmptyLocaleList()
-                                }
-                            AppCompatDelegate.setApplicationLocales(locales)
+                            runCatching {
+                                val locales =
+                                    when (appLanguage.trim().lowercase()) {
+                                        "en" -> LocaleListCompat.forLanguageTags("en")
+                                        "zh" -> LocaleListCompat.forLanguageTags("zh-CN")
+                                        else -> LocaleListCompat.getEmptyLocaleList()
+                                    }
+                                AppCompatDelegate.setApplicationLocales(locales)
+                            }
                         }
                         LaunchedEffect(Unit) {
-                            appContainer.repository.migratePersonalNicknameIfNeeded()
+                            runCatching { appContainer.repository.migratePersonalNicknameIfNeeded() }
                         }
                         NavHost(
                             navController = navController,
