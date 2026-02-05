@@ -72,6 +72,7 @@ fun SettingsScreen(navController: NavController) {
     val defaultChatModelId by repository.defaultChatModelIdFlow.collectAsState(initial = null)
     val nickname by repository.nicknameFlow.collectAsState(initial = "")
     val avatarUri by repository.avatarUriFlow.collectAsState(initial = "")
+    val appLanguage by repository.appLanguageFlow.collectAsState(initial = "system")
 
     var showEditProfile by remember { mutableStateOf(false) }
 
@@ -94,6 +95,14 @@ fun SettingsScreen(navController: NavController) {
 
     val displayName = nickname.takeIf { it.isNotBlank() } ?: "Kendall Williamson"
     val screenBackdrop = rememberLayerBackdrop()
+    val languageLabel =
+        remember(appLanguage) {
+            when (appLanguage.trim().lowercase()) {
+                "zh" -> "简体中文"
+                "en" -> "English"
+                else -> "Follow system"
+            }
+        }
 
     Scaffold(
         topBar = { SettingsTopBar(navController) },
@@ -182,10 +191,10 @@ fun SettingsScreen(navController: NavController) {
                     SettingsItem(
                         icon = { Icon(AppIcons.Language, null, Modifier.size(22.dp), tint = Color.Unspecified) },
                         label = "Language",
-                        value = "English",
+                        value = languageLabel,
                         showChevron = true,
                         showDivider = true,
-                        onClick = { }
+                        onClick = { navController.navigate("language") }
                     )
                     SettingsItem(
                         icon = { Icon(AppIcons.Notifications, null, Modifier.size(22.dp), tint = Color.Unspecified) },

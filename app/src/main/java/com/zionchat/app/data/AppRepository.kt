@@ -25,6 +25,7 @@ class AppRepository(context: Context) {
     private val handleKey = stringPreferencesKey("handle")
     private val avatarUriKey = stringPreferencesKey("avatar_uri")
     private val customInstructionsKey = stringPreferencesKey("custom_instructions")
+    private val appLanguageKey = stringPreferencesKey("app_language")
     private val defaultChatModelIdKey = stringPreferencesKey("default_chat_model_id")
     private val defaultVisionModelIdKey = stringPreferencesKey("default_vision_model_id")
     private val defaultImageModelIdKey = stringPreferencesKey("default_image_model_id")
@@ -88,6 +89,10 @@ class AppRepository(context: Context) {
         prefs[customInstructionsKey].orEmpty()
     }
 
+    val appLanguageFlow: Flow<String> = dataStore.data.map { prefs ->
+        prefs[appLanguageKey]?.trim()?.takeIf { it.isNotBlank() } ?: "system"
+    }
+
     val defaultChatModelIdFlow: Flow<String?> = dataStore.data.map { prefs ->
         prefs[defaultChatModelIdKey]
     }
@@ -139,6 +144,17 @@ class AppRepository(context: Context) {
     suspend fun setCustomInstructions(value: String) {
         dataStore.edit { prefs ->
             prefs[customInstructionsKey] = value
+        }
+    }
+
+    suspend fun setAppLanguage(value: String) {
+        val key =
+            when (value.trim().lowercase()) {
+                "en", "zh", "system" -> value.trim().lowercase()
+                else -> "system"
+            }
+        dataStore.edit { prefs ->
+            prefs[appLanguageKey] = key
         }
     }
 

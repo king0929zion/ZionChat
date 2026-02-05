@@ -5,12 +5,16 @@ import android.os.Bundle
 import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.core.os.LocaleListCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.navigation.compose.NavHost
@@ -63,12 +67,23 @@ class MainActivity : ComponentActivity() {
                         LocalOAuthClient provides appContainer.oauthClient,
                         LocalProviderAuthManager provides appContainer.providerAuthManager
                     ) {
+                        val appLanguage by appContainer.repository.appLanguageFlow.collectAsState(initial = "system")
+                        LaunchedEffect(appLanguage) {
+                            val locales =
+                                when (appLanguage.trim().lowercase()) {
+                                    "en" -> LocaleListCompat.forLanguageTags("en")
+                                    "zh" -> LocaleListCompat.forLanguageTags("zh-CN")
+                                    else -> LocaleListCompat.getEmptyLocaleList()
+                                }
+                            AppCompatDelegate.setApplicationLocales(locales)
+                        }
                         NavHost(
                             navController = navController,
                             startDestination = "chat"
                         ) {
                             composable("chat") { ChatScreen(navController) }
                             composable("settings") { SettingsScreen(navController) }
+                            composable("language") { LanguageScreen(navController) }
                             composable("personalization") { PersonalizationScreen(navController) }
                             composable("memories") { MemoriesScreen(navController) }
                             composable("default_model") { DefaultModelScreen(navController) }
