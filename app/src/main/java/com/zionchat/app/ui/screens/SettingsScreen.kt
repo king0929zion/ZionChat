@@ -540,7 +540,8 @@ fun EditProfileModal(
                 ) {
                     Column(
                         modifier = Modifier
-                            .padding(horizontal = 24.dp, top = 24.dp)
+                            .padding(horizontal = 24.dp)
+                            .padding(top = 24.dp)
                             .navigationBarsPadding()
                             .padding(bottom = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(20.dp),
