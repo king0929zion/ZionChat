@@ -10,4 +10,23 @@
     <string name="add_provider">Add Provider</string>
     <string name="models">Models</string>
     <string name="model_configuration">Model Configuration</string>
+
+    <string name="not_set">Not set</string>
+
+    <string name="settings_group_general">General</string>
+    <string name="settings_item_language">Language</string>
+    <string name="settings_item_notifications">Notifications</string>
+    <string name="settings_group_ai_model">AI Model</string>
+    <string name="settings_item_default_model">Default model</string>
+    <string name="settings_item_model_services">Model services</string>
+    <string name="settings_item_mcp_tools">MCP Tools</string>
+
+    <string name="language_title">Language</string>
+    <string name="language_option_system">Follow system</string>
+    <string name="language_option_system_subtitle">Use device language</string>
+    <string name="language_option_en">English</string>
+    <string name="language_option_en_subtitle">English</string>
+    <string name="language_option_zh">Chinese (Simplified)</string>
+    <string name="language_option_zh_subtitle">Chinese (Simplified)</string>
+    <string name="language_note">Changes apply immediately. Some screens may still use fixed text.</string>
 </resources>

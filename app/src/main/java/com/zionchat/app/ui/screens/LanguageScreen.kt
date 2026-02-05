@@ -27,11 +27,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.zionchat.app.LocalAppRepository
+import com.zionchat.app.R
 import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.Background
@@ -43,8 +45,8 @@ import kotlinx.coroutines.launch
 
 private data class LanguageOption(
     val code: String,
-    val title: String,
-    val subtitle: String
+    val titleRes: Int,
+    val subtitleRes: Int
 )
 
 @Composable
@@ -56,9 +58,9 @@ fun LanguageScreen(navController: NavController) {
     val options =
         remember {
             listOf(
-                LanguageOption(code = "system", title = "Follow system", subtitle = "Use device language"),
-                LanguageOption(code = "en", title = "English", subtitle = "English"),
-                LanguageOption(code = "zh", title = "简体中文", subtitle = "Chinese (Simplified)"),
+                LanguageOption(code = "system", titleRes = R.string.language_option_system, subtitleRes = R.string.language_option_system_subtitle),
+                LanguageOption(code = "en", titleRes = R.string.language_option_en, subtitleRes = R.string.language_option_en_subtitle),
+                LanguageOption(code = "zh", titleRes = R.string.language_option_zh, subtitleRes = R.string.language_option_zh_subtitle),
             )
         }
 
@@ -68,7 +70,7 @@ fun LanguageScreen(navController: NavController) {
             .background(Background)
     ) {
         PageTopBar(
-            title = "Language",
+            title = stringResource(R.string.language_title),
             onBack = { navController.navigateUp() }
         )
 
@@ -105,13 +107,13 @@ fun LanguageScreen(navController: NavController) {
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = option.title,
+                                text = stringResource(option.titleRes),
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = TextPrimary
                             )
                             Text(
-                                text = option.subtitle,
+                                text = stringResource(option.subtitleRes),
                                 fontSize = 13.sp,
                                 color = TextSecondary
                             )
@@ -137,7 +139,7 @@ fun LanguageScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Changes apply immediately. Some screens may still use fixed text.",
+                text = stringResource(R.string.language_note),
                 fontSize = 13.sp,
                 color = TextSecondary,
                 modifier = Modifier.padding(start = 8.dp, bottom = 24.dp)
@@ -145,4 +147,3 @@ fun LanguageScreen(navController: NavController) {
         }
     }
 }
-

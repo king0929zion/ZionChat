@@ -1,20 +1,12 @@
 package com.zionchat.app.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,19 +14,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.data.HttpHeader
 import com.zionchat.app.data.McpClient
 import com.zionchat.app.data.McpConfig
 import com.zionchat.app.data.McpProtocol
+import com.zionchat.app.ui.components.AppModalBottomSheet
+import com.zionchat.app.ui.components.EditableHeader
+import com.zionchat.app.ui.components.HeadersEditorCard
+import com.zionchat.app.ui.components.LiquidGlassSwitch
 import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
@@ -47,6 +40,7 @@ fun McpScreen(navController: NavController) {
     val repository = LocalAppRepository.current
     val scope = rememberCoroutineScope()
     val mcpClient = remember { McpClient() }
+    val addSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     
     val mcpList by repository.mcpListFlow.collectAsState(initial = emptyList())
     
@@ -106,10 +100,10 @@ fun McpScreen(navController: NavController) {
             }
         }
         
-        // Full screen modal with scrim covering status bar
         if (showAddModal) {
-            FullScreenModal(
-                onDismiss = { showAddModal = false }
+            AppModalBottomSheet(
+                onDismissRequest = { showAddModal = false },
+                sheetState = addSheetState
             ) {
                 McpEditSheetContent(
                     mcp = editingMcp,
@@ -197,11 +191,7 @@ fun McpListItem(
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onClick
-                    ),
+                    .pressableScale(pressedScale = 0.98f, onClick = onClick),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
@@ -237,49 +227,12 @@ fun McpListItem(
             }
             
             Spacer(modifier = Modifier.width(12.dp))
-            
-            McpToggleSwitch(
-                enabled = mcp.enabled,
-                onToggle = onToggle
+
+            LiquidGlassSwitch(
+                checked = mcp.enabled,
+                onCheckedChange = onToggle
             )
         }
-    }
-}
-
-@Composable
-fun McpToggleSwitch(
-    enabled: Boolean,
-    onToggle: () -> Unit
-) {
-    val thumbPosition by animateFloatAsState(
-        targetValue = if (enabled) 20f else 2f,
-        label = "toggle_thumb"
-    )
-    
-    Box(
-        modifier = Modifier
-            .width(52.dp)
-            .height(32.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (enabled) TextPrimary else Color.Transparent)
-            .border(2.dp, if (enabled) TextPrimary else TextSecondary, RoundedCornerShape(16.dp))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onToggle
-            )
-            .padding(2.dp),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        Box(
-            modifier = Modifier
-                .size(24.dp)
-                .graphicsLayer {
-                    translationX = thumbPosition
-                }
-                .clip(CircleShape)
-                .background(if (enabled) Color.White else TextSecondary)
-        )
     }
 }
 
@@ -292,41 +245,30 @@ fun McpEditSheetContent(
 ) {
     val isEditing = mcp != null
     
-    var name by remember { mutableStateOf(mcp?.name ?: "") }
-    var url by remember { mutableStateOf(mcp?.url ?: "") }
-    var description by remember { mutableStateOf(mcp?.description ?: "") }
-    var protocol by remember { mutableStateOf(mcp?.protocol ?: McpProtocol.HTTP) }
-    var headers by remember { mutableStateOf(mcp?.headers ?: emptyList()) }
+    var name by remember(mcp?.id) { mutableStateOf(mcp?.name.orEmpty()) }
+    var url by remember(mcp?.id) { mutableStateOf(mcp?.url.orEmpty()) }
+    var description by remember(mcp?.id) { mutableStateOf(mcp?.description.orEmpty()) }
+    var protocol by remember(mcp?.id) { mutableStateOf(mcp?.protocol ?: McpProtocol.HTTP) }
+    val headers = remember(mcp?.id) {
+        mutableStateListOf<EditableHeader>().apply {
+            mcp?.headers?.forEach { header -> add(EditableHeader(header.key, header.value)) }
+        }
+    }
     
     val scrollState = rememberScrollState()
     
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(max = 640.dp)
-            .background(Surface, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-            .navigationBarsPadding()
+            .fillMaxHeight(0.85f)
+            .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 16.dp)
     ) {
-        // Drag handle
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp, bottom = 12.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(40.dp)
-                    .height(4.dp)
-                    .background(GrayLight, RoundedCornerShape(2.dp))
-            )
-        }
-        
-        // Header - fixed at top
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 4.dp),
+                .padding(top = 4.dp, bottom = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -343,11 +285,7 @@ fun McpEditSheetContent(
                     .size(32.dp)
                     .clip(CircleShape)
                     .background(GrayLighter)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onDismiss
-                    ),
+                    .pressableScale(pressedScale = 0.95f, onClick = onDismiss),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -364,12 +302,9 @@ fun McpEditSheetContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .padding(horizontal = 20.dp)
                 .verticalScroll(scrollState),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Spacer(modifier = Modifier.height(4.dp))
-            
             // Protocol Selection
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
@@ -425,84 +360,7 @@ fun McpEditSheetContent(
                 placeholder = "Brief description"
             )
             
-            // Headers section
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = Surface,
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Custom Headers",
-                            fontSize = 13.sp,
-                            fontFamily = SourceSans3,
-                            color = TextSecondary
-                        )
-                        
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(GrayLighter, CircleShape)
-                                .pressableScale(pressedScale = 0.95f) {
-                                    headers = headers + HttpHeader("", "")
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = AppIcons.Plus,
-                                contentDescription = "Add Header",
-                                tint = TextPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                    
-                    if (headers.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "No custom headers",
-                                fontSize = 14.sp,
-                                color = TextSecondary.copy(alpha = 0.7f)
-                            )
-                        }
-                    } else {
-                        headers.forEachIndexed { index, header ->
-                            HeaderInputRow(
-                                key = header.key,
-                                value = header.value,
-                                onKeyChange = { newKey ->
-                                    headers = headers.toMutableList().apply {
-                                        this[index] = header.copy(key = newKey)
-                                    }
-                                },
-                                onValueChange = { newValue ->
-                                    headers = headers.toMutableList().apply {
-                                        this[index] = header.copy(value = newValue)
-                                    }
-                                },
-                                onDelete = {
-                                    headers = headers.filterIndexed { i, _ -> i != index }
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-            
+            HeadersEditorCard(headers = headers, title = "Custom Headers")
             Spacer(modifier = Modifier.height(8.dp))
         }
         
@@ -510,7 +368,6 @@ fun McpEditSheetContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
                 .padding(top = 12.dp, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -542,7 +399,15 @@ fun McpEditSheetContent(
                                 protocol = protocol,
                                 enabled = mcp?.enabled ?: true,
                                 description = description.trim(),
-                                headers = headers.filter { it.key.isNotBlank() && it.value.isNotBlank() }
+                                headers = headers
+                                    .mapNotNull { header ->
+                                        val key = header.key.trim()
+                                        if (key.isBlank()) return@mapNotNull null
+                                        HttpHeader(key = key, value = header.value.trim())
+                                    }
+                                    .distinctBy { it.key.trim().lowercase() },
+                                tools = mcp?.tools.orEmpty(),
+                                lastSyncAt = mcp?.lastSyncAt ?: 0L
                             )
                         )
                     }
@@ -643,97 +508,3 @@ fun McpConfigInputField(
     }
 }
 
-@Composable
-fun HeaderInputRow(
-    key: String,
-    value: String,
-    onKeyChange: (String) -> Unit,
-    onValueChange: (String) -> Unit,
-    onDelete: () -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Surface(
-            modifier = Modifier.weight(1f),
-            color = GrayLighter,
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            TextField(
-                value = key,
-                onValueChange = onKeyChange,
-                modifier = Modifier.padding(horizontal = 4.dp),
-                placeholder = {
-                    Text(
-                        text = "Key",
-                        fontSize = 15.sp,
-                        color = TextSecondary.copy(alpha = 0.7f)
-                    )
-                },
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                ),
-                textStyle = TextStyle(
-                    fontSize = 15.sp,
-                    color = TextPrimary
-                ),
-                singleLine = true
-            )
-        }
-        
-        Surface(
-            modifier = Modifier.weight(1f),
-            color = GrayLighter,
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            TextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier.padding(horizontal = 4.dp),
-                placeholder = {
-                    Text(
-                        text = "Value",
-                        fontSize = 15.sp,
-                        color = TextSecondary.copy(alpha = 0.7f)
-                    )
-                },
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                ),
-                textStyle = TextStyle(
-                    fontSize = 15.sp,
-                    color = TextPrimary
-                ),
-                singleLine = true
-            )
-        }
-        
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(GrayLighter)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDelete
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = AppIcons.Close,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = TextSecondary
-            )
-        }
-    }
-}

@@ -455,6 +455,24 @@ class AppRepository(context: Context) {
     val mcpListFlow: Flow<List<McpConfig>> = dataStore.data.map { prefs ->
         val json = prefs[mcpListKey] ?: "[]"
         runCatching { gson.fromJson<List<McpConfig>>(json, mcpListType) }.getOrDefault(emptyList())
+            .map { mcp ->
+                val safeHeaders =
+                    runCatching { mcp.headers }.getOrNull().orEmpty()
+                        .mapNotNull { header ->
+                            val key = runCatching { header.key }.getOrNull()?.trim().orEmpty()
+                            val value = runCatching { header.value }.getOrNull().orEmpty()
+                            if (key.isBlank()) null else HttpHeader(key, value)
+                        }
+                        .distinctBy { it.key.trim().lowercase() }
+
+                val safeProtocol = runCatching { mcp.protocol }.getOrNull() ?: McpProtocol.HTTP
+                mcp.copy(
+                    name = runCatching { mcp.name }.getOrNull().orEmpty(),
+                    url = runCatching { mcp.url }.getOrNull().orEmpty(),
+                    protocol = safeProtocol,
+                    headers = safeHeaders
+                )
+            }
     }
 
     suspend fun upsertMcp(mcp: McpConfig) {

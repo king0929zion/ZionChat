@@ -17,20 +17,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
 import com.zionchat.app.LocalAppRepository
-import com.zionchat.app.data.HttpHeader
 import com.zionchat.app.data.McpClient
 import com.zionchat.app.data.McpConfig
 import com.zionchat.app.data.McpProtocol
 import com.zionchat.app.data.McpTool
+import com.zionchat.app.ui.components.AppModalBottomSheet
+import com.zionchat.app.ui.components.LiquidGlassSwitch
 import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.*
 import kotlinx.coroutines.launch
+import java.text.DateFormat
+import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,6 +51,8 @@ fun McpDetailScreen(
     var showEditModal by remember { mutableStateOf(false) }
     var showToolDetail by remember { mutableStateOf<McpTool?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var syncingTools by remember { mutableStateOf(false) }
+    var syncError by remember { mutableStateOf<String?>(null) }
     
     LaunchedEffect(mcpListOrNull, mcpId) {
         if (mcpListOrNull != null && mcp == null) {
@@ -101,10 +104,29 @@ fun McpDetailScreen(
                     .padding(top = 12.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                McpInfoCard(mcp = mcp)
+                McpInfoCard(
+                    mcp = mcp,
+                    onToggleEnabled = { scope.launch { repository.toggleMcpEnabled(mcp.id) } }
+                )
                 McpConnectionCard(mcp = mcp)
                 McpToolsCard(
                     tools = mcp.tools,
+                    lastSyncAt = mcp.lastSyncAt,
+                    syncing = syncingTools,
+                    syncError = syncError,
+                    onSync = {
+                        if (syncingTools) return@McpToolsCard
+                        syncingTools = true
+                        syncError = null
+                        scope.launch {
+                            mcpClient.fetchTools(mcp)
+                                .onSuccess { tools -> repository.updateMcpTools(mcp.id, tools) }
+                                .onFailure { error ->
+                                    syncError = error.message?.takeIf { it.isNotBlank() } ?: "Sync failed"
+                                }
+                            syncingTools = false
+                        }
+                    },
                     onToolClick = { showToolDetail = it }
                 )
                 
@@ -129,7 +151,11 @@ fun McpDetailScreen(
         
         // Edit Modal
         if (showEditModal) {
-            FullScreenModal(onDismiss = { showEditModal = false }) {
+            val editSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            AppModalBottomSheet(
+                onDismissRequest = { showEditModal = false },
+                sheetState = editSheetState
+            ) {
                 McpEditSheetContent(
                     mcp = mcp,
                     onDismiss = { showEditModal = false },
@@ -151,7 +177,11 @@ fun McpDetailScreen(
         
         // Tool Detail Modal
         if (showToolDetail != null) {
-            FullScreenModal(onDismiss = { showToolDetail = null }) {
+            val toolSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            AppModalBottomSheet(
+                onDismissRequest = { showToolDetail = null },
+                sheetState = toolSheetState
+            ) {
                 ToolDetailSheetContent(
                     tool = showToolDetail!!,
                     onDismiss = { showToolDetail = null }
@@ -214,45 +244,10 @@ fun McpDetailScreen(
 }
 
 @Composable
-fun FullScreenModal(
-    onDismiss: () -> Unit,
-    content: @Composable () -> Unit
+fun McpInfoCard(
+    mcp: McpConfig,
+    onToggleEnabled: () -> Unit
 ) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDismiss
-                ),
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { }
-                    )
-            ) {
-                content()
-            }
-        }
-    }
-}
-
-@Composable
-fun McpInfoCard(mcp: McpConfig) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = Surface,
@@ -295,30 +290,40 @@ fun McpInfoCard(mcp: McpConfig) {
                 color = TextSecondary,
                 modifier = Modifier.padding(top = 4.dp)
             )
-            
+
             Row(
-                modifier = Modifier
-                    .padding(top = 12.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (mcp.enabled) Color(0xFF34C759).copy(alpha = 0.15f)
-                        else GrayLighter
-                    )
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.padding(top = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Box(
+                Row(
                     modifier = Modifier
-                        .size(8.dp)
                         .clip(CircleShape)
-                        .background(if (mcp.enabled) Color(0xFF34C759) else TextSecondary)
-                )
-                Text(
-                    text = if (mcp.enabled) "Connected" else "Disabled",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = if (mcp.enabled) Color(0xFF34C759) else TextSecondary
+                        .background(
+                            if (mcp.enabled) Color(0xFF34C759).copy(alpha = 0.15f)
+                            else GrayLighter
+                        )
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(if (mcp.enabled) Color(0xFF34C759) else TextSecondary)
+                    )
+                    Text(
+                        text = if (mcp.enabled) "Enabled" else "Disabled",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (mcp.enabled) Color(0xFF34C759) else TextSecondary
+                    )
+                }
+
+                LiquidGlassSwitch(
+                    checked = mcp.enabled,
+                    onCheckedChange = onToggleEnabled
                 )
             }
         }
@@ -383,6 +388,10 @@ fun ConnectionInfoRow(
 @Composable
 fun McpToolsCard(
     tools: List<McpTool>,
+    lastSyncAt: Long,
+    syncing: Boolean,
+    syncError: String?,
+    onSync: () -> Unit,
     onToolClick: (McpTool) -> Unit
 ) {
     Surface(
@@ -405,10 +414,65 @@ fun McpToolsCard(
                     fontFamily = SourceSans3,
                     color = TextSecondary
                 )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "${tools.size}",
+                        fontSize = 13.sp,
+                        color = TextSecondary.copy(alpha = 0.7f)
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(GrayLighter, CircleShape)
+                            .pressableScale(pressedScale = 0.95f) { if (!syncing) onSync() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (syncing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = TextSecondary
+                            )
+                        } else {
+                            Icon(
+                                imageVector = AppIcons.Refresh,
+                                contentDescription = "Sync",
+                                tint = TextPrimary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            val lastSyncLabel = remember(lastSyncAt) {
+                if (lastSyncAt <= 0L) {
+                    "Not synced yet"
+                } else {
+                    val formatted =
+                        runCatching {
+                            DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+                                .format(Date(lastSyncAt))
+                        }.getOrNull().orEmpty()
+                    if (formatted.isBlank()) "Last sync: $lastSyncAt" else "Last sync: $formatted"
+                }
+            }
+            Text(
+                text = lastSyncLabel,
+                fontSize = 13.sp,
+                color = TextSecondary.copy(alpha = 0.7f)
+            )
+            if (!syncError.isNullOrBlank()) {
                 Text(
-                    text = "${tools.size}",
+                    text = syncError,
                     fontSize = 13.sp,
-                    color = TextSecondary.copy(alpha = 0.7f)
+                    color = Color(0xFFFF3B30)
                 )
             }
             
@@ -530,65 +594,51 @@ fun ToolDetailSheetContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Surface, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-            .padding(bottom = 24.dp)
-            .navigationBarsPadding()
+            .fillMaxHeight(0.85f)
+            .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp, bottom = 16.dp),
-            contentAlignment = Alignment.Center
+                .padding(top = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            Text(
+                text = tool.name,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = SourceSans3,
+                color = TextPrimary
+            )
+
             Box(
                 modifier = Modifier
-                    .width(40.dp)
-                    .height(4.dp)
-                    .background(GrayLight, RoundedCornerShape(2.dp))
-            )
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(GrayLighter)
+                    .pressableScale(pressedScale = 0.95f, onClick = onDismiss),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = AppIcons.Close,
+                    contentDescription = null,
+                    tint = TextSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
-        
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
+                .weight(1f)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = tool.name,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = SourceSans3,
-                    color = TextPrimary
-                )
-                
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(GrayLighter)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onDismiss
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = AppIcons.Close,
-                        contentDescription = null,
-                        tint = TextSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-            
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = GrayLighter,
@@ -610,15 +660,14 @@ fun ToolDetailSheetContent(
                     )
                 }
             }
-            
+
             Text(
                 text = "Parameters",
                 fontSize = 13.sp,
                 fontFamily = SourceSans3,
-                color = TextSecondary,
-                modifier = Modifier.padding(bottom = 8.dp)
+                color = TextSecondary
             )
-            
+
             if (tool.parameters.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -642,25 +691,23 @@ fun ToolDetailSheetContent(
                     }
                 }
             }
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Button(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = TextPrimary,
-                    contentColor = Color.White
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    text = "Close",
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-            }
+        }
+
+        Button(
+            onClick = onDismiss,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = TextPrimary,
+                contentColor = Color.White
+            ),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text(
+                text = "Close",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
         }
     }
 }

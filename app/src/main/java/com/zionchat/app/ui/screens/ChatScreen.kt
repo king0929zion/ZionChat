@@ -73,6 +73,7 @@ import com.zionchat.app.data.ProviderConfig
 import com.zionchat.app.data.extractRemoteModelId
 import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.BottomFadeScrim
+import com.zionchat.app.ui.components.AppSheetDragHandle
 import com.zionchat.app.ui.components.MarkdownText
 import com.zionchat.app.ui.components.rememberResourceDrawablePainter
 import com.zionchat.app.ui.components.pressableScale
@@ -1133,22 +1134,7 @@ fun ChatScreen(navController: NavController) {
                     sheetState = thinkingSheetState,
                     containerColor = ThinkingBackground,
                     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                    dragHandle = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(ThinkingBackground)
-                                .padding(top = 12.dp, bottom = 16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .width(40.dp)
-                                    .height(4.dp)
-                                    .background(GrayLight, RoundedCornerShape(2.dp))
-                            )
-                        }
-                    }
+                    dragHandle = { AppSheetDragHandle(backgroundColor = ThinkingBackground) }
                 ) {
                     Column(
                         modifier = Modifier
@@ -1192,22 +1178,7 @@ fun ChatScreen(navController: NavController) {
                     sheetState = tagSheetState,
                     containerColor = ThinkingBackground,
                     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                    dragHandle = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(ThinkingBackground)
-                                .padding(top = 12.dp, bottom = 16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .width(40.dp)
-                                    .height(4.dp)
-                                    .background(GrayLight, RoundedCornerShape(2.dp))
-                            )
-                        }
-                    }
+                    dragHandle = { AppSheetDragHandle(backgroundColor = ThinkingBackground) }
                 ) {
                     Column(
                         modifier = Modifier

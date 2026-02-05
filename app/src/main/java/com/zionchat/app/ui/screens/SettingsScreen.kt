@@ -40,6 +40,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavController
 import com.zionchat.app.R
 import com.zionchat.app.LocalAppRepository
@@ -58,6 +59,10 @@ import com.zionchat.app.ui.components.rememberResourceDrawablePainter
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.*
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import com.kyant.backdrop.Backdrop
@@ -96,12 +101,10 @@ fun SettingsScreen(navController: NavController) {
     val displayName = nickname.takeIf { it.isNotBlank() } ?: "Kendall Williamson"
     val screenBackdrop = rememberLayerBackdrop()
     val languageLabel =
-        remember(appLanguage) {
-            when (appLanguage.trim().lowercase()) {
-                "zh" -> "简体中文"
-                "en" -> "English"
-                else -> "Follow system"
-            }
+        when (appLanguage.trim().lowercase()) {
+            "zh" -> stringResource(R.string.language_option_zh)
+            "en" -> stringResource(R.string.language_option_en)
+            else -> stringResource(R.string.language_option_system)
         }
 
     Scaffold(
@@ -187,10 +190,10 @@ fun SettingsScreen(navController: NavController) {
                 }
 
                 // General 分组
-                SettingsGroup(title = "General", itemCount = 2) {
+                SettingsGroup(title = stringResource(R.string.settings_group_general), itemCount = 2) {
                     SettingsItem(
                         icon = { Icon(AppIcons.Language, null, Modifier.size(22.dp), tint = Color.Unspecified) },
-                        label = "Language",
+                        label = stringResource(R.string.settings_item_language),
                         value = languageLabel,
                         showChevron = true,
                         showDivider = true,
@@ -198,14 +201,14 @@ fun SettingsScreen(navController: NavController) {
                     )
                     SettingsItem(
                         icon = { Icon(AppIcons.Notifications, null, Modifier.size(22.dp), tint = Color.Unspecified) },
-                        label = "Notifications",
+                        label = stringResource(R.string.settings_item_notifications),
                         showChevron = true,
                         onClick = { }
                     )
                 }
 
                 // AI Model 分组
-                SettingsGroup(title = "AI Model", itemCount = 3) {
+                SettingsGroup(title = stringResource(R.string.settings_group_ai_model), itemCount = 3) {
                     SettingsItem(
                         icon = {
                             Icon(
@@ -215,8 +218,8 @@ fun SettingsScreen(navController: NavController) {
                                 tint = Color.Unspecified
                             )
                         },
-                        label = "Default model",
-                        value = defaultChatModelName ?: "Not set",
+                        label = stringResource(R.string.settings_item_default_model),
+                        value = defaultChatModelName ?: stringResource(R.string.not_set),
                         showChevron = true,
                         showDivider = true,
                         onClick = { navController.navigate("default_model") }
@@ -230,14 +233,14 @@ fun SettingsScreen(navController: NavController) {
                                 tint = Color.Unspecified
                             )
                         },
-                        label = "Model services",
+                        label = stringResource(R.string.settings_item_model_services),
                         showChevron = true,
                         showDivider = true,
                         onClick = { navController.navigate("model_services") }
                     )
                     SettingsItem(
                         icon = { Icon(AppIcons.MCPTools, null, Modifier.size(22.dp), tint = Color.Unspecified) },
-                        label = "MCP Tools",
+                        label = stringResource(R.string.settings_item_mcp_tools),
                         showChevron = true,
                         onClick = { navController.navigate("mcp") }
                     )
@@ -259,11 +262,10 @@ fun SettingsScreen(navController: NavController) {
         onDismiss = { showEditProfile = false },
         currentNickname = displayName,
         currentAvatarUri = avatarUri,
-        onSave = { newNickname, newAvatarUri ->
+        onAutoSave = { newNickname, newAvatarUri ->
             scope.launch {
                 repository.setNickname(newNickname)
                 repository.setAvatarUri(newAvatarUri)
-                showEditProfile = false
             }
         }
     )
@@ -318,7 +320,7 @@ fun SettingsTopBar(navController: NavController) {
 
         // 标题
         Text(
-            text = "Settings",
+            text = stringResource(R.string.settings),
             fontSize = 17.sp,
             fontWeight = FontWeight.SemiBold,
             fontFamily = SourceSans3,
@@ -428,7 +430,7 @@ fun EditProfileModal(
     onDismiss: () -> Unit,
     currentNickname: String,
     currentAvatarUri: String,
-    onSave: (String, String) -> Unit
+    onAutoSave: (String, String) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -438,6 +440,10 @@ fun EditProfileModal(
 
     var nickname by remember { mutableStateOf("") }
     var avatarUri by remember { mutableStateOf("") }
+    var originalNickname by remember { mutableStateOf("") }
+    var originalAvatarUri by remember { mutableStateOf("") }
+
+    val latestOnAutoSave by rememberUpdatedState(onAutoSave)
 
     // 图片选择器
     val imagePicker = rememberLauncherForActivityResult(
@@ -450,8 +456,26 @@ fun EditProfileModal(
         if (visible) {
             nickname = currentNickname
             avatarUri = currentAvatarUri
+            originalNickname = currentNickname
+            originalAvatarUri = currentAvatarUri
             dragOffsetPx = 0f
         }
+    }
+
+    LaunchedEffect(visible) {
+        if (!visible) return@LaunchedEffect
+        var isFirst = true
+        snapshotFlow { nickname to avatarUri }
+            .map { (n, a) -> n.trimEnd() to a }
+            .debounce(400)
+            .distinctUntilChanged()
+            .collect { (n, a) ->
+                if (isFirst) {
+                    isFirst = false
+                    return@collect
+                }
+                latestOnAutoSave(n, a)
+            }
     }
 
     AnimatedVisibility(
@@ -648,7 +672,10 @@ fun EditProfileModal(
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Button(
-                                onClick = onDismiss,
+                                onClick = {
+                                    latestOnAutoSave(originalNickname.trimEnd(), originalAvatarUri)
+                                    onDismiss()
+                                },
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(48.dp),
@@ -660,7 +687,8 @@ fun EditProfileModal(
 
                             Button(
                                 onClick = {
-                                    onSave(nickname.trim(), avatarUri)
+                                    latestOnAutoSave(nickname.trimEnd(), avatarUri)
+                                    onDismiss()
                                 },
                                 modifier = Modifier
                                     .weight(1f)
