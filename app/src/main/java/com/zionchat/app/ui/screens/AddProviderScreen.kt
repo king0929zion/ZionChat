@@ -415,7 +415,7 @@ fun AvatarSelectionModal(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .imePadding()
+                    .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
             ) {
                 Surface(
                     modifier = Modifier

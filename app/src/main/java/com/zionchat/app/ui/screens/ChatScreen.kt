@@ -198,8 +198,10 @@ fun ChatScreen(navController: NavController) {
     val statusBarTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val listTopPadding = statusBarTopPadding + topBarHeightDp + 8.dp
     val imeBottomPadding = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+    val navBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val bottomSystemPadding = maxOf(imeBottomPadding, navBottomPadding)
     val bottomBarHeightDp = with(density) { bottomBarHeightPx.toDp() }
-    val bottomContentPadding = maxOf(80.dp, bottomBarHeightDp + 12.dp)
+    val bottomContentPadding = maxOf(80.dp, bottomBarHeightDp + 12.dp + bottomSystemPadding)
     val imeVisible = WindowInsets.ime.getBottom(density) > 0
 
     // Pending 消息：在 DataStore 落盘前立即显示，彻底修复“首条消息消失”
@@ -1020,23 +1022,13 @@ fun ChatScreen(navController: NavController) {
 
             // Bottom fade: start at the input bar top and fade into the bar.
             val bottomFadeHeight = 24.dp
-            val bottomMaskHeight = bottomBarHeightDp
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(bottomMaskHeight)
-                    .imePadding()
-                    .background(ChatBackground)
-                    .zIndex(1f)
-            )
+            val bottomOffset = bottomBarHeightDp + bottomSystemPadding
             BottomFadeScrim(
                 color = ChatBackground,
                 height = bottomFadeHeight,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .imePadding()
-                    .padding(bottom = bottomMaskHeight)
+                    .padding(bottom = bottomOffset)
                     .zIndex(1f)
             )
 
@@ -1059,7 +1051,7 @@ fun ChatScreen(navController: NavController) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .imePadding()
+                    .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
                     .zIndex(5f)
             ) {
                 Box(
@@ -1158,51 +1150,37 @@ fun ChatScreen(navController: NavController) {
                         }
                     }
                 ) {
-                    Box(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.67f)) {
-                        // Status bar background - gray like the rest
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .windowInsetsPadding(WindowInsets.statusBars)
-                                .background(ThinkingBackground)
-                                .align(Alignment.TopCenter)
-                                .zIndex(1f)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.67f)
+                            .background(ThinkingBackground)
+                            .padding(horizontal = 20.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Thinking",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
                         )
-                        
+
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .fillMaxHeight()
-                                .background(ThinkingBackground)
-                                .padding(horizontal = 20.dp)
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                                .padding(horizontal = 16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            // 标题 Thinking
-                            Text(
-                                text = "Thinking",
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = TextPrimary
-                            )
-
-                            // 内容区域
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                MarkdownText(
-                                    markdown = displayThinkingText.orEmpty(),
-                                    textStyle = TextStyle(
-                                        fontSize = 14.sp,
-                                        lineHeight = 22.sp,
-                                        color = TextPrimary
-                                    )
+                            MarkdownText(
+                                markdown = displayThinkingText.orEmpty(),
+                                textStyle = TextStyle(
+                                    fontSize = 14.sp,
+                                    lineHeight = 22.sp,
+                                    color = TextPrimary
                                 )
-                            }
+                            )
                         }
                     }
                 }
@@ -1231,48 +1209,37 @@ fun ChatScreen(navController: NavController) {
                         }
                     }
                 ) {
-                    Box(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.67f)) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .windowInsetsPadding(WindowInsets.statusBars)
-                                .background(ThinkingBackground)
-                                .align(Alignment.TopCenter)
-                                .zIndex(1f)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.67f)
+                            .background(ThinkingBackground)
+                            .padding(horizontal = 20.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = tag.title,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
                         )
 
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .fillMaxHeight()
-                                .background(ThinkingBackground)
-                                .padding(horizontal = 20.dp)
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                                .padding(horizontal = 16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text(
-                                text = tag.title,
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = TextPrimary
-                            )
-
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                MarkdownText(
-                                    markdown = tag.content,
-                                    textStyle = TextStyle(
-                                        fontSize = 14.sp,
-                                        lineHeight = 22.sp,
-                                        color = TextPrimary
-                                    )
+                            MarkdownText(
+                                markdown = tag.content,
+                                textStyle = TextStyle(
+                                    fontSize = 14.sp,
+                                    lineHeight = 22.sp,
+                                    color = TextPrimary
                                 )
-                            }
+                            )
                         }
                     }
                 }
@@ -1872,6 +1839,7 @@ fun ToolMenuPanel(
     val density = LocalDensity.current
     var dragOffsetPx by remember { mutableFloatStateOf(0f) }
     val dismissThresholdPx = remember(density) { with(density) { 120.dp.toPx() } }
+    val navBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     LaunchedEffect(visible) {
         if (!visible) dragOffsetPx = 0f
@@ -1901,6 +1869,7 @@ fun ToolMenuPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
+                        .padding(bottom = bottomBarHeight + navBottomPadding)
                         .offset { IntOffset(0, dragOffsetPx.roundToInt()) }
                         .draggable(
                             orientation = Orientation.Vertical,

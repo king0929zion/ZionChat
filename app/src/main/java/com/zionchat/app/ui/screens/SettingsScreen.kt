@@ -463,8 +463,7 @@ fun EditProfileModal(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .imePadding()
+                    .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
             ) {
                 Surface(
                     modifier = Modifier
