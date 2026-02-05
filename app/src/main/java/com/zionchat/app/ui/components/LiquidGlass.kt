@@ -37,6 +37,16 @@ import com.zionchat.app.ui.theme.Surface
 import com.zionchat.app.ui.theme.TextPrimary
 import com.zionchat.app.ui.theme.TextSecondary
 
+private fun supportsLiquidGlassBlur(): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
+    if (Build.VERSION.SDK_INT >= 36) return false
+
+    val manufacturer = Build.MANUFACTURER.orEmpty().lowercase()
+    val brand = Build.BRAND.orEmpty().lowercase()
+    if (manufacturer.contains("vivo") || brand.contains("vivo") || brand.contains("iqoo")) return false
+    return true
+}
+
 fun Modifier.liquidGlass(
     backdrop: Backdrop,
     shape: Shape,
@@ -48,7 +58,7 @@ fun Modifier.liquidGlass(
     highlightAlpha: Float = 0.35f,
     shadowAlpha: Float = 0.10f
 ): Modifier {
-    val supportsBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val supportsBlur = supportsLiquidGlassBlur()
     if (!supportsBlur) {
         return this
             .background(fallbackColor, shape)
