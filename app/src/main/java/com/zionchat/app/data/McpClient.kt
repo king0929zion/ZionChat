@@ -179,7 +179,7 @@ class McpClient {
 
             val obj = el as? JsonObject
             val type = obj?.get("type").toSchemaTypeString()
-            val description = (obj?.get("description") as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+            val description = (obj?.get("description") as? JsonPrimitive)?.content?.trim().orEmpty()
             McpToolParameter(
                 name = key,
                 type = type,
@@ -193,9 +193,9 @@ class McpClient {
         return when (this) {
             null -> "string"
             is JsonNull -> "string"
-            is JsonPrimitive -> contentOrNull?.trim()?.takeIf { it.isNotBlank() } ?: "string"
+            is JsonPrimitive -> content.trim().takeIf { it.isNotBlank() } ?: "string"
             is JsonArray -> joinToString("|") { it.toSchemaTypeString() }.ifBlank { "string" }
-            is JsonObject -> (this["type"] as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotBlank() } ?: "object"
+            is JsonObject -> (this["type"] as? JsonPrimitive)?.content?.trim()?.takeIf { it.isNotBlank() } ?: "object"
         }
     }
 
