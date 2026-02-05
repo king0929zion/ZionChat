@@ -17,7 +17,6 @@ import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequestParams
 import io.modelcontextprotocol.kotlin.sdk.types.ContentBlock
 import io.modelcontextprotocol.kotlin.sdk.types.ImageContent
 import io.modelcontextprotocol.kotlin.sdk.types.Implementation
-import io.modelcontextprotocol.kotlin.sdk.types.McpJson
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
@@ -93,7 +92,7 @@ class McpClient {
 
                     val isError = result.isError == true
                     val text = result.content.toDisplayText().ifBlank {
-                        McpJson.encodeToJsonElement(result.content).toString()
+                        result.content.toString()
                     }
                     McpToolResult(
                         success = !isError,
@@ -250,4 +249,3 @@ class McpClient {
         }
     }
 }
-
