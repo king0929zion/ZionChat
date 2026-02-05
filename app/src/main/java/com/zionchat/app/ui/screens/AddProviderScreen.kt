@@ -22,11 +22,14 @@ import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.zionchat.app.LocalAppRepository
+import com.zionchat.app.data.HttpHeader
 import com.zionchat.app.data.ProviderConfig
 import com.zionchat.app.data.DEFAULT_PROVIDER_PRESETS
 import com.zionchat.app.data.findProviderPreset
 import com.zionchat.app.data.resolveProviderIconAsset
 import com.zionchat.app.ui.components.AssetIcon
+import com.zionchat.app.ui.components.EditableHeader
+import com.zionchat.app.ui.components.HeadersEditorCard
 import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.components.liquidGlass
 import com.zionchat.app.ui.components.pressableScale
@@ -60,6 +63,17 @@ fun AddProviderScreen(
         activeProviderId?.let { id -> providers.firstOrNull { it.id == id } }
     }
     val editingProviderId = remember(activeProviderId) { activeProviderId ?: UUID.randomUUID().toString() }
+    val providerHeaders = remember(editingProviderId) { mutableStateListOf<EditableHeader>() }
+
+    fun buildSanitizedHeaders(): List<HttpHeader> {
+        return providerHeaders
+            .mapNotNull { header ->
+                val key = header.key.trim()
+                if (key.isBlank()) return@mapNotNull null
+                HttpHeader(key = key, value = header.value)
+            }
+            .distinctBy { it.key.trim().lowercase() }
+    }
 
     val presetData = remember(preset) { findProviderPreset(preset) }
 
@@ -70,6 +84,10 @@ fun AddProviderScreen(
             apiUrl = it.apiUrl
             selectedType = it.type
             selectedIconAsset = resolveProviderIconAsset(it).orEmpty()
+            providerHeaders.clear()
+            it.headers.forEach { header ->
+                providerHeaders.add(EditableHeader(header.key, header.value))
+            }
         }
     }
 
@@ -87,7 +105,16 @@ fun AddProviderScreen(
     LaunchedEffect(editingProviderId, existingProvider?.presetId, presetData?.id) {
         if (existingProvider == null) return@LaunchedEffect // Don't auto-save for new providers
 
-        snapshotFlow { listOf(providerName, apiKey, apiUrl, selectedType, selectedIconAsset) }
+        snapshotFlow {
+            listOf(
+                providerName,
+                apiKey,
+                apiUrl,
+                selectedType,
+                selectedIconAsset,
+                providerHeaders.joinToString("|") { "${it.key}=${it.value}" }
+            )
+        }
             .debounce(500)
             .distinctUntilChanged()
             .collect {
@@ -102,7 +129,8 @@ fun AddProviderScreen(
                         name = providerName,
                         type = selectedType,
                         apiUrl = apiUrl,
-                        apiKey = apiKey
+                        apiKey = apiKey,
+                        headers = buildSanitizedHeaders()
                     )
                 )
             }
@@ -133,7 +161,8 @@ fun AddProviderScreen(
                                             type = selectedType.trim(),
                                             apiUrl = apiUrl.trim(),
                                             apiKey = apiKey.trim(),
-                                            iconAsset = normalizedIconAsset ?: existing.iconAsset
+                                            iconAsset = normalizedIconAsset ?: existing.iconAsset,
+                                            headers = buildSanitizedHeaders()
                                         )
                                     } ?: ProviderConfig(
                                         presetId = preset?.takeIf { it.isNotBlank() },
@@ -141,7 +170,8 @@ fun AddProviderScreen(
                                         name = providerName.trim(),
                                         type = selectedType.trim(),
                                         apiUrl = apiUrl.trim(),
-                                        apiKey = apiKey.trim()
+                                        apiKey = apiKey.trim(),
+                                        headers = buildSanitizedHeaders()
                                     )
                                 )
                                 navController.navigateUp()
@@ -297,6 +327,8 @@ fun AddProviderScreen(
                     placeholder = "https://api.example.com/v1"
                 )
 
+                HeadersEditorCard(headers = providerHeaders)
+
                 // Models Section
                 Row(
                     modifier = Modifier
@@ -313,7 +345,8 @@ fun AddProviderScreen(
                                         name = providerName,
                                         type = selectedType,
                                         apiUrl = apiUrl,
-                                        apiKey = apiKey
+                                        apiKey = apiKey,
+                                        headers = buildSanitizedHeaders()
                                     )
                                 )
                                 navController.navigate("models?providerId=$editingProviderId")

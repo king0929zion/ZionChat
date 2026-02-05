@@ -27,6 +27,36 @@ class ChatApiClient {
     private val markdownImageRegex = Regex("!\\[[^\\]]*\\]\\(([^)]+)\\)")
     private val codexModelCache = ConcurrentHashMap<String, CodexModelMeta>()
 
+    private fun buildEffectiveHeaders(
+        provider: ProviderConfig,
+        extraHeaders: List<HttpHeader>
+    ): List<HttpHeader> {
+        val combined = ArrayList<HttpHeader>(provider.headers.size + extraHeaders.size)
+        combined.addAll(provider.headers)
+        combined.addAll(extraHeaders)
+
+        val map = LinkedHashMap<String, HttpHeader>()
+        combined.forEach { header ->
+            val key = header.key.trim()
+            if (key.isBlank()) return@forEach
+            map[key.lowercase()] = HttpHeader(key = key, value = header.value)
+        }
+        return map.values.toList()
+    }
+
+    private fun hasHeader(headers: List<HttpHeader>, key: String): Boolean {
+        val normalized = key.trim().lowercase()
+        return headers.any { it.key.trim().lowercase() == normalized }
+    }
+
+    private fun applyHeaders(builder: Request.Builder, headers: List<HttpHeader>) {
+        headers.forEach { header ->
+            val key = header.key.trim()
+            if (key.isBlank()) return@forEach
+            builder.header(key, header.value)
+        }
+    }
+
     suspend fun webSearch(query: String): Result<String> {
         val trimmed = query.trim()
         if (trimmed.isBlank()) return Result.success("")
@@ -123,18 +153,21 @@ class ChatApiClient {
                 else ->
                     runCatching {
                         val url = provider.apiUrl.trimEnd('/') + "/models"
+                        val effectiveHeaders = buildEffectiveHeaders(provider, extraHeaders)
                         val requestBuilder =
                             Request.Builder()
                                 .url(url)
                                 .get()
-                                .addHeader("Accept", "application/json")
-                                .addHeader("Authorization", "Bearer ${provider.apiKey}")
-                        if (isIFlow(provider)) {
-                            requestBuilder.addHeader("User-Agent", IFLOW_USER_AGENT)
+
+                        applyHeaders(requestBuilder, effectiveHeaders)
+
+                        requestBuilder.header("Accept", "application/json")
+                        if (provider.apiKey.isNotBlank() && !hasHeader(effectiveHeaders, "authorization")) {
+                            requestBuilder.header("Authorization", "Bearer ${provider.apiKey}")
                         }
-                        extraHeaders
-                            .filter { it.key.isNotBlank() }
-                            .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
+                        if (isIFlow(provider) && !hasHeader(effectiveHeaders, "user-agent")) {
+                            requestBuilder.header("User-Agent", IFLOW_USER_AGENT)
+                        }
 
                         client.newCall(requestBuilder.build()).execute().use { response ->
                             val raw = response.body?.string().orEmpty()
@@ -164,25 +197,28 @@ class ChatApiClient {
                     .url(url)
                     .get()
 
+            val effectiveHeaders = buildEffectiveHeaders(provider, extraHeaders)
             val isOAuthToken =
                 provider.oauthProvider?.trim()?.equals("codex", ignoreCase = true) == true ||
                     !provider.oauthAccessToken.isNullOrBlank() ||
                     !provider.oauthRefreshToken.isNullOrBlank() ||
                     !provider.oauthIdToken.isNullOrBlank()
 
-            extraHeaders
-                .filter { it.key.isNotBlank() }
-                .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
+            applyHeaders(requestBuilder, effectiveHeaders)
 
             requestBuilder
                 .header("Accept", "application/json")
-                .header("authorization", "Bearer ${provider.apiKey}")
+                .apply {
+                    if (provider.apiKey.isNotBlank() && !hasHeader(effectiveHeaders, "authorization")) {
+                        header("authorization", "Bearer ${provider.apiKey}")
+                    }
+                }
                 .header("originator", "codex_cli_rs")
                 .header("User-Agent", CODEX_USER_AGENT)
 
             if (isOAuthToken) {
                 provider.oauthAccountId?.trim()?.takeIf { it.isNotBlank() }?.let { accountId ->
-                    requestBuilder.header("ChatGPT-Account-ID", accountId)
+                    requestBuilder.header("ChatGPT-Account-Id", accountId)
                 }
             }
 
@@ -312,6 +348,7 @@ class ChatApiClient {
         return withContext(Dispatchers.IO) {
             runCatching {
                 val url = provider.apiUrl.trimEnd('/') + "/chat/completions"
+                val effectiveHeaders = buildEffectiveHeaders(provider, extraHeaders)
                 val body = gson.toJson(
                     mapOf(
                         "model" to modelId,
@@ -320,14 +357,17 @@ class ChatApiClient {
                 )
                 val requestBuilder = Request.Builder()
                     .url(url)
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("Authorization", "Bearer ${provider.apiKey}")
-                if (isIFlow(provider)) {
-                    requestBuilder.addHeader("User-Agent", IFLOW_USER_AGENT)
+
+                applyHeaders(requestBuilder, effectiveHeaders)
+
+                if (provider.apiKey.isNotBlank() && !hasHeader(effectiveHeaders, "authorization")) {
+                    requestBuilder.header("Authorization", "Bearer ${provider.apiKey}")
                 }
-                extraHeaders
-                    .filter { it.key.isNotBlank() }
-                    .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
+                if (isIFlow(provider) && !hasHeader(effectiveHeaders, "user-agent")) {
+                    requestBuilder.header("User-Agent", IFLOW_USER_AGENT)
+                }
+
+                requestBuilder.header("Content-Type", "application/json")
                 val request = requestBuilder
                     .post(body.toRequestBody(jsonMediaType))
                     .build()
@@ -372,6 +412,7 @@ class ChatApiClient {
         extraHeaders: List<HttpHeader>
     ): Flow<ChatStreamDelta> = flow {
         val url = provider.apiUrl.trimEnd('/') + "/chat/completions"
+        val effectiveHeaders = buildEffectiveHeaders(provider, extraHeaders)
         val body = gson.toJson(
             mapOf(
                 "model" to modelId,
@@ -379,17 +420,20 @@ class ChatApiClient {
                 "stream" to true
             )
         )
-        val requestBuilder = Request.Builder()
-            .url(url)
-            .addHeader("Content-Type", "application/json")
-            .addHeader("Authorization", "Bearer ${provider.apiKey}")
-            .addHeader("Accept", "text/event-stream")
-        if (isIFlow(provider)) {
-            requestBuilder.addHeader("User-Agent", IFLOW_USER_AGENT)
+        val requestBuilder = Request.Builder().url(url)
+
+        applyHeaders(requestBuilder, effectiveHeaders)
+
+        if (provider.apiKey.isNotBlank() && !hasHeader(effectiveHeaders, "authorization")) {
+            requestBuilder.header("Authorization", "Bearer ${provider.apiKey}")
         }
-        extraHeaders
-            .filter { it.key.isNotBlank() }
-            .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
+        if (isIFlow(provider) && !hasHeader(effectiveHeaders, "user-agent")) {
+            requestBuilder.header("User-Agent", IFLOW_USER_AGENT)
+        }
+
+        requestBuilder
+            .header("Content-Type", "application/json")
+            .header("Accept", "text/event-stream")
         val request = requestBuilder
             .post(body.toRequestBody(jsonMediaType))
             .build()
@@ -464,6 +508,7 @@ class ChatApiClient {
     ): Flow<ChatStreamDelta> = flow {
         val url = normalizeCodexBaseUrl(provider) + "/responses"
         val sessionId = conversationId?.trim()?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
+        val effectiveHeaders = buildEffectiveHeaders(provider, extraHeaders)
 
         val meta = codexModelCache[modelId] ?: runCatching {
             // Best-effort: refresh cache once if missing.
@@ -565,12 +610,14 @@ class ChatApiClient {
                 !provider.oauthRefreshToken.isNullOrBlank() ||
                 !provider.oauthIdToken.isNullOrBlank()
 
-        extraHeaders
-            .filter { it.key.isNotBlank() }
-            .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
+        applyHeaders(requestBuilder, effectiveHeaders)
 
         requestBuilder
-            .header("authorization", "Bearer ${provider.apiKey}")
+            .apply {
+                if (provider.apiKey.isNotBlank() && !hasHeader(effectiveHeaders, "authorization")) {
+                    header("authorization", "Bearer ${provider.apiKey}")
+                }
+            }
             .header("Content-Type", "application/json")
             .header("Accept", "text/event-stream")
             .header("originator", "codex_cli_rs")
@@ -628,6 +675,7 @@ class ChatApiClient {
         messages: List<Message>,
         extraHeaders: List<HttpHeader>
     ): Flow<ChatStreamDelta> = flow {
+        val effectiveHeaders = buildEffectiveHeaders(provider, extraHeaders)
         val project = provider.oauthProjectId?.trim().takeIf { !it.isNullOrBlank() } ?: generateAntigravityProjectId()
 
         val systemText =
@@ -675,17 +723,20 @@ class ChatApiClient {
         for ((index, baseUrl) in baseUrls.withIndex()) {
             var completed = false
             val url = baseUrl.trimEnd('/') + "/v1internal:streamGenerateContent?alt=sse"
-            val requestBuilder =
-                Request.Builder()
-                    .url(url)
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("Authorization", "Bearer ${provider.apiKey}")
-                    .addHeader("Accept", "text/event-stream")
-                    .addHeader("User-Agent", ANTIGRAVITY_USER_AGENT)
+            val requestBuilder = Request.Builder().url(url)
 
-            extraHeaders
-                .filter { it.key.isNotBlank() }
-                .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
+            applyHeaders(requestBuilder, effectiveHeaders)
+
+            if (provider.apiKey.isNotBlank() && !hasHeader(effectiveHeaders, "authorization")) {
+                requestBuilder.header("Authorization", "Bearer ${provider.apiKey}")
+            }
+            if (!hasHeader(effectiveHeaders, "user-agent")) {
+                requestBuilder.header("User-Agent", ANTIGRAVITY_USER_AGENT)
+            }
+
+            requestBuilder
+                .header("Content-Type", "application/json")
+                .header("Accept", "text/event-stream")
 
             val request = requestBuilder.post(body.toRequestBody(jsonMediaType)).build()
 
@@ -737,6 +788,7 @@ class ChatApiClient {
             throw IllegalStateException("Missing project id")
         }
 
+        val effectiveHeaders = buildEffectiveHeaders(provider, extraHeaders)
         val url = provider.apiUrl.trimEnd('/') + "/v1internal:streamGenerateContent?alt=sse"
 
         val systemText =
@@ -763,19 +815,22 @@ class ChatApiClient {
 
         val body = gson.toJson(mapOf("project" to project, "request" to requestPayload, "model" to modelId))
 
-        val requestBuilder =
-            Request.Builder()
-                .url(url)
-                .addHeader("Content-Type", "application/json")
-                .addHeader("Authorization", "Bearer ${provider.apiKey}")
-                .addHeader("Accept", "text/event-stream")
-                .addHeader("User-Agent", GEMINI_CLI_USER_AGENT)
-                .addHeader("X-Goog-Api-Client", GEMINI_CLI_API_CLIENT)
-                .addHeader("Client-Metadata", GEMINI_CLI_CLIENT_METADATA)
+        val requestBuilder = Request.Builder().url(url)
 
-        extraHeaders
-            .filter { it.key.isNotBlank() }
-            .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
+        applyHeaders(requestBuilder, effectiveHeaders)
+
+        if (provider.apiKey.isNotBlank() && !hasHeader(effectiveHeaders, "authorization")) {
+            requestBuilder.header("Authorization", "Bearer ${provider.apiKey}")
+        }
+        if (!hasHeader(effectiveHeaders, "user-agent")) {
+            requestBuilder.header("User-Agent", GEMINI_CLI_USER_AGENT)
+        }
+
+        requestBuilder
+            .header("Content-Type", "application/json")
+            .header("Accept", "text/event-stream")
+            .header("X-Goog-Api-Client", GEMINI_CLI_API_CLIENT)
+            .header("Client-Metadata", GEMINI_CLI_CLIENT_METADATA)
 
         val request = requestBuilder.post(body.toRequestBody(jsonMediaType)).build()
 
@@ -811,6 +866,7 @@ class ChatApiClient {
     }.flowOn(Dispatchers.IO)
 
     private fun listAntigravityModels(provider: ProviderConfig, extraHeaders: List<HttpHeader>): List<String> {
+        val effectiveHeaders = buildEffectiveHeaders(provider, extraHeaders)
         val baseUrls = antigravityBaseUrlFallbackOrder(provider)
         var lastError: String? = null
 
@@ -820,14 +876,19 @@ class ChatApiClient {
                 Request.Builder()
                     .url(url)
                     .post("{}".toRequestBody(jsonMediaType))
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("Authorization", "Bearer ${provider.apiKey}")
-                    .addHeader("Accept", "application/json")
-                    .addHeader("User-Agent", ANTIGRAVITY_USER_AGENT)
 
-            extraHeaders
-                .filter { it.key.isNotBlank() }
-                .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
+            applyHeaders(requestBuilder, effectiveHeaders)
+
+            if (provider.apiKey.isNotBlank() && !hasHeader(effectiveHeaders, "authorization")) {
+                requestBuilder.header("Authorization", "Bearer ${provider.apiKey}")
+            }
+            if (!hasHeader(effectiveHeaders, "user-agent")) {
+                requestBuilder.header("User-Agent", ANTIGRAVITY_USER_AGENT)
+            }
+
+            requestBuilder
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
 
             val request = requestBuilder.build()
 
@@ -853,20 +914,26 @@ class ChatApiClient {
 
     private fun listGeminiCliModels(provider: ProviderConfig, extraHeaders: List<HttpHeader>): List<String> {
         val url = provider.apiUrl.trimEnd('/') + "/v1internal:fetchAvailableModels"
+        val effectiveHeaders = buildEffectiveHeaders(provider, extraHeaders)
         val requestBuilder =
             Request.Builder()
                 .url(url)
                 .post("{}".toRequestBody(jsonMediaType))
-                .addHeader("Content-Type", "application/json")
-                .addHeader("Authorization", "Bearer ${provider.apiKey}")
-                .addHeader("Accept", "application/json")
-                .addHeader("User-Agent", GEMINI_CLI_USER_AGENT)
-                .addHeader("X-Goog-Api-Client", GEMINI_CLI_API_CLIENT)
-                .addHeader("Client-Metadata", GEMINI_CLI_CLIENT_METADATA)
 
-        extraHeaders
-            .filter { it.key.isNotBlank() }
-            .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
+        applyHeaders(requestBuilder, effectiveHeaders)
+
+        if (provider.apiKey.isNotBlank() && !hasHeader(effectiveHeaders, "authorization")) {
+            requestBuilder.header("Authorization", "Bearer ${provider.apiKey}")
+        }
+        if (!hasHeader(effectiveHeaders, "user-agent")) {
+            requestBuilder.header("User-Agent", GEMINI_CLI_USER_AGENT)
+        }
+
+        requestBuilder
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .header("X-Goog-Api-Client", GEMINI_CLI_API_CLIENT)
+            .header("Client-Metadata", GEMINI_CLI_CLIENT_METADATA)
 
         val request = requestBuilder.build()
 
@@ -897,6 +964,7 @@ class ChatApiClient {
         return withContext(Dispatchers.IO) {
             runCatching {
                 val url = provider.apiUrl.trimEnd('/') + "/images/generations"
+                val effectiveHeaders = buildEffectiveHeaders(provider, extraHeaders)
                 val body = gson.toJson(
                     mapOf(
                         "model" to modelId,
@@ -907,13 +975,15 @@ class ChatApiClient {
                         "response_format" to "url"
                     )
                 )
-                val requestBuilder = Request.Builder()
-                    .url(url)
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("Authorization", "Bearer ${provider.apiKey}")
-                extraHeaders
-                    .filter { it.key.isNotBlank() }
-                    .forEach { header -> requestBuilder.addHeader(header.key.trim(), header.value) }
+                val requestBuilder = Request.Builder().url(url)
+
+                applyHeaders(requestBuilder, effectiveHeaders)
+
+                if (provider.apiKey.isNotBlank() && !hasHeader(effectiveHeaders, "authorization")) {
+                    requestBuilder.header("Authorization", "Bearer ${provider.apiKey}")
+                }
+
+                requestBuilder.header("Content-Type", "application/json")
                 val request = requestBuilder
                     .post(body.toRequestBody(jsonMediaType))
                     .build()

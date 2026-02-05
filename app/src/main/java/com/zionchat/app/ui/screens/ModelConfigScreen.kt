@@ -49,6 +49,8 @@ import com.zionchat.app.data.HttpHeader
 import com.zionchat.app.data.ModelConfig
 import com.zionchat.app.data.isCodexProvider
 import com.zionchat.app.ui.components.BottomFadeScrim
+import com.zionchat.app.ui.components.EditableHeader
+import com.zionchat.app.ui.components.HeadersEditorCard
 import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
@@ -86,8 +88,8 @@ fun ModelConfigScreen(
         mutableStateOf(existingModel?.reasoningEffort?.trim()?.lowercase()?.takeIf { it.isNotBlank() })
     }
     val headers = remember(existingModel?.id) {
-        mutableStateListOf<Header>().apply {
-            existingModel?.headers?.forEach { add(Header(it.key, it.value)) }
+        mutableStateListOf<EditableHeader>().apply {
+            existingModel?.headers?.forEach { add(EditableHeader(it.key, it.value)) }
         }
     }
 
@@ -268,71 +270,7 @@ fun ModelConfigScreen(
                 }
             }
 
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = Surface,
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Custom Headers",
-                            fontSize = 13.sp,
-                            fontFamily = SourceSans3,
-                            color = TextSecondary
-                        )
-
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(GrayLighter, CircleShape)
-                                .pressableScale(pressedScale = 0.95f) { headers.add(Header("", "")) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = AppIcons.Plus,
-                                contentDescription = "Add Header",
-                                tint = TextPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-
-                    if (headers.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "No custom headers",
-                                fontSize = 14.sp,
-                                color = TextSecondary
-                            )
-                        }
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            headers.forEachIndexed { index, header ->
-                                HeaderItem(
-                                    header = header,
-                                    onKeyChange = { headers[index] = header.copy(key = it) },
-                                    onValueChange = { headers[index] = header.copy(value = it) },
-                                    onRemove = { headers.removeAt(index) }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            HeadersEditorCard(headers = headers)
 
             Spacer(modifier = Modifier.height(32.dp))
             }
@@ -405,111 +343,3 @@ private fun ReasoningOptionChip(
         )
     }
 }
-
-@Composable
-private fun HeaderItem(
-    header: Header,
-    onKeyChange: (String) -> Unit,
-    onValueChange: (String) -> Unit,
-    onRemove: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(GrayLighter, RoundedCornerShape(16.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Header Key",
-                fontSize = 11.sp,
-                fontFamily = SourceSans3,
-                color = TextSecondary
-            )
-            TextField(
-                value = header.key,
-                onValueChange = onKeyChange,
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = {
-                    Text(
-                        text = "e.g. Authorization",
-                        fontSize = 15.sp,
-                        color = TextSecondary
-                    )
-                },
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                ),
-                textStyle = TextStyle(
-                    fontSize = 15.sp,
-                    color = TextPrimary
-                ),
-                singleLine = true
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .width(1.dp)
-                .height(32.dp)
-                .background(Color(0xFFD1D1D6))
-        )
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Header Value",
-                fontSize = 11.sp,
-                fontFamily = SourceSans3,
-                color = TextSecondary
-            )
-            TextField(
-                value = header.value,
-                onValueChange = onValueChange,
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = {
-                    Text(
-                        text = "e.g. Bearer token",
-                        fontSize = 15.sp,
-                        color = TextSecondary
-                    )
-                },
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                ),
-                textStyle = TextStyle(
-                    fontSize = 15.sp,
-                    color = TextPrimary
-                ),
-                singleLine = true
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .pressableScale(pressedScale = 0.95f, onClick = onRemove),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = AppIcons.Close,
-                contentDescription = "Remove",
-                tint = TextSecondary,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-    }
-}
-
-private data class Header(
-    val key: String,
-    val value: String
-)
