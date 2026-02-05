@@ -11,8 +11,8 @@ android {
         applicationId "com.zionchat.app"
         minSdk 24
         targetSdk 36
-        versionCode 98
-        versionName "0.18.60"
+        versionCode 99
+        versionName "0.18.61"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -81,6 +81,12 @@ dependencies {
     implementation 'io.coil-kt.coil3:coil-network-okhttp:3.3.0'
     implementation 'io.coil-kt.coil3:coil-svg:3.3.0'
     implementation 'org.commonmark:commonmark:0.21.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0'
+    implementation 'io.ktor:ktor-client-core:3.4.0'
+    implementation 'io.ktor:ktor-client-okhttp:3.4.0'
+    implementation 'io.ktor:ktor-client-content-negotiation:3.4.0'
+    implementation 'io.ktor:ktor-client-sse:3.4.0'
+    implementation 'io.ktor:ktor-serialization-kotlinx-json:3.4.0'
     implementation 'io.modelcontextprotocol:kotlin-sdk:0.8.3'
     implementation 'io.github.kyant0:backdrop:1.0.5'
 
