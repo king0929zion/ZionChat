@@ -83,10 +83,12 @@ import com.zionchat.app.ui.theme.*
 import coil3.compose.AsyncImage
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -98,6 +100,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import java.io.ByteArrayOutputStream
 import kotlin.math.roundToInt
 
@@ -216,6 +219,8 @@ fun ChatScreen(navController: NavController) {
     var isStreaming by remember { mutableStateOf(false) }
     var streamingMessageId by remember { mutableStateOf<String?>(null) }
     var streamingConversationId by remember { mutableStateOf<String?>(null) }
+    var streamingJob by remember { mutableStateOf<Job?>(null) }
+    var stopRequestedByUser by remember { mutableStateOf(false) }
 
     // 清理已落盘的 pending，避免列表不断增长
     LaunchedEffect(conversations, pendingMessages) {
@@ -305,12 +310,19 @@ fun ChatScreen(navController: NavController) {
         }
     }
 
+    fun stopStreaming() {
+        if (!isStreaming) return
+        stopRequestedByUser = true
+        streamingJob?.cancel(CancellationException("Stopped by user."))
+    }
+
     fun sendMessage() {
         val trimmed = messageText.trim()
         val attachmentsSnapshot = imageAttachments
         if ((trimmed.isEmpty() && attachmentsSnapshot.isEmpty()) || isStreaming) return
 
-        scope.launch {
+        stopRequestedByUser = false
+        streamingJob = scope.launch {
             val nowMs = System.currentTimeMillis()
             val provisionalTitle = trimmed.lineSequence().firstOrNull().orEmpty().trim().take(24)
             val initialConversations = repository.conversationsFlow.first()
@@ -467,6 +479,9 @@ fun ChatScreen(navController: NavController) {
             // 流式输出
             val assistantMessage = Message(role = "assistant", content = "")
             var assistantTags = emptyList<MessageTag>()
+            var latestAssistantContent = ""
+            var latestAssistantReasoning: String? = null
+            var dropPendingAssistantOnExit = false
             pendingMessages = pendingMessages + PendingMessage(safeConversationId, assistantMessage)
             isStreaming = true
             streamingMessageId = assistantMessage.id
@@ -485,7 +500,10 @@ fun ChatScreen(navController: NavController) {
             }
 
             fun updateAssistantContent(content: String, reasoning: String?) {
-                updateAssistantPending { it.copy(content = content, reasoning = reasoning) }
+                val normalizedReasoning = reasoning?.trim()?.ifBlank { null }
+                latestAssistantContent = content
+                latestAssistantReasoning = normalizedReasoning
+                updateAssistantPending { it.copy(content = content, reasoning = normalizedReasoning) }
             }
 
             fun appendAssistantTag(tag: MessageTag) {
@@ -1060,14 +1078,47 @@ fun ChatScreen(navController: NavController) {
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                if (!stopRequestedByUser) throw e
+                val partialContent = latestAssistantContent.trim()
+                val partialReasoning = latestAssistantReasoning?.trim()?.ifBlank { null }
+                val hasPartialOutput =
+                    partialContent.isNotBlank() ||
+                        !partialReasoning.isNullOrBlank() ||
+                        assistantTags.isNotEmpty()
+                val alreadyPersisted =
+                    repository.conversationsFlow.first()
+                        .firstOrNull { it.id == safeConversationId }
+                        ?.messages
+                        ?.any { it.id == assistantMessage.id } == true
+                if (!alreadyPersisted && hasPartialOutput) {
+                    repository.appendMessage(
+                        safeConversationId,
+                        assistantMessage.copy(
+                            content = partialContent,
+                            reasoning = partialReasoning,
+                            tags = assistantTags.takeIf { it.isNotEmpty() }
+                        )
+                    )
+                } else if (!alreadyPersisted) {
+                    dropPendingAssistantOnExit = true
+                }
             } catch (e: Exception) {
                 val errorMsg = "Request failed: ${e.message ?: e.toString()}"
                 updateAssistantContent(errorMsg, null)
                 repository.appendMessage(safeConversationId, assistantMessage.copy(content = errorMsg, reasoning = null))
             } finally {
+                if (dropPendingAssistantOnExit) {
+                    pendingMessages =
+                        pendingMessages.filterNot { pending ->
+                            pending.conversationId == safeConversationId && pending.message.id == assistantMessage.id
+                        }
+                }
                 isStreaming = false
                 streamingMessageId = null
                 streamingConversationId = null
+                streamingJob = null
+                stopRequestedByUser = false
                 selectedTool = null // 清除选中的工具
             }
         }
@@ -1278,7 +1329,9 @@ fun ChatScreen(navController: NavController) {
                         messageText = messageText,
                         onMessageChange = { messageText = it },
                         onSend = ::sendMessage,
+                        onStopStreaming = ::stopStreaming,
                         sendAllowed = !defaultChatModelId.isNullOrBlank(),
+                        isStreaming = isStreaming,
                         imeVisible = imeVisible
                     )
                 }
@@ -2153,6 +2206,13 @@ fun ToolMenuPanel(
     val density = LocalDensity.current
     var dragOffsetPx by remember { mutableFloatStateOf(0f) }
     val dismissThresholdPx = remember(density) { with(density) { 120.dp.toPx() } }
+    val dragProgress = remember(dragOffsetPx, dismissThresholdPx) {
+        (dragOffsetPx / dismissThresholdPx).coerceIn(0f, 1f)
+    }
+    val scrimAlpha by animateFloatAsState(
+        targetValue = if (visible) (0.5f * (1f - dragProgress * 0.72f)) else 0f,
+        animationSpec = tween(durationMillis = 120, easing = FastOutSlowInEasing)
+    )
     LaunchedEffect(visible) {
         if (!visible) dragOffsetPx = 0f
     }
@@ -2160,8 +2220,8 @@ fun ToolMenuPanel(
     AnimatedVisibility(
         modifier = modifier,
         visible = visible,
-        enter = fadeIn(),
-        exit = fadeOut()
+        enter = fadeIn(animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing)),
+        exit = fadeOut(animationSpec = tween(durationMillis = 130, easing = FastOutSlowInEasing))
     ) {
         Box(
             modifier = Modifier
@@ -2170,7 +2230,7 @@ fun ToolMenuPanel(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f))
+                    .background(Color.Black.copy(alpha = scrimAlpha))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -2199,8 +2259,8 @@ fun ToolMenuPanel(
                                             initialValue = dragOffsetPx,
                                             targetValue = 0f,
                                             animationSpec = tween(
-                                                durationMillis = 180,
-                                                easing = LinearEasing
+                                                durationMillis = 220,
+                                                easing = FastOutSlowInEasing
                                             )
                                         ) { value, _ ->
                                             dragOffsetPx = value
@@ -2210,8 +2270,18 @@ fun ToolMenuPanel(
                             }
                         )
                         .animateEnterExit(
-                            enter = slideInVertically(initialOffsetY = { it }),
-                            exit = slideOutVertically(targetOffsetY = { it })
+                            enter =
+                                slideInVertically(
+                                    initialOffsetY = { it / 2 },
+                                    animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
+                                ) +
+                                    fadeIn(animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)),
+                            exit =
+                                slideOutVertically(
+                                    targetOffsetY = { it },
+                                    animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing)
+                                ) +
+                                    fadeOut(animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing))
                         )
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
@@ -2226,6 +2296,7 @@ fun ToolMenuPanel(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .animateContentSize(animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing))
                             .background(Surface)
                             .padding(16.dp)
                     ) {
@@ -2468,14 +2539,29 @@ private fun BottomInputArea(
     messageText: String,
     onMessageChange: (String) -> Unit,
     onSend: () -> Unit,
+    onStopStreaming: () -> Unit,
     sendAllowed: Boolean = true,
+    isStreaming: Boolean = false,
     imeVisible: Boolean = false
 ) {
     val hasText = messageText.trim().isNotEmpty()
     val hasAttachments = attachments.isNotEmpty()
     val sendEnabled = (hasText || hasAttachments) && sendAllowed
-    val sendBackground = if (sendEnabled) TextPrimary else GrayLight
-    val sendIconTint = if (sendEnabled) Color.White else TextSecondary
+    val actionIsStop = isStreaming
+    val actionEnabled = if (actionIsStop) true else sendEnabled
+    val actionBackground by animateColorAsState(
+        targetValue =
+            when {
+                actionIsStop -> Color(0xFFE45454)
+                sendEnabled -> TextPrimary
+                else -> GrayLight
+            },
+        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+    )
+    val actionIconTint by animateColorAsState(
+        targetValue = if (actionIsStop || sendEnabled) Color.White else TextSecondary,
+        animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing)
+    )
     val maxTextHeight = if (selectedTool != null) 140.dp else 120.dp
     val maxLines = if (selectedTool != null) 6 else 5
     val toolLabel = when (selectedTool) {
@@ -2500,6 +2586,7 @@ private fun BottomInputArea(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .animateContentSize(animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing))
             .padding(horizontal = 16.dp)
             .padding(top = 6.dp, bottom = bottomPadding)
     ) {
@@ -2538,106 +2625,126 @@ private fun BottomInputArea(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .animateContentSize(animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing))
                         .padding(start = 12.dp, end = 48.dp, top = 8.dp, bottom = 8.dp)
                 ) {
-                    if (attachments.isNotEmpty()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            attachments.forEachIndexed { index, attachment ->
-                                Box(
-                                    modifier = Modifier
-                                        .size(92.dp)
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(GrayLighter),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    AsyncImage(
-                                        model = attachment.uri ?: attachment.bitmap,
-                                        contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
+                    AnimatedVisibility(
+                        visible = attachments.isNotEmpty(),
+                        enter =
+                            fadeIn(animationSpec = tween(160, easing = FastOutSlowInEasing)) +
+                                expandVertically(animationSpec = tween(200, easing = FastOutSlowInEasing)),
+                        exit =
+                            fadeOut(animationSpec = tween(120, easing = FastOutSlowInEasing)) +
+                                shrinkVertically(animationSpec = tween(160, easing = FastOutSlowInEasing))
+                    ) {
+                        Column {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                attachments.forEachIndexed { index, attachment ->
                                     Box(
                                         modifier = Modifier
-                                            .align(Alignment.TopEnd)
-                                            .padding(6.dp)
-                                            .size(22.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White.copy(alpha = 0.92f))
-                                            .pressableScale(
-                                                pressedScale = 0.92f,
-                                                onClick = { onRemoveAttachment(index) }
-                                            ),
+                                            .size(92.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(GrayLighter),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(
-                                            imageVector = AppIcons.Close,
-                                            contentDescription = "Remove",
-                                            tint = TextPrimary,
-                                            modifier = Modifier.size(14.dp)
+                                        AsyncImage(
+                                            model = attachment.uri ?: attachment.bitmap,
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
                                         )
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .padding(6.dp)
+                                                .size(22.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.White.copy(alpha = 0.92f))
+                                                .pressableScale(
+                                                    pressedScale = 0.92f,
+                                                    onClick = { onRemoveAttachment(index) }
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = AppIcons.Close,
+                                                contentDescription = "Remove",
+                                                tint = TextPrimary,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
+                            Spacer(modifier = Modifier.height(12.dp))
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
                     }
 
-                    // 选中的工具标签 - 位于输入框内部，出现时顶起输入框高度
-                    if (selectedTool != null) {
-                        Row(
-                            modifier = Modifier
-                                .offset(x = (-4).dp)
-                                .background(Color(0xFFE8F4FD), RoundedCornerShape(16.dp))
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            if (toolIconRes != null) {
-                                Icon(
-                                    painter = rememberResourceDrawablePainter(toolIconRes),
-                                    contentDescription = null,
-                                    tint = Color(0xFF007AFF),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = toolIconVector ?: AppIcons.Globe,
-                                    contentDescription = null,
-                                    tint = Color(0xFF007AFF),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                            Text(
-                                text = toolLabel,
-                                fontSize = 15.sp,
-                                color = Color(0xFF007AFF),
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.offset(y = (-1).dp)
-                            )
-                            Box(
+                    AnimatedVisibility(
+                        visible = selectedTool != null,
+                        enter =
+                            fadeIn(animationSpec = tween(140, easing = FastOutSlowInEasing)) +
+                                expandVertically(animationSpec = tween(180, easing = FastOutSlowInEasing)),
+                        exit =
+                            fadeOut(animationSpec = tween(100, easing = FastOutSlowInEasing)) +
+                                shrinkVertically(animationSpec = tween(140, easing = FastOutSlowInEasing))
+                    ) {
+                        Column {
+                            Row(
                                 modifier = Modifier
-                                    .size(20.dp)
-                                    .clip(CircleShape)
-                                    .pressableScale(
-                                        pressedScale = 0.95f,
-                                        onClick = onClearTool
-                                    ),
-                                contentAlignment = Alignment.Center
+                                    .offset(x = (-4).dp)
+                                    .background(Color(0xFFE8F4FD), RoundedCornerShape(16.dp))
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Icon(
-                                    imageVector = AppIcons.Close,
-                                    contentDescription = "Clear",
-                                    tint = Color(0xFF007AFF),
-                                    modifier = Modifier.size(16.dp)
+                                if (toolIconRes != null) {
+                                    Icon(
+                                        painter = rememberResourceDrawablePainter(toolIconRes),
+                                        contentDescription = null,
+                                        tint = Color(0xFF007AFF),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = toolIconVector ?: AppIcons.Globe,
+                                        contentDescription = null,
+                                        tint = Color(0xFF007AFF),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Text(
+                                    text = toolLabel,
+                                    fontSize = 15.sp,
+                                    color = Color(0xFF007AFF),
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.offset(y = (-1).dp)
                                 )
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .pressableScale(
+                                            pressedScale = 0.95f,
+                                            onClick = onClearTool
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = AppIcons.Close,
+                                        contentDescription = "Clear",
+                                        tint = Color(0xFF007AFF),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
                             }
+                            Spacer(modifier = Modifier.height(12.dp))
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
                     }
 
                     // 输入框 - 多行自动增高，最大高度120dp
@@ -2653,9 +2760,12 @@ private fun BottomInputArea(
                             color = TextPrimary
                         ),
                         cursorBrush = SolidColor(TextPrimary),
-                        keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
+                        keyboardOptions = KeyboardOptions.Default.copy(
+                            imeAction = if (actionIsStop) ImeAction.Done else ImeAction.Send
+                        ),
                         keyboardActions = KeyboardActions(
-                            onSend = { if (sendEnabled) onSend() }
+                            onSend = { if (sendEnabled) onSend() },
+                            onDone = { if (actionIsStop) onStopStreaming() }
                         ),
                         minLines = 1,
                         maxLines = maxLines,
@@ -2685,21 +2795,43 @@ private fun BottomInputArea(
                         .padding(end = 6.dp, bottom = 4.dp)
                         .size(36.dp)
                         .clip(CircleShape)
-                        .background(sendBackground, CircleShape)
+                        .background(actionBackground, CircleShape)
                         .zIndex(2f)
                         .pressableScale(
-                            enabled = sendEnabled,
-                            pressedScale = 0.95f,
-                            onClick = onSend
+                            enabled = actionEnabled,
+                            pressedScale = if (actionIsStop) 0.93f else 0.95f,
+                            onClick = {
+                                if (actionIsStop) onStopStreaming() else onSend()
+                            }
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = AppIcons.Send,
-                        contentDescription = "Send",
-                        tint = sendIconTint,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    AnimatedContent(
+                        targetState = actionIsStop,
+                        transitionSpec = {
+                            (
+                                fadeIn(animationSpec = tween(130, easing = FastOutSlowInEasing)) +
+                                    scaleIn(
+                                        initialScale = 0.84f,
+                                        animationSpec = tween(150, easing = FastOutSlowInEasing)
+                                    )
+                                ) togetherWith
+                                (
+                                    fadeOut(animationSpec = tween(100, easing = FastOutSlowInEasing)) +
+                                        scaleOut(
+                                            targetScale = 0.9f,
+                                            animationSpec = tween(130, easing = FastOutSlowInEasing)
+                                        )
+                                    )
+                        }
+                    ) { stopMode ->
+                        Icon(
+                            imageVector = if (stopMode) AppIcons.Close else AppIcons.Send,
+                            contentDescription = if (stopMode) "Stop" else "Send",
+                            tint = actionIconTint,
+                            modifier = Modifier.size(if (stopMode) 16.dp else 18.dp)
+                        )
+                    }
                 }
             }
         }
