@@ -27,6 +27,7 @@ import com.zionchat.app.data.McpClient
 import com.zionchat.app.data.McpConfig
 import com.zionchat.app.data.McpProtocol
 import com.zionchat.app.data.McpTool
+import com.zionchat.app.ui.components.AppModalBottomSheet
 import com.zionchat.app.ui.components.LiquidGlassSwitch
 import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.components.pressableScale
@@ -58,6 +59,7 @@ fun McpDetailScreen(
 
     var syncingTools by remember { mutableStateOf(false) }
     var syncError by remember { mutableStateOf<String?>(null) }
+    var showToolDetail by remember { mutableStateOf<McpTool?>(null) }
 
     LaunchedEffect(mcpListOrNull, mcpId) {
         if (mcpListOrNull != null && mcp == null) {
@@ -171,7 +173,20 @@ fun McpDetailScreen(
                             }
                         }
                     },
-                    onToolClick = { _ -> navController.navigate("mcp_tools/${mcp.id}") }
+                    onToolClick = { tool -> showToolDetail = tool }
+                )
+            }
+        }
+
+        showToolDetail?.let { tool ->
+            val toolSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            AppModalBottomSheet(
+                onDismissRequest = { showToolDetail = null },
+                sheetState = toolSheetState
+            ) {
+                ToolDetailSheetContent(
+                    tool = tool,
+                    onDismiss = { showToolDetail = null }
                 )
             }
         }
@@ -412,38 +427,33 @@ fun McpToolsCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(
-                        text = "${tools.size}",
-                        fontSize = 13.sp,
-                        color = TextSecondary.copy(alpha = 0.7f)
-                    )
+                Text(
+                    text = "${tools.size} tools",
+                    fontSize = 13.sp,
+                    color = TextSecondary.copy(alpha = 0.7f)
+                )
 
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(GrayLighter, CircleShape)
-                            .pressableScale(pressedScale = 0.95f) { if (!syncing) onSync() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (syncing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = TextSecondary
-                            )
-                        } else {
-                            Icon(
-                                imageVector = AppIcons.Refresh,
-                                contentDescription = "Sync",
-                                tint = TextPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(GrayLighter, CircleShape)
+                        .pressableScale(pressedScale = 0.95f) { if (!syncing) onSync() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (syncing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = TextSecondary
+                        )
+                    } else {
+                        Icon(
+                            imageVector = AppIcons.Refresh,
+                            contentDescription = "Sync",
+                            tint = TextPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }
@@ -537,23 +547,13 @@ fun ToolItem(
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
+            Text(
+                text = tool.name,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = TextPrimary,
                 modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = tool.name,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = TextPrimary
-                )
-                Text(
-                    text = tool.description,
-                    fontSize = 13.sp,
-                    color = TextSecondary,
-                    maxLines = 1,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-            }
+            )
             
             Icon(
                 imageVector = AppIcons.ChevronRight,

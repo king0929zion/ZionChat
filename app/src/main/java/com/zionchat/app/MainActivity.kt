@@ -138,13 +138,6 @@ class MainActivity : ComponentActivity() {
                                 val mcpId = backStackEntry.arguments?.getString("mcpId") ?: ""
                                 McpDetailScreen(navController, mcpId)
                             }
-                            composable(
-                                route = "mcp_tools/{mcpId}",
-                                arguments = listOf(navArgument("mcpId") { defaultValue = "" })
-                            ) { backStackEntry ->
-                                val mcpId = backStackEntry.arguments?.getString("mcpId") ?: ""
-                                McpToolsScreen(navController, mcpId)
-                            }
                         }
                     }
                 }
