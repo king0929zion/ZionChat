@@ -47,6 +47,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
@@ -1513,49 +1514,21 @@ fun MessageItem(
                 }
             }
 
-            message.tags.orEmpty().forEach { tag ->
-                val tagRunning = isTagRunning(tag)
-                Row(
-                    modifier = Modifier
-                        .padding(bottom = 6.dp)
-                        .pressableScale(
-                            pressedScale = 0.98f,
-                            onClick = { onShowTag(message.id, tag.id) }
-                        ),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (tag.kind == "mcp") {
-                        Icon(
-                            imageVector = AppIcons.Tool,
-                            contentDescription = null,
-                            tint = ThinkingLabelColor,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                    }
-                    Text(
-                        text = tag.title,
-                        fontSize = 15.sp,
-                        fontFamily = SourceSans3,
-                        fontWeight = FontWeight.SemiBold,
-                        color = ThinkingLabelColor,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (tagRunning) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(13.dp),
-                            strokeWidth = 1.7.dp,
-                            color = ThinkingLabelColor
-                        )
-                    } else {
-                        Icon(
-                            imageVector = AppIcons.ChevronRight,
-                            contentDescription = null,
-                            tint = ThinkingLabelColor,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
+            val orderedTags = remember(message.tags) {
+                message.tags.orEmpty().sortedWith(
+                    compareBy<MessageTag> { if (it.kind == "mcp") 0 else 1 }
+                        .thenBy { it.createdAt }
+                )
+            }
+            val toolTags = orderedTags.filter { it.kind == "mcp" }
+            val otherTags = orderedTags.filterNot { it.kind == "mcp" }
+
+            toolTags.forEach { tag ->
+                MessageTagRow(
+                    tag = tag,
+                    messageId = message.id,
+                    onShowTag = onShowTag
+                )
             }
             MarkdownText(
                 markdown = message.content,
@@ -1565,6 +1538,13 @@ fun MessageItem(
                     color = TextPrimary
                 )
             )
+            otherTags.forEach { tag ->
+                MessageTagRow(
+                    tag = tag,
+                    messageId = message.id,
+                    onShowTag = onShowTag
+                )
+            }
 
             if (isStreaming) {
                 val infiniteTransition = rememberInfiniteTransition(label = "cursor_pulse")
@@ -1633,134 +1613,147 @@ fun MessageItem(
 }
 
 @Composable
-private fun McpTagDetailCard(tag: MessageTag) {
-    val detail = remember(tag.content) { parseMcpTagDetail(tag.content) }
-    val isRunning = isTagRunning(tag)
-    val isError = tag.status == "error"
-    val statusColor =
-        when {
-            isRunning -> Color(0xFF0A84FF)
-            isError -> Color(0xFFEF4444)
-            else -> Color(0xFF10B981)
-        }
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = Surface
+private fun MessageTagRow(
+    tag: MessageTag,
+    messageId: String,
+    onShowTag: (messageId: String, tagId: String) -> Unit
+) {
+    val tagRunning = isTagRunning(tag)
+    Row(
+        modifier = Modifier
+            .padding(bottom = 6.dp)
+            .pressableScale(
+                pressedScale = 0.98f,
+                onClick = { onShowTag(messageId, tag.id) }
+            ),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = detail.status.ifBlank { if (isRunning) "Running" else "Completed" },
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = statusColor,
-                    modifier = Modifier.weight(1f)
-                )
-                if (isRunning) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(14.dp),
-                        strokeWidth = 1.8.dp,
-                        color = statusColor
-                    )
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                if (detail.server.isNotBlank()) {
-                    DetailChip(label = "Server", value = detail.server, modifier = Modifier.weight(1f))
-                }
-                DetailChip(label = "Tool", value = detail.tool, modifier = Modifier.weight(1f))
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                DetailChip(label = "Round", value = detail.round, modifier = Modifier.weight(1f))
-                detail.attempts.takeIf { it.isNotBlank() }?.let {
-                    DetailChip(label = "Attempts", value = it, modifier = Modifier.weight(1f))
-                }
-                detail.elapsed.takeIf { it.isNotBlank() }?.let {
-                    DetailChip(label = "Elapsed", value = it, modifier = Modifier.weight(1f))
-                }
-            }
-
-            if (detail.argumentsJson.isNotBlank()) {
-                Text(text = "Arguments", fontSize = 13.sp, color = TextSecondary)
-                MarkdownText(
-                    markdown = "```json\n${detail.argumentsJson}\n```",
-                    textStyle = TextStyle(
-                        fontSize = 13.sp,
-                        lineHeight = 20.sp,
-                        color = TextPrimary
-                    )
-                )
-            }
-
-            if (detail.result.isNotBlank()) {
-                Text(text = "Result", fontSize = 13.sp, color = TextSecondary)
-                MarkdownText(
-                    markdown = detail.result,
-                    textStyle = TextStyle(
-                        fontSize = 14.sp,
-                        lineHeight = 21.sp,
-                        color = TextPrimary
-                    )
-                )
-            }
-
-            if (detail.error.isNotBlank()) {
-                Text(text = "Error", fontSize = 13.sp, color = Color(0xFFEF4444))
-                MarkdownText(
-                    markdown = detail.error,
-                    textStyle = TextStyle(
-                        fontSize = 14.sp,
-                        lineHeight = 21.sp,
-                        color = Color(0xFFB91C1C)
-                    )
-                )
-            }
+        if (tag.kind == "mcp") {
+            Icon(
+                imageVector = AppIcons.Tool,
+                contentDescription = null,
+                tint = ThinkingLabelColor,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+        }
+        Text(
+            text = tag.title,
+            fontSize = 15.sp,
+            fontFamily = SourceSans3,
+            fontWeight = FontWeight.SemiBold,
+            color = ThinkingLabelColor,
+            modifier = Modifier.weight(1f)
+        )
+        if (tagRunning) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(13.dp),
+                strokeWidth = 1.7.dp,
+                color = ThinkingLabelColor
+            )
+        } else {
+            Icon(
+                imageVector = AppIcons.ChevronRight,
+                contentDescription = null,
+                tint = ThinkingLabelColor,
+                modifier = Modifier.size(14.dp)
+            )
         }
     }
 }
 
 @Composable
-private fun DetailChip(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier
+private fun McpTagDetailCard(tag: MessageTag) {
+    val detail = remember(tag.content) { parseMcpTagDetail(tag.content) }
+    val calledTool = tag.title.trim().ifBlank { detail.tool.ifBlank { "mcp_tool" } }
+    val isRunning = isTagRunning(tag)
+    val argumentsText = remember(detail.argumentsJson) { formatToolDetailJson(detail.argumentsJson) }
+    val resultRaw =
+        when {
+            detail.error.isNotBlank() -> detail.error
+            detail.result.isNotBlank() -> detail.result
+            isRunning -> "Running..."
+            else -> "{}"
+        }
+    val resultText = remember(resultRaw) { formatToolDetailJson(resultRaw) }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = "Tool Call",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Normal,
+            color = TextPrimary
+        )
+        Text(
+            text = "Called tool $calledTool",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = TextPrimary
+        )
+        ToolDetailCodeCard(
+            title = "Arguments",
+            content = argumentsText
+        )
+        if (isRunning) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    strokeWidth = 1.8.dp,
+                    color = ThinkingLabelColor
+                )
+                Text(
+                    text = "Running",
+                    fontSize = 14.sp,
+                    color = ThinkingLabelColor,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+        ToolDetailCodeCard(
+            title = "Call result",
+            content = resultText
+        )
+    }
+}
+
+@Composable
+private fun ToolDetailCodeCard(
+    title: String,
+    content: String
 ) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = title,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = TextPrimary
+        )
     Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
         color = GrayLighter
     ) {
-        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
-            Text(
-                text = label,
-                fontSize = 11.sp,
-                color = TextSecondary.copy(alpha = 0.85f)
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = value,
-                fontSize = 13.sp,
-                color = TextPrimary,
-                maxLines = 2
-            )
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                Text(
+                    text = "json",
+                    fontSize = 14.sp,
+                    color = TextSecondary.copy(alpha = 0.75f)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = content.ifBlank { "{}" },
+                    fontSize = 15.sp,
+                    lineHeight = 23.sp,
+                    color = TextPrimary,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
         }
     }
 }
@@ -3049,6 +3042,18 @@ private fun formatElapsedDuration(elapsedMs: Long): String {
     if (elapsedMs <= 0L) return "0.0s"
     val seconds = elapsedMs / 1000.0
     return String.format(java.util.Locale.US, "%.1fs", seconds)
+}
+
+private fun formatToolDetailJson(rawText: String): String {
+    val raw = rawText.trim()
+    if (raw.isBlank()) return "{}"
+    val cleaned = stripMarkdownCodeFences(raw)
+    val firstChar = cleaned.firstOrNull()
+    if (firstChar != '{' && firstChar != '[') return cleaned
+    return runCatching {
+        GsonBuilder().setPrettyPrinting().create()
+            .toJson(JsonParser.parseString(cleaned))
+    }.getOrDefault(cleaned)
 }
 
 private fun buildMcpToolPlannerPrompt(
