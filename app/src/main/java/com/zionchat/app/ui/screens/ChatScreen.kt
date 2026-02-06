@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
@@ -57,8 +58,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import androidx.navigation.NavController
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.zionchat.app.R
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.LocalChatApiClient
@@ -77,7 +76,6 @@ import com.zionchat.app.data.extractRemoteModelId
 import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.AppSheetDragHandle
 import com.zionchat.app.ui.components.MarkdownText
-import com.zionchat.app.ui.components.liquidGlass
 import com.zionchat.app.ui.components.rememberResourceDrawablePainter
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
@@ -91,7 +89,8 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -208,7 +207,12 @@ fun ChatScreen(navController: NavController) {
     val bottomBarHeightDp = with(density) { bottomBarHeightPx.toDp() }
     val bottomContentPadding = maxOf(80.dp, bottomBarHeightDp + 12.dp + bottomSystemPadding)
     val imeVisible = WindowInsets.ime.getBottom(density) > 0
-    val screenBackdrop = rememberLayerBackdrop()
+    val inputBottomInsetTarget = maxOf(imeBottomPadding, navBottomPadding)
+    val inputBottomInset by animateDpAsState(
+        targetValue = inputBottomInsetTarget,
+        animationSpec = tween(durationMillis = 170, easing = FastOutSlowInEasing),
+        label = "input_bottom_inset"
+    )
 
     // Pending 消息：在 DataStore 落盘前立即显示，彻底修复“首条消息消失”
     var pendingMessages by remember { mutableStateOf<List<PendingMessage>>(emptyList()) }
@@ -1110,7 +1114,6 @@ fun ChatScreen(navController: NavController) {
             modifier = Modifier
                 .fillMaxSize()
                 .background(ChatBackground)
-                .layerBackdrop(screenBackdrop)
         ) {
             // Chat content (behind the top bar), so messages can scroll into the fade region.
             if (localMessages.isEmpty()) {
@@ -1192,31 +1195,34 @@ fun ChatScreen(navController: NavController) {
                     .zIndex(1f)
             )
 
-            // Bottom glass mask: cover the input zone + safe-area while staying behind input/tools.
-            val bottomGlassHeight = remember(imeVisible, bottomSystemPadding, bottomBarHeightDp) {
+            // Bottom fade mask: starts near the input top and fades to solid background at screen bottom.
+            val bottomFadeHeightTarget = remember(imeVisible, bottomSystemPadding, bottomBarHeightDp) {
                 if (imeVisible) {
-                    bottomBarHeightDp + 8.dp
+                    bottomBarHeightDp + 10.dp
                 } else {
-                    bottomBarHeightDp + bottomSystemPadding + 18.dp
+                    bottomBarHeightDp + bottomSystemPadding + 20.dp
                 }
             }
-            if (bottomGlassHeight > 0.dp) {
+            val bottomFadeHeight by animateDpAsState(
+                targetValue = bottomFadeHeightTarget,
+                animationSpec = tween(durationMillis = 170, easing = FastOutSlowInEasing),
+                label = "bottom_fade_height"
+            )
+            if (bottomFadeHeight > 0.dp) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .height(bottomGlassHeight)
+                        .height(bottomFadeHeight)
                         .zIndex(3f)
-                        .liquidGlass(
-                            backdrop = screenBackdrop,
-                            shape = RoundedCornerShape(0.dp),
-                            overlayColor = ChatBackground.copy(alpha = 0.66f),
-                            fallbackColor = ChatBackground,
-                            blurRadius = 24.dp,
-                            refractionHeight = 6.dp,
-                            refractionAmount = 10.dp,
-                            highlightAlpha = 0.18f,
-                            shadowAlpha = 0f
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    ChatBackground.copy(alpha = 0f),
+                                    ChatBackground.copy(alpha = 0.62f),
+                                    ChatBackground
+                                )
+                            )
                         )
                 )
             }
@@ -1240,7 +1246,7 @@ fun ChatScreen(navController: NavController) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
+                    .padding(bottom = inputBottomInset)
                     .zIndex(5f)
             ) {
                 Box(
