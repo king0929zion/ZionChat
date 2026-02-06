@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -14,6 +15,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,6 +33,13 @@ import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.*
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
@@ -42,17 +53,16 @@ fun McpDetailScreen(
     val repository = LocalAppRepository.current
     val scope = rememberCoroutineScope()
     val mcpClient = remember { McpClient() }
-    
+
     val mcpListOrNull by produceState<List<McpConfig>?>(initialValue = null, repository) {
         repository.mcpListFlow.collect { value = it }
     }
     val mcp = mcpListOrNull?.firstOrNull { it.id == mcpId }
-    
-    var showEditModal by remember { mutableStateOf(false) }
+
     var syncingTools by remember { mutableStateOf(false) }
     var syncError by remember { mutableStateOf<String?>(null) }
     var showToolDetail by remember { mutableStateOf<McpTool?>(null) }
-    
+
     LaunchedEffect(mcpListOrNull, mcpId) {
         if (mcpListOrNull != null && mcp == null) {
             navController.navigateUp()
@@ -68,33 +78,37 @@ fun McpDetailScreen(
         Box(modifier = Modifier.fillMaxSize().background(Background))
         return
     }
-    
+
+    var serverUrl by remember(mcp.id) { mutableStateOf(mcp.url) }
+    var serverUrlFocused by remember { mutableStateOf(false) }
+    val latestStoredUrl by rememberUpdatedState(mcp.url)
+
+    LaunchedEffect(mcp.url, serverUrlFocused) {
+        if (!serverUrlFocused && serverUrl != mcp.url) {
+            serverUrl = mcp.url
+        }
+    }
+
+    LaunchedEffect(mcp.id) {
+        snapshotFlow { serverUrl }
+            .map { it.trim() }
+            .distinctUntilChanged()
+            .debounce(350)
+            .filter { it != latestStoredUrl.trim() }
+            .onEach { value ->
+                val current = repository.mcpListFlow.first().firstOrNull { it.id == mcp.id } ?: return@onEach
+                repository.upsertMcp(current.copy(url = value))
+            }
+            .collect()
+    }
+
     Box(modifier = Modifier.fillMaxSize().background(Background)) {
         Column(modifier = Modifier.fillMaxSize()) {
             PageTopBar(
                 title = mcp.name,
-                onBack = { navController.navigateUp() },
-                trailing = {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Surface, CircleShape)
-                            .pressableScale(pressedScale = 0.95f) {
-                                showEditModal = true
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = AppIcons.Edit,
-                            contentDescription = "Edit",
-                            tint = TextPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
+                onBack = { navController.navigateUp() }
             )
-            
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -103,15 +117,43 @@ fun McpDetailScreen(
                     .padding(top = 12.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                McpInfoCard(
-                    mcp = mcp,
-                    onToggleEnabled = {
-                        scope.launch { repository.toggleMcpEnabled(mcp.id) }
+                McpSectionTitle(title = "Server URL")
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Surface)
+                ) {
+                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                        BasicTextField(
+                            value = serverUrl,
+                            onValueChange = { serverUrl = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onFocusChanged { serverUrlFocused = it.isFocused },
+                            textStyle = TextStyle(
+                                fontSize = 16.sp,
+                                color = TextPrimary
+                            ),
+                            singleLine = true,
+                            cursorBrush = SolidColor(TextPrimary),
+                            decorationBox = { innerTextField ->
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    if (serverUrl.isBlank()) {
+                                        Text(
+                                            text = "Enter server URL",
+                                            fontSize = 16.sp,
+                                            color = Color(0xFFC7C7CC)
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            }
+                        )
                     }
-                )
+                }
 
-                McpConnectionCard(mcp = mcp)
-
+                Spacer(modifier = Modifier.height(4.dp))
+                McpSectionTitle(title = "Available tools")
                 McpToolsCard(
                     tools = mcp.tools,
                     lastSyncAt = mcp.lastSyncAt,
@@ -137,46 +179,6 @@ fun McpDetailScreen(
                     },
                     onToolClick = { tool -> showToolDetail = tool }
                 )
-
-                McpDetailItem(
-                    icon = {
-                        Icon(
-                            imageVector = AppIcons.Tool,
-                            contentDescription = null,
-                            tint = TextPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    },
-                    title = "All tools",
-                    subtitle = "Open full tools list page",
-                    onClick = { navController.navigate("mcp_tools/${mcp.id}") }
-                )
-            }
-        }
-        
-        // Edit Modal
-        if (showEditModal) {
-            val editSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-            AppModalBottomSheet(
-                onDismissRequest = { showEditModal = false },
-                sheetState = editSheetState
-            ) {
-                McpEditSheetContent(
-                    mcp = mcp,
-                    onDismiss = { showEditModal = false },
-                    onSave = { updatedMcp ->
-                        scope.launch {
-                            repository.upsertMcp(updatedMcp)
-                            runCatching {
-                                val tools = mcpClient.fetchTools(updatedMcp).getOrNull()
-                                if (tools != null) {
-                                    repository.updateMcpTools(updatedMcp.id, tools)
-                                }
-                            }
-                            showEditModal = false
-                        }
-                    }
-                )
             }
         }
 
@@ -193,6 +195,18 @@ fun McpDetailScreen(
             }
         }
     }
+}
+
+@Composable
+private fun McpSectionTitle(title: String) {
+    Text(
+        text = title.uppercase(),
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Medium,
+        fontFamily = SourceSans3,
+        color = TextSecondary,
+        modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
+    )
 }
 
 @Composable

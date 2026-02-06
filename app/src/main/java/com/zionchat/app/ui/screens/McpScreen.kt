@@ -152,7 +152,7 @@ fun McpEmptyState() {
             modifier = Modifier
                 .size(64.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(GrayLight),
+                .background(Surface),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -236,7 +236,7 @@ fun McpListItem(
             modifier = Modifier
                 .fillMaxSize()
                 .offset { IntOffset(swipeableState.offset.value.roundToInt(), 0) }
-                .background(GrayLight, RoundedCornerShape(14.dp))
+                .background(Surface, RoundedCornerShape(14.dp))
                 .swipeable(
                     state = swipeableState,
                     anchors = anchors,
