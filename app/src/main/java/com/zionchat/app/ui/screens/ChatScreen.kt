@@ -3108,7 +3108,9 @@ private fun extractInlineMcpCallBlocks(content: String): InlineMcpCallExtraction
         return InlineMcpCallExtraction(visibleText = "", blocks = emptyList())
     }
 
-    val blockRegex = Regex("(?is)<(?:mcp_call|tool_call)\\b[^>]*>(.*?)</(?:mcp_call|tool_call)>")
+    val blockRegex = Regex(
+        "(?is)<(?:mcp_call|tool_call)\\b[^>]*>(.*?)(?:</(?:mcp_call|tool_call)>|$)"
+    )
     val blocks =
         blockRegex.findAll(raw)
             .mapNotNull { match ->
@@ -3118,6 +3120,7 @@ private fun extractInlineMcpCallBlocks(content: String): InlineMcpCallExtraction
 
     val visible =
         raw.replace(blockRegex, " ")
+            .replace(Regex("(?is)</(?:mcp_call|tool_call)>"), " ")
             .replace(Regex("\\n{3,}"), "\n\n")
             .trim()
 
