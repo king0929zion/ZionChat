@@ -731,12 +731,22 @@ fun ChatScreen(navController: NavController) {
                         var roundVisible = thinkingSplit.visible
                         var roundThinking = mergeTextSections(roundThinkingRaw.toString(), thinkingSplit.thinking)
 
-                        val mcpCallsExtract = extractInlineMcpCallBlocks(roundVisible)
-                        roundVisible = mcpCallsExtract.visibleText.trim()
-                        roundThinking = roundThinking.trim()
+                        val visibleCallBlocks = extractInlineMcpCallBlocks(roundVisible)
+                        roundVisible = visibleCallBlocks.visibleText.trim()
+                        val thinkingCallBlocks = extractInlineMcpCallBlocks(roundThinking)
+                        roundThinking = thinkingCallBlocks.visibleText.trim()
+
+                        val allRawCallBlocks = visibleCallBlocks.blocks + thinkingCallBlocks.blocks
+                        val parseFailedBlocks = mutableListOf<String>()
                         val parsedCalls =
-                            mcpCallsExtract.blocks
-                                .flatMap(::parseMcpToolCallsPayload)
+                            allRawCallBlocks
+                                .flatMap { block ->
+                                    val parsed = parseMcpToolCallsPayload(block)
+                                    if (parsed.isEmpty()) {
+                                        parseFailedBlocks += block
+                                    }
+                                    parsed
+                                }
                                 .map { call ->
                                     call.copy(
                                         serverId = call.serverId.trim(),
@@ -763,6 +773,28 @@ fun ChatScreen(navController: NavController) {
 
                         updateAssistantFromCombined(roundVisible = roundVisible, roundThinking = roundThinking)
                         appendRoundToCombined(roundVisible = roundVisible, roundThinking = roundThinking)
+
+                        parseFailedBlocks.take(2).forEach { rawBlock ->
+                            val rawPreview = rawBlock.trim().take(1800)
+                            appendAssistantTag(
+                                MessageTag(
+                                    kind = "mcp",
+                                    title = "Tool",
+                                    content = buildMcpTagDetailContent(
+                                        round = roundIndex,
+                                        serverName = null,
+                                        toolName = "unknown",
+                                        argumentsJson = rawPreview,
+                                        statusText = "Failed",
+                                        attempts = 1,
+                                        elapsedMs = null,
+                                        resultText = null,
+                                        errorText = "Invalid mcp_call payload."
+                                    ),
+                                    status = "error"
+                                )
+                            )
+                        }
 
                         if (roundVisible.isNotBlank()) {
                             baseMessages.add(Message(role = "assistant", content = roundVisible))
@@ -1601,7 +1633,7 @@ private fun MessageTagRow(
             Spacer(modifier = Modifier.width(6.dp))
         }
         Text(
-            text = tag.title,
+            text = if (tag.kind == "mcp") "Tool" else tag.title,
             fontSize = 15.sp,
             fontFamily = SourceSans3,
             fontWeight = FontWeight.SemiBold,
@@ -3076,7 +3108,7 @@ private fun extractInlineMcpCallBlocks(content: String): InlineMcpCallExtraction
         return InlineMcpCallExtraction(visibleText = "", blocks = emptyList())
     }
 
-    val blockRegex = Regex("(?is)<(?:mcp_call|tool_call)>(.*?)</(?:mcp_call|tool_call)>")
+    val blockRegex = Regex("(?is)<(?:mcp_call|tool_call)\\b[^>]*>(.*?)</(?:mcp_call|tool_call)>")
     val blocks =
         blockRegex.findAll(raw)
             .mapNotNull { match ->
@@ -3169,8 +3201,11 @@ private fun parseMcpToolCallsPayload(text: String): List<PlannedMcpToolCall> {
     val cleaned = stripMarkdownCodeFences(text).trim()
     if (cleaned.isBlank()) return emptyList()
 
-    val candidate = extractFirstJsonCandidate(cleaned) ?: return emptyList()
-    val root = runCatching { JsonParser.parseString(candidate) }.getOrNull() ?: return emptyList()
+    val candidate = extractFirstJsonCandidate(cleaned)
+    val root = candidate?.let { raw -> runCatching { JsonParser.parseString(raw) }.getOrNull() }
+    if (root == null) {
+        return parseLooseMcpToolCall(cleaned)?.let { listOf(it) } ?: emptyList()
+    }
 
     val callsElement =
         when {
@@ -3200,7 +3235,7 @@ private fun parseMcpToolCallsPayload(text: String): List<PlannedMcpToolCall> {
             ?: com.google.gson.JsonObject()
     }
 
-    return callsArray.mapNotNull { el ->
+    val strictParsed = callsArray.mapNotNull { el ->
         val obj = runCatching { el.asJsonObject }.getOrNull() ?: return@mapNotNull null
         val toolName = getString(obj, "toolName", "tool_name", "tool", "name").orEmpty()
         if (toolName.isBlank()) return@mapNotNull null
@@ -3212,6 +3247,8 @@ private fun parseMcpToolCallsPayload(text: String): List<PlannedMcpToolCall> {
 
         PlannedMcpToolCall(serverId = serverId, toolName = toolName, arguments = args)
     }
+    if (strictParsed.isNotEmpty()) return strictParsed
+    return parseLooseMcpToolCall(cleaned)?.let { listOf(it) } ?: emptyList()
 }
 
 private fun extractFirstJsonCandidate(text: String): String? {
@@ -3232,6 +3269,102 @@ private fun extractFirstJsonCandidate(text: String): String? {
     if (end <= start) return null
 
     return raw.substring(start, end + 1)
+}
+
+private fun parseLooseMcpToolCall(text: String): PlannedMcpToolCall? {
+    val toolName =
+        extractQuotedField(text, listOf("toolName", "tool_name", "tool", "name"))
+            .orEmpty()
+            .trim()
+    if (toolName.isBlank()) return null
+
+    val serverId =
+        extractQuotedField(text, listOf("serverId", "server_id", "server", "mcpId", "mcp_id", "id"))
+            .orEmpty()
+            .trim()
+
+    val argsFromJson =
+        extractObjectField(text, listOf("arguments", "args", "input"))
+            ?.let { raw ->
+                runCatching { JsonParser.parseString(raw).asJsonObject }.getOrNull()
+            }
+            ?.entrySet()
+            ?.associate { entry -> entry.key to entry.value.toKotlinAny() }
+            .orEmpty()
+            .toMutableMap()
+
+    if (argsFromJson.isEmpty()) {
+        extractQuotedField(text, listOf("value"))?.takeIf { it.isNotBlank() }?.let { value ->
+            argsFromJson["value"] = value
+        }
+    }
+
+    return PlannedMcpToolCall(
+        serverId = serverId,
+        toolName = toolName,
+        arguments = argsFromJson
+    )
+}
+
+private fun extractQuotedField(text: String, keys: List<String>): String? {
+    keys.forEach { key ->
+        val regex = Regex("\"${Regex.escape(key)}\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"", setOf(RegexOption.IGNORE_CASE))
+        val value = regex.find(text)?.groupValues?.getOrNull(1)?.trim().orEmpty()
+        if (value.isNotBlank()) {
+            val decoded = runCatching { JsonParser.parseString("\"$value\"").asString }.getOrDefault(value)
+            return decoded.trim()
+        }
+    }
+    return null
+}
+
+private fun extractObjectField(text: String, keys: List<String>): String? {
+    keys.forEach { key ->
+        val markerRegex = Regex("\"${Regex.escape(key)}\"\\s*:\\s*\\{", setOf(RegexOption.IGNORE_CASE))
+        val marker = markerRegex.find(text) ?: return@forEach
+        val start = marker.range.last
+        val end = findMatchingBraceEnd(text, start)
+        if (start >= 0 && end >= start && end < text.length) {
+            return text.substring(start, end + 1)
+        }
+    }
+    return null
+}
+
+private fun findMatchingBraceEnd(text: String, startIndex: Int): Int {
+    if (startIndex !in text.indices || text[startIndex] != '{') return -1
+    var depth = 0
+    var inString = false
+    var escaped = false
+
+    for (index in startIndex until text.length) {
+        val c = text[index]
+        if (inString) {
+            if (escaped) {
+                escaped = false
+                continue
+            }
+            if (c == '\\') {
+                escaped = true
+                continue
+            }
+            if (c == '"') {
+                inString = false
+            }
+            continue
+        }
+
+        when (c) {
+            '"' -> inString = true
+            '{' -> depth += 1
+            '}' -> {
+                depth -= 1
+                if (depth == 0) return index
+                if (depth < 0) return -1
+            }
+        }
+    }
+    return -1
 }
 
 private fun com.google.gson.JsonElement.toKotlinAny(): Any? {
