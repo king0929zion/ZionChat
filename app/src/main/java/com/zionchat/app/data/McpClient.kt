@@ -10,7 +10,6 @@ import io.ktor.http.append
 import io.ktor.serialization.kotlinx.json.json
 import io.modelcontextprotocol.kotlin.sdk.client.Client
 import io.modelcontextprotocol.kotlin.sdk.shared.AbstractTransport
-import io.modelcontextprotocol.kotlin.sdk.shared.RequestOptions
 import io.modelcontextprotocol.kotlin.sdk.types.AudioContent
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequestParams
@@ -31,7 +30,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
-import kotlin.time.Duration.Companion.seconds
 import com.zionchat.app.data.mcp.transport.SseClientTransport
 import com.zionchat.app.data.mcp.transport.StreamableHttpClientTransport
 
@@ -76,14 +74,12 @@ class McpClient {
 
     suspend fun callTool(
         config: McpConfig,
-        toolCall: McpToolCall,
-        timeoutSeconds: Long = 60L
+        toolCall: McpToolCall
     ): Result<McpToolResult> {
         return withContext(Dispatchers.IO) {
             runCatching {
                 withConnectedClient(config) { client ->
                     val argsJson = toolCall.arguments.toJsonObject()
-                    val effectiveTimeoutSeconds = timeoutSeconds.coerceIn(15L, 180L)
                     val result =
                         client.callTool(
                             request = CallToolRequest(
@@ -91,8 +87,7 @@ class McpClient {
                                     name = toolCall.toolName,
                                     arguments = argsJson,
                                 ),
-                            ),
-                            options = RequestOptions(timeout = effectiveTimeoutSeconds.seconds),
+                            )
                         )
 
                     val isError = result.isError == true
