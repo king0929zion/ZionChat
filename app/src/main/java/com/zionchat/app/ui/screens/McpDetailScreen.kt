@@ -27,7 +27,6 @@ import com.zionchat.app.data.McpClient
 import com.zionchat.app.data.McpConfig
 import com.zionchat.app.data.McpProtocol
 import com.zionchat.app.data.McpTool
-import com.zionchat.app.ui.components.AppModalBottomSheet
 import com.zionchat.app.ui.components.LiquidGlassSwitch
 import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.components.pressableScale
@@ -41,8 +40,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import java.text.DateFormat
-import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,7 +58,6 @@ fun McpDetailScreen(
 
     var syncingTools by remember { mutableStateOf(false) }
     var syncError by remember { mutableStateOf<String?>(null) }
-    var showToolDetail by remember { mutableStateOf<McpTool?>(null) }
 
     LaunchedEffect(mcpListOrNull, mcpId) {
         if (mcpListOrNull != null && mcp == null) {
@@ -114,8 +110,8 @@ fun McpDetailScreen(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp)
-                    .padding(top = 12.dp, bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(top = 8.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 McpSectionTitle(title = "Server URL")
                 Card(
@@ -123,7 +119,7 @@ fun McpDetailScreen(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = Surface)
                 ) {
-                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                         BasicTextField(
                             value = serverUrl,
                             onValueChange = { serverUrl = it },
@@ -152,11 +148,9 @@ fun McpDetailScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
                 McpSectionTitle(title = "Available tools")
                 McpToolsCard(
                     tools = mcp.tools,
-                    lastSyncAt = mcp.lastSyncAt,
                     syncing = syncingTools,
                     syncError = syncError,
                     onSync = {
@@ -177,20 +171,7 @@ fun McpDetailScreen(
                             }
                         }
                     },
-                    onToolClick = { tool -> showToolDetail = tool }
-                )
-            }
-        }
-
-        showToolDetail?.let { tool ->
-            val toolSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-            AppModalBottomSheet(
-                onDismissRequest = { showToolDetail = null },
-                sheetState = toolSheetState
-            ) {
-                ToolDetailSheetContent(
-                    tool = tool,
-                    onDismiss = { showToolDetail = null }
+                    onToolClick = { _ -> navController.navigate("mcp_tools/${mcp.id}") }
                 )
             }
         }
@@ -205,7 +186,7 @@ private fun McpSectionTitle(title: String) {
         fontWeight = FontWeight.Medium,
         fontFamily = SourceSans3,
         color = TextSecondary,
-        modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
+        modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)
     )
 }
 
@@ -412,7 +393,6 @@ fun ConnectionInfoRow(
 @Composable
 fun McpToolsCard(
     tools: List<McpTool>,
-    lastSyncAt: Long,
     syncing: Boolean,
     syncError: String?,
     onSync: () -> Unit,
@@ -432,13 +412,6 @@ fun McpToolsCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Available Tools",
-                    fontSize = 13.sp,
-                    fontFamily = SourceSans3,
-                    color = TextSecondary
-                )
-
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -474,24 +447,6 @@ fun McpToolsCard(
                     }
                 }
             }
-
-            val lastSyncLabel = remember(lastSyncAt) {
-                if (lastSyncAt <= 0L) {
-                    "Not synced yet"
-                } else {
-                    val formatted =
-                        runCatching {
-                            DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
-                                .format(Date(lastSyncAt))
-                        }.getOrNull().orEmpty()
-                    if (formatted.isBlank()) "Last sync: $lastSyncAt" else "Last sync: $formatted"
-                }
-            }
-            Text(
-                text = lastSyncLabel,
-                fontSize = 13.sp,
-                color = TextSecondary.copy(alpha = 0.7f)
-            )
             if (!syncError.isNullOrBlank()) {
                 Text(
                     text = syncError,
@@ -567,14 +522,14 @@ fun ToolItem(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick
             ),
         color = GrayLighter,
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(16.dp)
     ) {
         Row(
             modifier = Modifier
