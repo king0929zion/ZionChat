@@ -67,6 +67,7 @@ data class MessageTag(
     val kind: String,
     val title: String,
     val content: String,
+    val status: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
 

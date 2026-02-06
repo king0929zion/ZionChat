@@ -104,11 +104,17 @@ class AppRepository(context: Context) {
 
         val id = safeTrim(tag.id).ifBlank { UUID.randomUUID().toString() }
         val createdAt = tag.createdAt.takeIf { it > 0 } ?: System.currentTimeMillis()
+        val status =
+            tag.status
+                ?.trim()
+                ?.lowercase()
+                ?.takeIf { it == "running" || it == "success" || it == "error" || it == "info" }
         return MessageTag(
             id = id,
             kind = kind.ifBlank { "tag" },
             title = title,
             content = content,
+            status = status,
             createdAt = createdAt
         )
     }
