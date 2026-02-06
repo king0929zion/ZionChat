@@ -589,7 +589,6 @@ fun ChatScreen(navController: NavController) {
 
                     val prettyGson = GsonBuilder().setPrettyPrinting().create()
                     val serversById = availableMcpServers.associateBy { it.id }
-                    val executedSignatures = linkedSetOf<String>()
                     val maxRounds = if (canUseMcp) (if (explicitMcp) 6 else 4) else 1
                     val maxCallsPerRound = if (explicitMcp) 4 else 3
                     val modelId = extractRemoteModelId(selectedModel.id)
@@ -637,10 +636,58 @@ fun ChatScreen(navController: NavController) {
 
                         val roundVisibleRaw = StringBuilder()
                         val roundThinkingRaw = StringBuilder()
+                        val streamedCallBlocks = mutableListOf<String>()
+                        val inlineCallRegex = Regex("(?is)<(?:mcp_call|tool_call)\\b[^>]*>(.*?)</(?:mcp_call|tool_call)>")
+                        val inlineCallStartRegex = Regex("(?is)<(?:mcp_call|tool_call)\\b")
+                        var inlineCallTail = ""
                         var inThink = false
                         var remainder = ""
                         val keepTail = 12
                         var lastUiUpdateMs = 0L
+
+                        fun appendVisibleWithInlineCallExtraction(text: String, flush: Boolean = false) {
+                            if (text.isEmpty() && !flush) return
+                            var source = inlineCallTail + text
+                            inlineCallTail = ""
+                            if (source.isEmpty()) return
+
+                            var cursor = 0
+                            inlineCallRegex.findAll(source).forEach { match ->
+                                if (match.range.first > cursor) {
+                                    roundVisibleRaw.append(source.substring(cursor, match.range.first))
+                                }
+                                val payload = match.groupValues.getOrNull(1)?.trim().orEmpty()
+                                if (payload.isNotBlank()) {
+                                    streamedCallBlocks += payload
+                                }
+                                cursor = match.range.last + 1
+                            }
+
+                            if (cursor >= source.length) return
+                            val remaining = source.substring(cursor)
+                            val openIdx = inlineCallStartRegex.find(remaining)?.range?.first ?: -1
+                            if (openIdx >= 0) {
+                                if (openIdx > 0) {
+                                    roundVisibleRaw.append(remaining.substring(0, openIdx))
+                                }
+                                val tailCandidate = remaining.substring(openIdx)
+                                if (flush) {
+                                    roundVisibleRaw.append(tailCandidate)
+                                } else {
+                                    inlineCallTail = tailCandidate
+                                }
+                            } else if (flush) {
+                                roundVisibleRaw.append(remaining)
+                            } else {
+                                val safeTailLen = 24
+                                if (remaining.length > safeTailLen) {
+                                    roundVisibleRaw.append(remaining.dropLast(safeTailLen))
+                                    inlineCallTail = remaining.takeLast(safeTailLen)
+                                } else {
+                                    inlineCallTail = remaining
+                                }
+                            }
+                        }
 
                         fun appendWithThinkExtraction(input: String) {
                             if (input.isEmpty()) return
@@ -662,14 +709,14 @@ fun ChatScreen(navController: NavController) {
                                     if (next < 0) {
                                         val safeEnd = maxOf(cursor, source.length - keepTail)
                                         if (safeEnd > cursor) {
-                                            roundVisibleRaw.append(source.substring(cursor, safeEnd))
+                                            appendVisibleWithInlineCallExtraction(source.substring(cursor, safeEnd))
                                         }
                                         remainder = source.substring(safeEnd)
                                         return
                                     }
 
                                     if (next > cursor) {
-                                        roundVisibleRaw.append(source.substring(cursor, next))
+                                        appendVisibleWithInlineCallExtraction(source.substring(cursor, next))
                                     }
 
                                     inThink = true
@@ -713,37 +760,46 @@ fun ChatScreen(navController: NavController) {
                             }
                         }
 
-                        chatApiClient.chatCompletionsStream(
-                            provider = resolvedProvider,
-                            modelId = modelId,
-                            messages = requestMessages,
-                            extraHeaders = selectedModel.headers,
-                            reasoningEffort = selectedModel.reasoningEffort,
-                            conversationId = safeConversationId
-                        ).collect { delta ->
-                            delta.reasoning?.takeIf { it.isNotBlank() }?.let { roundThinkingRaw.append(it) }
-                            delta.content?.let { appendWithThinkExtraction(it) }
+                        try {
+                            chatApiClient.chatCompletionsStream(
+                                provider = resolvedProvider,
+                                modelId = modelId,
+                                messages = requestMessages,
+                                extraHeaders = selectedModel.headers,
+                                reasoningEffort = selectedModel.reasoningEffort,
+                                conversationId = safeConversationId
+                            ).collect { delta ->
+                                delta.reasoning?.takeIf { it.isNotBlank() }?.let { roundThinkingRaw.append(it) }
+                                delta.content?.let { appendWithThinkExtraction(it) }
 
-                            val now = System.currentTimeMillis()
-                            val shouldUpdate =
-                                now - lastUiUpdateMs >= 33L || (roundVisibleRaw.length + roundThinkingRaw.length) % 120 == 0
-                            if (shouldUpdate) {
-                                updateAssistantFromCombined(
-                                    roundVisible = roundVisibleRaw.toString(),
-                                    roundThinking = roundThinkingRaw.toString()
-                                )
-                                lastUiUpdateMs = now
+                                val now = System.currentTimeMillis()
+                                val shouldUpdate =
+                                    now - lastUiUpdateMs >= 33L || (roundVisibleRaw.length + roundThinkingRaw.length) % 120 == 0
+                                if (shouldUpdate) {
+                                    updateAssistantFromCombined(
+                                        roundVisible = roundVisibleRaw.toString(),
+                                        roundThinking = roundThinkingRaw.toString()
+                                    )
+                                    lastUiUpdateMs = now
+                                }
+
+                                if (canUseMcp && streamedCallBlocks.isNotEmpty() && !inlineCallStartRegex.containsMatchIn(inlineCallTail)) {
+                                    throw RoundToolCallReadySignal()
+                                }
                             }
+                        } catch (_: RoundToolCallReadySignal) {
+                            // A full <mcp_call> block is ready; stop this round stream early and execute tools.
                         }
 
                         if (remainder.isNotEmpty()) {
                             if (inThink) {
                                 roundThinkingRaw.append(remainder)
                             } else {
-                                roundVisibleRaw.append(remainder)
+                                appendVisibleWithInlineCallExtraction(remainder, flush = true)
                             }
                             remainder = ""
                         }
+                        appendVisibleWithInlineCallExtraction("", flush = true)
 
                         val thinkingSplit = splitThinkingFromContent(roundVisibleRaw.toString())
                         var roundVisible = thinkingSplit.visible
@@ -754,8 +810,9 @@ fun ChatScreen(navController: NavController) {
                         val thinkingCallBlocks = extractInlineMcpCallBlocks(roundThinking)
                         roundThinking = thinkingCallBlocks.visibleText.trim()
 
-                        val allRawCallBlocks = visibleCallBlocks.blocks + thinkingCallBlocks.blocks
+                        val allRawCallBlocks = streamedCallBlocks + visibleCallBlocks.blocks + thinkingCallBlocks.blocks
                         val parseFailedBlocks = mutableListOf<String>()
+                        val roundSeenSignatures = linkedSetOf<String>()
                         val parsedCalls =
                             allRawCallBlocks
                                 .flatMap { block ->
@@ -779,13 +836,7 @@ fun ChatScreen(navController: NavController) {
                                 }
                                 .filter { it.toolName.isNotBlank() }
                                 .filter { call ->
-                                    val signature = buildMcpCallSignature(call)
-                                    if (executedSignatures.contains(signature)) {
-                                        false
-                                    } else {
-                                        executedSignatures.add(signature)
-                                        true
-                                    }
+                                    roundSeenSignatures.add(buildMcpCallSignature(call))
                                 }
                                 .take(maxCallsPerRound)
 
@@ -2552,14 +2603,14 @@ private fun BottomInputArea(
     val actionBackground by animateColorAsState(
         targetValue =
             when {
-                actionIsStop -> Color(0xFFE45454)
+                actionIsStop -> GrayLight
                 sendEnabled -> TextPrimary
                 else -> GrayLight
             },
         animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
     )
     val actionIconTint by animateColorAsState(
-        targetValue = if (actionIsStop || sendEnabled) Color.White else TextSecondary,
+        targetValue = if (sendEnabled) Color.White else TextSecondary,
         animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing)
     )
     val maxTextHeight = if (selectedTool != null) 140.dp else 120.dp
@@ -2825,12 +2876,21 @@ private fun BottomInputArea(
                                     )
                         }
                     ) { stopMode ->
-                        Icon(
-                            imageVector = if (stopMode) AppIcons.Close else AppIcons.Send,
-                            contentDescription = if (stopMode) "Stop" else "Send",
-                            tint = actionIconTint,
-                            modifier = Modifier.size(if (stopMode) 16.dp else 18.dp)
-                        )
+                        if (stopMode) {
+                            Box(
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(Color.White)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = AppIcons.Send,
+                                contentDescription = "Send",
+                                tint = actionIconTint,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -3187,6 +3247,8 @@ private data class ThinkingSplitResult(
     val visible: String,
     val thinking: String
 )
+
+private class RoundToolCallReadySignal : RuntimeException()
 
 private data class InlineMcpCallExtraction(
     val visibleText: String,
