@@ -88,6 +88,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -479,6 +480,7 @@ fun ChatScreen(navController: NavController) {
             // 流式输出
             val assistantMessage = Message(role = "assistant", content = "")
             var assistantTags = emptyList<MessageTag>()
+            val mcpTagAnchors = mutableListOf<McpTagAnchor>()
             var latestAssistantContent = ""
             var latestAssistantReasoning: String? = null
             var dropPendingAssistantOnExit = false
@@ -503,12 +505,17 @@ fun ChatScreen(navController: NavController) {
                 val normalizedReasoning = reasoning?.trim()?.ifBlank { null }
                 latestAssistantContent = content
                 latestAssistantReasoning = normalizedReasoning
-                updateAssistantPending { it.copy(content = content, reasoning = normalizedReasoning) }
+                val contentWithMarkers = insertMcpTagMarkers(content, mcpTagAnchors)
+                updateAssistantPending { it.copy(content = contentWithMarkers, reasoning = normalizedReasoning) }
             }
 
             fun appendAssistantTag(tag: MessageTag) {
                 assistantTags = assistantTags + tag
-                updateAssistantPending { it.copy(tags = assistantTags) }
+                if (tag.kind == "mcp") {
+                    mcpTagAnchors += McpTagAnchor(tag.id, latestAssistantContent.length)
+                }
+                val contentWithMarkers = insertMcpTagMarkers(latestAssistantContent, mcpTagAnchors)
+                updateAssistantPending { it.copy(content = contentWithMarkers, tags = assistantTags) }
             }
 
             fun updateAssistantTag(tagId: String, update: (MessageTag) -> MessageTag) {
@@ -596,7 +603,15 @@ fun ChatScreen(navController: NavController) {
                     val baseMessages = mutableListOf<Message>().apply {
                         if (systemMessage != null) add(systemMessage)
                         if (webContextMessage != null) add(webContextMessage)
-                        addAll(currentMessages)
+                        addAll(
+                            currentMessages.map { msg ->
+                                if (msg.role == "assistant") {
+                                    msg.copy(content = stripMcpTagMarkers(msg.content))
+                                } else {
+                                    msg
+                                }
+                            }
+                        )
                         if (currentMessages.lastOrNull()?.id != userMessage.id) add(userMessage)
                     }
 
@@ -637,9 +652,11 @@ fun ChatScreen(navController: NavController) {
                         val roundVisibleRaw = StringBuilder()
                         val roundThinkingRaw = StringBuilder()
                         val streamedCallBlocks = mutableListOf<String>()
+                        var streamHasReadyValidCall = false
                         val inlineCallRegex = Regex("(?is)<(?:mcp_call|tool_call)\\b[^>]*>(.*?)</(?:mcp_call|tool_call)>")
                         val inlineCallStartRegex = Regex("(?is)<(?:mcp_call|tool_call)\\b")
                         var inlineCallTail = ""
+                        var stoppedForToolCall = false
                         var inThink = false
                         var remainder = ""
                         val keepTail = 12
@@ -659,6 +676,9 @@ fun ChatScreen(navController: NavController) {
                                 val payload = match.groupValues.getOrNull(1)?.trim().orEmpty()
                                 if (payload.isNotBlank()) {
                                     streamedCallBlocks += payload
+                                    if (!streamHasReadyValidCall && parseMcpToolCallsPayload(payload).isNotEmpty()) {
+                                        streamHasReadyValidCall = true
+                                    }
                                 }
                                 cursor = match.range.last + 1
                             }
@@ -760,46 +780,49 @@ fun ChatScreen(navController: NavController) {
                             }
                         }
 
-                        try {
-                            chatApiClient.chatCompletionsStream(
-                                provider = resolvedProvider,
-                                modelId = modelId,
-                                messages = requestMessages,
-                                extraHeaders = selectedModel.headers,
-                                reasoningEffort = selectedModel.reasoningEffort,
-                                conversationId = safeConversationId
-                            ).collect { delta ->
-                                delta.reasoning?.takeIf { it.isNotBlank() }?.let { roundThinkingRaw.append(it) }
-                                delta.content?.let { appendWithThinkExtraction(it) }
+                        chatApiClient.chatCompletionsStream(
+                            provider = resolvedProvider,
+                            modelId = modelId,
+                            messages = requestMessages,
+                            extraHeaders = selectedModel.headers,
+                            reasoningEffort = selectedModel.reasoningEffort,
+                            conversationId = safeConversationId
+                        ).takeWhile { delta ->
+                            delta.reasoning?.takeIf { it.isNotBlank() }?.let { roundThinkingRaw.append(it) }
+                            delta.content?.let { appendWithThinkExtraction(it) }
 
-                                val now = System.currentTimeMillis()
-                                val shouldUpdate =
-                                    now - lastUiUpdateMs >= 33L || (roundVisibleRaw.length + roundThinkingRaw.length) % 120 == 0
-                                if (shouldUpdate) {
-                                    updateAssistantFromCombined(
-                                        roundVisible = roundVisibleRaw.toString(),
-                                        roundThinking = roundThinkingRaw.toString()
-                                    )
-                                    lastUiUpdateMs = now
-                                }
-
-                                if (canUseMcp && streamedCallBlocks.isNotEmpty() && !inlineCallStartRegex.containsMatchIn(inlineCallTail)) {
-                                    throw RoundToolCallReadySignal()
-                                }
+                            val now = System.currentTimeMillis()
+                            val shouldUpdate =
+                                now - lastUiUpdateMs >= 33L || (roundVisibleRaw.length + roundThinkingRaw.length) % 120 == 0
+                            if (shouldUpdate) {
+                                updateAssistantFromCombined(
+                                    roundVisible = roundVisibleRaw.toString(),
+                                    roundThinking = roundThinkingRaw.toString()
+                                )
+                                lastUiUpdateMs = now
                             }
-                        } catch (_: RoundToolCallReadySignal) {
-                            // A full <mcp_call> block is ready; stop this round stream early and execute tools.
-                        }
+
+                            val hasReadyValidCall =
+                                canUseMcp &&
+                                    streamHasReadyValidCall &&
+                                    !inlineCallStartRegex.containsMatchIn(inlineCallTail)
+                            if (hasReadyValidCall) {
+                                stoppedForToolCall = true
+                            }
+                            !hasReadyValidCall
+                        }.collect()
 
                         if (remainder.isNotEmpty()) {
                             if (inThink) {
                                 roundThinkingRaw.append(remainder)
-                            } else {
+                            } else if (!stoppedForToolCall) {
                                 appendVisibleWithInlineCallExtraction(remainder, flush = true)
                             }
                             remainder = ""
                         }
-                        appendVisibleWithInlineCallExtraction("", flush = true)
+                        if (!stoppedForToolCall) {
+                            appendVisibleWithInlineCallExtraction("", flush = true)
+                        }
 
                         val thinkingSplit = splitThinkingFromContent(roundVisibleRaw.toString())
                         var roundVisible = thinkingSplit.visible
@@ -1006,12 +1029,13 @@ fun ChatScreen(navController: NavController) {
 
                     val finalContent = visibleContent.toString().trim()
                     val finalReasoning = thinkingContent.toString().trim().ifBlank { null }
+                    val finalContentWithMarkers = insertMcpTagMarkers(finalContent, mcpTagAnchors)
                     updateAssistantContent(finalContent, finalReasoning)
                     if (finalContent.isNotBlank() || !finalReasoning.isNullOrBlank() || assistantTags.isNotEmpty()) {
                         repository.appendMessage(
                             safeConversationId,
                             assistantMessage.copy(
-                                content = finalContent,
+                                content = finalContentWithMarkers,
                                 reasoning = finalReasoning,
                                 tags = assistantTags.takeIf { it.isNotEmpty() }
                             )
@@ -1143,10 +1167,11 @@ fun ChatScreen(navController: NavController) {
                         ?.messages
                         ?.any { it.id == assistantMessage.id } == true
                 if (!alreadyPersisted && hasPartialOutput) {
+                    val partialContentWithMarkers = insertMcpTagMarkers(partialContent, mcpTagAnchors)
                     repository.appendMessage(
                         safeConversationId,
                         assistantMessage.copy(
-                            content = partialContent,
+                            content = partialContentWithMarkers,
                             reasoning = partialReasoning,
                             tags = assistantTags.takeIf { it.isNotEmpty() }
                         )
@@ -1624,17 +1649,51 @@ fun MessageItem(
                 }
             }
 
-            MarkdownText(
-                markdown = message.content,
-                textStyle = TextStyle(
-                    fontSize = 16.sp,
-                    lineHeight = 24.sp,
-                    color = TextPrimary
-                )
-            )
+            val contentSegments = remember(message.content) { splitContentByMcpTagMarkers(message.content) }
+            val tagsById = remember(message.tags) { message.tags.orEmpty().associateBy { it.id } }
+            val inlineTagIds = remember(contentSegments) {
+                contentSegments.mapNotNull { it.tagId }.toSet()
+            }
 
-            val orderedTags = remember(message.tags) {
-                message.tags.orEmpty().sortedBy { it.createdAt }
+            if (contentSegments.isEmpty()) {
+                MarkdownText(
+                    markdown = stripMcpTagMarkers(message.content),
+                    textStyle = TextStyle(
+                        fontSize = 16.sp,
+                        lineHeight = 24.sp,
+                        color = TextPrimary
+                    )
+                )
+            } else {
+                contentSegments.forEach { segment ->
+                    val text = segment.text
+                    val tagId = segment.tagId
+                    if (!text.isNullOrBlank()) {
+                        MarkdownText(
+                            markdown = text,
+                            textStyle = TextStyle(
+                                fontSize = 16.sp,
+                                lineHeight = 24.sp,
+                                color = TextPrimary
+                            )
+                        )
+                    } else if (!tagId.isNullOrBlank()) {
+                        val tag = tagsById[tagId]
+                        if (tag != null) {
+                            MessageTagRow(
+                                tag = tag,
+                                messageId = message.id,
+                                onShowTag = onShowTag
+                            )
+                        }
+                    }
+                }
+            }
+
+            val orderedTags = remember(message.tags, inlineTagIds) {
+                message.tags.orEmpty()
+                    .filterNot { tag -> inlineTagIds.contains(tag.id) }
+                    .sortedBy { it.createdAt }
             }
             orderedTags.forEach { tag ->
                 MessageTagRow(
@@ -1670,7 +1729,7 @@ fun MessageItem(
                     ActionButton(
                         icon = AppIcons.Copy,
                         onClick = {
-                            clipboardManager.setText(AnnotatedString(message.content))
+                            clipboardManager.setText(AnnotatedString(stripMcpTagMarkers(message.content)))
                         }
                     )
                     ActionButton(icon = AppIcons.Edit, onClick = onEdit)
@@ -1691,7 +1750,7 @@ fun MessageItem(
         MessageOptionsDialog(
             isUser = isUser,
             onCopy = {
-                clipboardManager.setText(AnnotatedString(message.content))
+                clipboardManager.setText(AnnotatedString(stripMcpTagMarkers(message.content)))
                 showMenu = false
             },
             onEdit = {
@@ -1779,12 +1838,6 @@ private fun McpTagDetailCard(tag: MessageTag) {
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(
-            text = "Details",
-            fontSize = 19.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TextPrimary
-        )
         ToolDetailCodeCard(
             title = "Arguments",
             content = argumentsText
@@ -2603,7 +2656,7 @@ private fun BottomInputArea(
     val actionBackground by animateColorAsState(
         targetValue =
             when {
-                actionIsStop -> GrayLight
+                actionIsStop -> TextPrimary
                 sendEnabled -> TextPrimary
                 else -> GrayLight
             },
@@ -2981,7 +3034,8 @@ private fun buildConversationTranscript(
                 }
             append(prefix)
             append(": ")
-            append(msg.content.replace('\n', ' ').trim().take(maxCharsPerMessage))
+            val cleanContent = stripMcpTagMarkers(msg.content)
+            append(cleanContent.replace('\n', ' ').trim().take(maxCharsPerMessage))
             append('\n')
         }
     }.trim()
@@ -3248,12 +3302,95 @@ private data class ThinkingSplitResult(
     val thinking: String
 )
 
-private class RoundToolCallReadySignal : RuntimeException()
+private data class McpTagAnchor(
+    val tagId: String,
+    val charIndex: Int
+)
 
 private data class InlineMcpCallExtraction(
     val visibleText: String,
     val blocks: List<String>
 )
+
+private data class MessageInlineSegment(
+    val text: String? = null,
+    val tagId: String? = null
+)
+
+private val mcpTagMarkerRegex =
+    Regex("(?is)<!--\\s*mcp_tag:([A-Za-z0-9_-]+)\\s*-->")
+
+private fun buildMcpTagMarker(tagId: String): String {
+    return "<!--mcp_tag:${tagId.trim()}-->"
+}
+
+private fun insertMcpTagMarkers(visibleContent: String, anchors: List<McpTagAnchor>): String {
+    if (anchors.isEmpty()) return visibleContent
+    val content = visibleContent
+    val sortedAnchors = anchors.sortedBy { it.charIndex }
+    val sb = StringBuilder()
+    var cursor = 0
+
+    sortedAnchors.forEach { anchor ->
+        val safeId = anchor.tagId.trim()
+        if (safeId.isBlank()) return@forEach
+        val index = anchor.charIndex.coerceIn(0, content.length)
+        if (index > cursor) {
+            sb.append(content.substring(cursor, index))
+        }
+        if (sb.isNotEmpty() && sb.last() != '\n') {
+            sb.append("\n\n")
+        } else if (sb.isNotEmpty()) {
+            sb.append('\n')
+        }
+        sb.append(buildMcpTagMarker(safeId))
+        sb.append("\n\n")
+        cursor = index
+    }
+
+    if (cursor < content.length) {
+        sb.append(content.substring(cursor))
+    }
+    return sb.toString()
+        .replace(Regex("\\n{3,}"), "\n\n")
+        .trim()
+}
+
+private fun splitContentByMcpTagMarkers(content: String): List<MessageInlineSegment> {
+    if (!mcpTagMarkerRegex.containsMatchIn(content)) return emptyList()
+    val result = mutableListOf<MessageInlineSegment>()
+    var cursor = 0
+
+    mcpTagMarkerRegex.findAll(content).forEach { match ->
+        if (match.range.first > cursor) {
+            val text = content.substring(cursor, match.range.first).trim()
+            if (text.isNotBlank()) {
+                result += MessageInlineSegment(text = text)
+            }
+        }
+        val tagId = match.groupValues.getOrNull(1)?.trim().orEmpty()
+        if (tagId.isNotBlank()) {
+            result += MessageInlineSegment(tagId = tagId)
+        }
+        cursor = match.range.last + 1
+    }
+
+    if (cursor < content.length) {
+        val tail = content.substring(cursor).trim()
+        if (tail.isNotBlank()) {
+            result += MessageInlineSegment(text = tail)
+        }
+    }
+    return result
+}
+
+private fun stripMcpTagMarkers(content: String): String {
+    if (content.isBlank()) return ""
+    return content
+        .replace(mcpTagMarkerRegex, " ")
+        .replace(Regex("\\n{3,}"), "\n\n")
+        .trim()
+}
 
 private fun appendTextSection(target: StringBuilder, text: String) {
     val cleaned = text.trim()

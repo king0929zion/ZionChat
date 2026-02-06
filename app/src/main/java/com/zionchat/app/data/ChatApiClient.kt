@@ -28,12 +28,12 @@ class ChatApiClient {
     private val dataUrlRegex = Regex("^data:([^;]+);base64,(.+)$", RegexOption.IGNORE_CASE)
     private val codexModelCache = ConcurrentHashMap<String, CodexModelMeta>()
 
+    @Suppress("UNUSED_PARAMETER")
     private fun buildEffectiveHeaders(
         provider: ProviderConfig,
         extraHeaders: List<HttpHeader>
     ): List<HttpHeader> {
-        val combined = ArrayList<HttpHeader>(provider.headers.size + extraHeaders.size)
-        combined.addAll(provider.headers)
+        val combined = ArrayList<HttpHeader>(extraHeaders.size)
         combined.addAll(extraHeaders)
 
         val map = LinkedHashMap<String, HttpHeader>()
