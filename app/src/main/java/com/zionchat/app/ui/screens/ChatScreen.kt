@@ -834,6 +834,7 @@ fun ChatScreen(navController: NavController) {
                         roundThinking = thinkingCallBlocks.visibleText.trim()
 
                         val allRawCallBlocks = streamedCallBlocks + visibleCallBlocks.blocks + thinkingCallBlocks.blocks
+                        val hadRawCallBlocks = allRawCallBlocks.any { it.isNotBlank() }
                         val parseFailedBlocks = mutableListOf<String>()
                         val roundSeenSignatures = linkedSetOf<String>()
                         val parsedCalls =
@@ -892,14 +893,34 @@ fun ChatScreen(navController: NavController) {
                             baseMessages.add(Message(role = "assistant", content = roundVisible))
                         }
 
-                        if (!canUseMcp || parsedCalls.isEmpty()) {
+                        if (!canUseMcp) {
+                            break
+                        }
+                        if (parsedCalls.isEmpty()) {
+                            if (hadRawCallBlocks && roundIndex < maxRounds) {
+                                baseMessages.add(
+                                    Message(
+                                        role = "system",
+                                        content = buildMcpRoundResultContext(
+                                            roundIndex = roundIndex,
+                                            summary =
+                                                "- Failed to parse executable <mcp_call> payload from the previous reply.\n" +
+                                                    "- Keep the visible reply, then emit a valid JSON payload inside " +
+                                                    "<mcp_call>...</mcp_call>."
+                                        )
+                                    )
+                                )
+                                roundIndex += 1
+                                continue
+                            }
                             break
                         }
 
                         val roundSummary = StringBuilder()
-                        var executedCallCount = 0
+                        var processedCallCount = 0
 
                         parsedCalls.forEach { call ->
+                            processedCallCount += 1
                             fun resolveServer(): McpConfig? {
                                 val serverId = call.serverId.trim()
                                 if (serverId.isNotBlank()) {
@@ -974,7 +995,6 @@ fun ChatScreen(navController: NavController) {
                                 ).getOrElse(::toMcpFailureResult)
                             val elapsedMs = System.currentTimeMillis() - startedAt
 
-                            executedCallCount += 1
                             val compactContent = callResult.content.trim().take(1800)
                             val finalError = (callResult.error ?: callResult.content).trim()
                             val apiError = if (callResult.success) null else extractExplicitApiError(finalError)
@@ -1013,7 +1033,7 @@ fun ChatScreen(navController: NavController) {
                             roundSummary.append('\n')
                         }
 
-                        if (executedCallCount == 0) {
+                        if (processedCallCount == 0) {
                             break
                         }
 
@@ -1800,9 +1820,9 @@ private fun MessageTagRow(
             fontSize = 15.sp,
             fontFamily = SourceSans3,
             fontWeight = FontWeight.SemiBold,
-            color = ThinkingLabelColor,
-            modifier = Modifier.weight(1f)
+            color = ThinkingLabelColor
         )
+        Spacer(modifier = Modifier.width(6.dp))
         if (tagRunning) {
             CircularProgressIndicator(
                 modifier = Modifier.size(13.dp),

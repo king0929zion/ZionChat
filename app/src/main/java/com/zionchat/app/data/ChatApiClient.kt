@@ -16,11 +16,20 @@ import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import kotlin.random.Random
 
 class ChatApiClient {
-    private val client = OkHttpClient()
+    private val client: OkHttpClient =
+        OkHttpClient.Builder()
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(0, TimeUnit.MILLISECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
+            .callTimeout(0, TimeUnit.MILLISECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .build()
     private val gson = Gson()
     private val jsonMediaType = "application/json".toMediaType()
     private val strictJsonMediaType = "application/json".toMediaType()

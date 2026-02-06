@@ -37,8 +37,9 @@ class McpClient {
     private val okHttpClient: OkHttpClient =
         OkHttpClient.Builder()
             .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(5, TimeUnit.MINUTES)
+            .readTimeout(0, TimeUnit.MILLISECONDS)
             .writeTimeout(120, TimeUnit.SECONDS)
+            .callTimeout(0, TimeUnit.MILLISECONDS)
             .followSslRedirects(true)
             .followRedirects(true)
             .build()
