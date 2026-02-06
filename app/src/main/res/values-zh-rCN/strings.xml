@@ -29,5 +29,89 @@
     <string name="language_option_zh">简体中文</string>
     <string name="language_option_zh_subtitle">简体中文</string>
     <string name="language_note">更改会立即生效。部分页面仍可能使用固定文本。</string>
-</resources>
 
+    <string name="profile_default_name">Kendall Williamson</string>
+    <string name="settings_group_my_chatgpt">我的 ChatGPT</string>
+    <string name="settings_item_personalization">个性化</string>
+    <string name="settings_group_appearance">外观</string>
+    <string name="settings_item_appearance">外观</string>
+    <string name="appearance_option_system">跟随系统</string>
+    <string name="appearance_option_light">浅色</string>
+    <string name="appearance_option_dark">深色</string>
+    <string name="settings_item_accent_color">强调色</string>
+    <string name="settings_item_edit_profile">编辑资料</string>
+    <string name="edit_profile_title">编辑资料</string>
+    <string name="edit_profile_tap_change_photo">点击更换头像</string>
+    <string name="edit_profile_name">名称</string>
+
+    <string name="common_add">添加</string>
+    <string name="common_save">保存</string>
+    <string name="common_cancel">取消</string>
+    <string name="common_continue">继续</string>
+
+    <string name="accent_color_default">默认</string>
+    <string name="accent_color_blue">蓝色</string>
+    <string name="accent_color_green">绿色</string>
+    <string name="accent_color_yellow">黄色</string>
+    <string name="accent_color_pink">粉色</string>
+    <string name="accent_color_orange">橙色</string>
+    <string name="accent_color_purple">紫色</string>
+
+    <string name="personalization_nickname">昵称</string>
+    <string name="personalization_nickname_placeholder">输入你的昵称</string>
+    <string name="personalization_custom_instructions">自定义指令</string>
+    <string name="personalization_instructions_placeholder">你希望 ChatGPT 了解你哪些信息以便提供更好的回答？\n\n示例：我是一名软件工程师，偏好简洁回答，关注 AI 技术。</string>
+    <string name="personalization_memory">记忆</string>
+    <string name="personalization_memories">记忆</string>
+    <string name="personalization_memories_count">%1$d 条记忆</string>
+
+    <string name="oauth_badge">OAuth</string>
+    <string name="model_services_configure_models">配置模型</string>
+
+    <string name="add_provider_tap_change_avatar">点击更换头像</string>
+    <string name="add_provider_select_avatar">选择头像</string>
+    <string name="add_provider_import_from_gallery">从相册导入</string>
+
+    <string name="add_oauth_provider_name">供应商名称</string>
+    <string name="add_oauth_provider_name_placeholder">输入供应商名称</string>
+    <string name="add_oauth_authentication">认证</string>
+    <string name="add_oauth_step1_tip">通过 OAuth 连接你的账号以启用该供应商</string>
+    <string name="add_oauth_connect">使用 OAuth 连接</string>
+    <string name="add_oauth_step2_tip">请输入 OAuth 回调 URL</string>
+    <string name="add_oauth_connected">OAuth 已连接</string>
+    <string name="add_oauth_connected_tip">现在你可以为该供应商选择模型</string>
+    <string name="add_oauth_disconnect">断开连接</string>
+
+    <string name="error_provider_name_required">供应商名称不能为空。</string>
+    <string name="error_oauth_complete_first">请先完成 OAuth。</string>
+    <string name="error_select_oauth_provider">请选择一个 OAuth 供应商。</string>
+    <string name="error_open_browser_with_reason">打开浏览器失败：%1$s</string>
+    <string name="error_start_oauth_first">请先启动 OAuth 流程。</string>
+    <string name="error_invalid_callback_url">回调 URL 无效。</string>
+    <string name="error_missing_authorization_code">回调 URL 中缺少授权码。</string>
+    <string name="error_oauth_state_mismatch">OAuth 状态不匹配，请重试。</string>
+    <string name="error_load_models_with_reason">加载模型失败：%1$s</string>
+
+    <string name="mcp_no_tools">暂无 MCP 工具</string>
+    <string name="mcp_tap_add_first">点击 + 添加你的第一个 MCP</string>
+    <string name="mcp_add_title">添加 MCP</string>
+    <string name="mcp_edit_title">编辑 MCP</string>
+    <string name="mcp_protocol">协议</string>
+    <string name="mcp_protocol_http">HTTP</string>
+    <string name="mcp_protocol_sse">SSE</string>
+    <string name="mcp_name">名称</string>
+    <string name="mcp_name_placeholder">输入 MCP 名称</string>
+    <string name="mcp_server_url">服务地址</string>
+    <string name="mcp_description_optional">描述（可选）</string>
+    <string name="mcp_description_placeholder">简要描述</string>
+    <string name="mcp_custom_headers">自定义请求头</string>
+
+    <string name="thinking_label">思考</string>
+    <string name="tool_label">工具</string>
+    <string name="chat_placeholder_ask_anything">随便问点什么</string>
+    <string name="chat_tool_web_search">网页搜索</string>
+    <string name="chat_tool_web_search_subtitle">获取实时资讯与信息</string>
+    <string name="chat_tool_create_image">创建图片</string>
+    <string name="chat_tool_create_image_subtitle">把想法可视化</string>
+    <string name="chat_tool_mcp_subtitle">连接外部工具</string>
+</resources>

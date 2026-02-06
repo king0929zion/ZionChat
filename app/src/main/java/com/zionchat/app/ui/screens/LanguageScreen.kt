@@ -41,7 +41,6 @@ import com.zionchat.app.ui.theme.Surface
 import com.zionchat.app.ui.theme.TextPrimary
 import com.zionchat.app.ui.theme.TextSecondary
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 private data class LanguageOption(
     val code: String,
@@ -57,6 +56,7 @@ fun LanguageScreen(navController: NavController) {
     val options =
         remember {
             listOf(
+                LanguageOption(code = "system", titleRes = R.string.language_option_system),
                 LanguageOption(code = "en", titleRes = R.string.language_option_en),
                 LanguageOption(code = "zh", titleRes = R.string.language_option_zh),
             )
@@ -64,11 +64,8 @@ fun LanguageScreen(navController: NavController) {
     val selectedCode =
         remember(current) {
             when (current.trim().lowercase()) {
-                "en", "zh" -> current.trim().lowercase()
-                else -> {
-                    val localeTag = Locale.getDefault().toLanguageTag().lowercase()
-                    if (localeTag.startsWith("zh")) "zh" else "en"
-                }
+                "en", "zh", "system" -> current.trim().lowercase()
+                else -> "system"
             }
         }
 

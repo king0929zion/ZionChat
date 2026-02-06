@@ -25,8 +25,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavController
 import com.zionchat.app.LocalAppRepository
+import com.zionchat.app.R
 import com.zionchat.app.data.HttpHeader
 import com.zionchat.app.data.McpClient
 import com.zionchat.app.data.McpConfig
@@ -58,7 +60,7 @@ fun McpScreen(navController: NavController) {
     Box(modifier = Modifier.fillMaxSize().background(Background)) {
         Column(modifier = Modifier.fillMaxSize()) {
             PageTopBar(
-                title = "MCP Tools",
+                title = stringResource(R.string.settings_item_mcp_tools),
                 onBack = { navController.navigateUp() },
                 trailing = {
                     Box(
@@ -74,7 +76,7 @@ fun McpScreen(navController: NavController) {
                     ) {
                         Icon(
                             imageVector = AppIcons.Plus,
-                            contentDescription = "Add",
+                            contentDescription = stringResource(R.string.common_add),
                             tint = TextPrimary,
                             modifier = Modifier.size(22.dp)
                         )
@@ -166,7 +168,7 @@ fun McpEmptyState() {
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(
-            text = "No MCP Tools",
+            text = stringResource(R.string.mcp_no_tools),
             fontSize = 17.sp,
             color = TextSecondary
         )
@@ -174,7 +176,7 @@ fun McpEmptyState() {
         Spacer(modifier = Modifier.height(4.dp))
         
         Text(
-            text = "Tap + to add your first MCP",
+            text = stringResource(R.string.mcp_tap_add_first),
             fontSize = 14.sp,
             color = TextSecondary.copy(alpha = 0.7f)
         )
@@ -265,7 +267,7 @@ fun McpListItem(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = if (mcp.protocol == McpProtocol.HTTP) AppIcons.Globe else AppIcons.Stream,
+                    imageVector = AppIcons.Globe,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                     tint = TextSecondary
@@ -327,7 +329,7 @@ fun McpEditSheetContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (isEditing) "Edit MCP" else "Add MCP",
+                text = if (isEditing) stringResource(R.string.mcp_edit_title) else stringResource(R.string.mcp_add_title),
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = SourceSans3,
@@ -362,7 +364,7 @@ fun McpEditSheetContent(
             // Protocol Selection
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    text = "Protocol",
+                    text = stringResource(R.string.mcp_protocol),
                     fontSize = 13.sp,
                     fontFamily = SourceSans3,
                     color = TextSecondary
@@ -376,13 +378,13 @@ fun McpEditSheetContent(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     ProtocolOption(
-                        text = "HTTP",
+                        text = stringResource(R.string.mcp_protocol_http),
                         selected = protocol == McpProtocol.HTTP,
                         onClick = { protocol = McpProtocol.HTTP },
                         modifier = Modifier.weight(1f)
                     )
                     ProtocolOption(
-                        text = "SSE",
+                        text = stringResource(R.string.mcp_protocol_sse),
                         selected = protocol == McpProtocol.SSE,
                         onClick = { protocol = McpProtocol.SSE },
                         modifier = Modifier.weight(1f)
@@ -392,15 +394,15 @@ fun McpEditSheetContent(
             
             // Name input
             McpConfigInputField(
-                label = "Name",
+                label = stringResource(R.string.mcp_name),
                 value = name,
                 onValueChange = { name = it },
-                placeholder = "Enter MCP name"
+                placeholder = stringResource(R.string.mcp_name_placeholder)
             )
             
             // URL input
             McpConfigInputField(
-                label = "Server URL",
+                label = stringResource(R.string.mcp_server_url),
                 value = url,
                 onValueChange = { url = it },
                 placeholder = "https://api.example.com/mcp"
@@ -408,13 +410,13 @@ fun McpEditSheetContent(
             
             // Description input
             McpConfigInputField(
-                label = "Description (Optional)",
+                label = stringResource(R.string.mcp_description_optional),
                 value = description,
                 onValueChange = { description = it },
-                placeholder = "Brief description"
+                placeholder = stringResource(R.string.mcp_description_placeholder)
             )
             
-            HeadersEditorCard(headers = headers, title = "Custom Headers")
+            HeadersEditorCard(headers = headers, title = stringResource(R.string.mcp_custom_headers))
             Spacer(modifier = Modifier.height(8.dp))
         }
         
@@ -435,7 +437,7 @@ fun McpEditSheetContent(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text(
-                    text = "Cancel",
+                    text = stringResource(R.string.common_cancel),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.padding(vertical = 6.dp)
@@ -475,7 +477,7 @@ fun McpEditSheetContent(
                 enabled = name.isNotBlank() && url.isNotBlank()
             ) {
                 Text(
-                    text = "Save",
+                    text = stringResource(R.string.common_save),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.padding(vertical = 6.dp)

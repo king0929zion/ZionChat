@@ -29,4 +29,89 @@
     <string name="language_option_zh">Chinese (Simplified)</string>
     <string name="language_option_zh_subtitle">Chinese (Simplified)</string>
     <string name="language_note">Changes apply immediately. Some screens may still use fixed text.</string>
+
+    <string name="profile_default_name">Kendall Williamson</string>
+    <string name="settings_group_my_chatgpt">My ChatGPT</string>
+    <string name="settings_item_personalization">Personalization</string>
+    <string name="settings_group_appearance">Appearance</string>
+    <string name="settings_item_appearance">Appearance</string>
+    <string name="appearance_option_system">System</string>
+    <string name="appearance_option_light">Light</string>
+    <string name="appearance_option_dark">Dark</string>
+    <string name="settings_item_accent_color">Accent color</string>
+    <string name="settings_item_edit_profile">Edit profile</string>
+    <string name="edit_profile_title">Edit Profile</string>
+    <string name="edit_profile_tap_change_photo">Tap to change photo</string>
+    <string name="edit_profile_name">Name</string>
+
+    <string name="common_add">Add</string>
+    <string name="common_save">Save</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_continue">Continue</string>
+
+    <string name="accent_color_default">Default</string>
+    <string name="accent_color_blue">Blue</string>
+    <string name="accent_color_green">Green</string>
+    <string name="accent_color_yellow">Yellow</string>
+    <string name="accent_color_pink">Pink</string>
+    <string name="accent_color_orange">Orange</string>
+    <string name="accent_color_purple">Purple</string>
+
+    <string name="personalization_nickname">Nickname</string>
+    <string name="personalization_nickname_placeholder">Enter your nickname</string>
+    <string name="personalization_custom_instructions">Custom Instructions</string>
+    <string name="personalization_instructions_placeholder">What would you like ChatGPT to know about you to provide better responses?\n\nExample: I work as a software engineer, prefer concise answers, and am interested in AI technology.</string>
+    <string name="personalization_memory">Memory</string>
+    <string name="personalization_memories">Memories</string>
+    <string name="personalization_memories_count">%1$d memories</string>
+
+    <string name="oauth_badge">OAuth</string>
+    <string name="model_services_configure_models">Configure models</string>
+
+    <string name="add_provider_tap_change_avatar">Tap to change avatar</string>
+    <string name="add_provider_select_avatar">Select Avatar</string>
+    <string name="add_provider_import_from_gallery">Import from Gallery</string>
+
+    <string name="add_oauth_provider_name">Provider Name</string>
+    <string name="add_oauth_provider_name_placeholder">Enter provider name</string>
+    <string name="add_oauth_authentication">Authentication</string>
+    <string name="add_oauth_step1_tip">Connect your account via OAuth to enable this provider</string>
+    <string name="add_oauth_connect">Connect with OAuth</string>
+    <string name="add_oauth_step2_tip">Please enter your OAuth callback URL</string>
+    <string name="add_oauth_connected">OAuth Connected!</string>
+    <string name="add_oauth_connected_tip">You can now select models from this provider</string>
+    <string name="add_oauth_disconnect">Disconnect</string>
+
+    <string name="error_provider_name_required">Provider name is required.</string>
+    <string name="error_oauth_complete_first">Please complete OAuth first.</string>
+    <string name="error_select_oauth_provider">Please select an OAuth provider.</string>
+    <string name="error_open_browser_with_reason">Failed to open browser: %1$s</string>
+    <string name="error_start_oauth_first">Please start OAuth first.</string>
+    <string name="error_invalid_callback_url">Invalid callback URL.</string>
+    <string name="error_missing_authorization_code">Missing authorization code in callback URL.</string>
+    <string name="error_oauth_state_mismatch">OAuth state mismatch. Please retry.</string>
+    <string name="error_load_models_with_reason">Failed to load models: %1$s</string>
+
+    <string name="mcp_no_tools">No MCP Tools</string>
+    <string name="mcp_tap_add_first">Tap + to add your first MCP</string>
+    <string name="mcp_add_title">Add MCP</string>
+    <string name="mcp_edit_title">Edit MCP</string>
+    <string name="mcp_protocol">Protocol</string>
+    <string name="mcp_protocol_http">HTTP</string>
+    <string name="mcp_protocol_sse">SSE</string>
+    <string name="mcp_name">Name</string>
+    <string name="mcp_name_placeholder">Enter MCP name</string>
+    <string name="mcp_server_url">Server URL</string>
+    <string name="mcp_description_optional">Description (Optional)</string>
+    <string name="mcp_description_placeholder">Brief description</string>
+    <string name="mcp_custom_headers">Custom Headers</string>
+
+    <string name="thinking_label">Thinking</string>
+    <string name="tool_label">Tool</string>
+    <string name="chat_placeholder_ask_anything">Ask anything</string>
+    <string name="chat_tool_web_search">Web search</string>
+    <string name="chat_tool_web_search_subtitle">Find real-time news and info</string>
+    <string name="chat_tool_create_image">Create image</string>
+    <string name="chat_tool_create_image_subtitle">Visualize anything</string>
+    <string name="chat_tool_mcp_subtitle">Connect external tools</string>
 </resources>

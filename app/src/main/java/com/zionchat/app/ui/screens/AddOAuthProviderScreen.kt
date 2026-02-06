@@ -30,13 +30,16 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
+import com.zionchat.app.R
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.LocalChatApiClient
 import com.zionchat.app.LocalOAuthClient
@@ -44,6 +47,8 @@ import com.zionchat.app.data.ModelConfig
 import com.zionchat.app.data.OAuthClient
 import com.zionchat.app.data.ProviderConfig
 import com.zionchat.app.data.buildModelStorageId
+import com.zionchat.app.data.findProviderPreset
+import com.zionchat.app.ui.components.AssetIcon
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.SourceSans3
 import com.zionchat.app.ui.components.pressableScale
@@ -128,11 +133,11 @@ fun AddOAuthProviderScreen(
                     errorText = null
                     val provider = connectedProvider
                     if (providerName.isBlank()) {
-                        errorText = "Provider name is required."
+                        errorText = context.getString(R.string.error_provider_name_required)
                         return@AddProviderTopBar
                     }
                     if (currentStep != OAuthStep.STEP_3_COMPLETED || provider == null) {
-                        errorText = "Please complete OAuth first."
+                        errorText = context.getString(R.string.error_oauth_complete_first)
                         return@AddProviderTopBar
                     }
                     scope.launch {
@@ -182,7 +187,7 @@ fun AddOAuthProviderScreen(
                         errorText = null
                         val provider = resolvedOauthProvider()
                         if (provider == null) {
-                            errorText = "Please select an OAuth provider."
+                            errorText = context.getString(R.string.error_select_oauth_provider)
                             return@OAuthSection
                         }
                         val start =
@@ -196,19 +201,22 @@ fun AddOAuthProviderScreen(
                         runCatching {
                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(start.authUrl)))
                         }.onFailure { throwable ->
-                            errorText = "Failed to open browser: ${throwable.message ?: throwable.toString()}"
+                            errorText = context.getString(
+                                R.string.error_open_browser_with_reason,
+                                throwable.message ?: throwable.toString()
+                            )
                         }
                     },
                     onSubmitCallback = {
                         if (isWorking) return@OAuthSection
                         val start = oauthStart
                         if (start == null) {
-                            errorText = "Please start OAuth first."
+                            errorText = context.getString(R.string.error_start_oauth_first)
                             return@OAuthSection
                         }
                         val parsed = oauthClient.parseCallback(callbackUrl)
                         if (parsed == null) {
-                            errorText = "Invalid callback URL."
+                            errorText = context.getString(R.string.error_invalid_callback_url)
                             return@OAuthSection
                         }
                         if (!parsed.error.isNullOrBlank()) {
@@ -217,11 +225,11 @@ fun AddOAuthProviderScreen(
                         }
                         val code = parsed.code?.trim().orEmpty()
                         if (code.isBlank()) {
-                            errorText = "Missing authorization code in callback URL."
+                            errorText = context.getString(R.string.error_missing_authorization_code)
                             return@OAuthSection
                         }
                         if (parsed.state?.trim().orEmpty() != start.state.trim()) {
-                            errorText = "OAuth state mismatch. Please retry."
+                            errorText = context.getString(R.string.error_oauth_state_mismatch)
                             return@OAuthSection
                         }
 
@@ -278,7 +286,10 @@ fun AddOAuthProviderScreen(
 
                                 val modelIds =
                                     chatApiClient.listModels(providerConfig).getOrElse { throwable ->
-                                        errorText = "Failed to load models: ${throwable.message ?: throwable.toString()}"
+                                        errorText = context.getString(
+                                            R.string.error_load_models_with_reason,
+                                            throwable.message ?: throwable.toString()
+                                        )
                                         emptyList()
                                     }
                                 val enabledSet = suggestEnabledModels(start.provider, modelIds).toSet()
@@ -357,13 +368,13 @@ fun AddOAuthProviderScreen(
                     ) {
                         Column {
                             Text(
-                                text = "Models",
+                                text = stringResource(R.string.models),
                                 fontSize = 13.sp,
                                 fontFamily = SourceSans3,
                                 color = Color(0xFF8E8E93)
                             )
                             Text(
-                                text = "Configure models",
+                                text = stringResource(R.string.model_services_configure_models),
                                 fontSize = 17.sp,
                                 fontFamily = SourceSans3,
                                 color = Color(0xFF1C1C1E),
@@ -438,7 +449,7 @@ private fun AddProviderTopBar(
 
         // 标题
         Text(
-            text = "Add Provider",
+            text = stringResource(R.string.add_provider),
             fontSize = 17.sp,
             fontWeight = FontWeight.SemiBold,
             fontFamily = SourceSans3,
@@ -471,6 +482,7 @@ private fun AvatarSection(
     selectedAvatar: String,
     onAvatarClick: () -> Unit
 ) {
+    val iconAsset = remember(selectedAvatar) { findProviderPreset(selectedAvatar)?.iconAsset }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -490,20 +502,29 @@ private fun AvatarSection(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            // 这里应该显示实际的 provider 图标
-            // 使用一个简单的占位符
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFFF2F2F7)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = selectedAvatar.take(1).uppercase(),
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1C1C1E)
+            if (!iconAsset.isNullOrBlank()) {
+                AssetIcon(
+                    assetFileName = iconAsset,
+                    contentDescription = selectedAvatar,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(10.dp),
+                    contentScale = ContentScale.Fit
                 )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFFF2F2F7)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppIcons.ChatGPTLogo,
+                        contentDescription = null,
+                        tint = Color(0xFF1C1C1E),
+                        modifier = Modifier.size(30.dp)
+                    )
+                }
             }
 
             // 编辑图标覆盖层 (hover效果在移动端显示为常显或点击时显示)
@@ -525,7 +546,7 @@ private fun AvatarSection(
         Spacer(modifier = Modifier.height(12.dp))
 
         Text(
-            text = "Tap to change avatar",
+            text = stringResource(R.string.add_provider_tap_change_avatar),
             fontSize = 13.sp,
             color = Color(0xFF8E8E93),
             fontFamily = SourceSans3
@@ -593,7 +614,7 @@ private fun AvatarSelectionModal(
 
                     // 标题
                     Text(
-                        text = "Select Avatar",
+                        text = stringResource(R.string.add_provider_select_avatar),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF1C1C1E),
@@ -612,6 +633,7 @@ private fun AvatarSelectionModal(
                             ) {
                                 row.forEach { avatar ->
                                     val isSelected = avatar == selectedAvatar
+                                    val avatarAsset = findProviderPreset(avatar)?.iconAsset.orEmpty()
                                     Box(
                                         modifier = Modifier
                                             .size(48.dp)
@@ -625,12 +647,23 @@ private fun AvatarSelectionModal(
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(
-                                            text = avatar.take(1).uppercase(),
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = if (isSelected) Color.White else Color(0xFF1C1C1E)
-                                        )
+                                        if (avatarAsset.isNotBlank()) {
+                                            AssetIcon(
+                                                assetFileName = avatarAsset,
+                                                contentDescription = avatar,
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .padding(8.dp),
+                                                contentScale = ContentScale.Fit
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = AppIcons.ChatGPTLogo,
+                                                contentDescription = null,
+                                                tint = if (isSelected) Color.White else Color(0xFF1C1C1E),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -660,7 +693,7 @@ private fun AvatarSelectionModal(
                                 modifier = Modifier.size(20.dp)
                             )
                             Text(
-                                text = "Import from Gallery",
+                                text = stringResource(R.string.add_provider_import_from_gallery),
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color(0xFF1C1C1E),
@@ -677,7 +710,7 @@ private fun AvatarSelectionModal(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "Cancel",
+                            text = stringResource(R.string.common_cancel),
                             fontSize = 16.sp,
                             color = Color(0xFF8E8E93),
                             fontFamily = SourceSans3
@@ -702,7 +735,7 @@ private fun ProviderNameInput(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
             Text(
-                text = "Provider Name",
+                text = stringResource(R.string.add_oauth_provider_name),
                 fontSize = 13.sp,
                 color = Color(0xFF8E8E93),
                 fontFamily = SourceSans3
@@ -723,7 +756,7 @@ private fun ProviderNameInput(
                     Box {
                         if (value.isEmpty()) {
                             Text(
-                                text = "Enter provider name",
+                                text = stringResource(R.string.add_oauth_provider_name_placeholder),
                                 fontSize = 17.sp,
                                 color = Color(0xFFC7C7CC),
                                 fontFamily = SourceSans3
@@ -761,7 +794,7 @@ private fun OAuthSection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Authentication",
+                    text = stringResource(R.string.add_oauth_authentication),
                     fontSize = 13.sp,
                     color = Color(0xFF8E8E93),
                     fontFamily = SourceSans3
@@ -773,9 +806,9 @@ private fun OAuthSection(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(
-                        text = "OAuth 2.0",
+                        text = stringResource(R.string.oauth_badge),
                         fontSize = 12.sp,
-                        color = Color(0xFF007AFF),
+                        color = Color(0xFF1C1C1E),
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         fontFamily = SourceSans3
@@ -907,7 +940,7 @@ private fun Step1Content(onStartOAuth: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Connect your account via OAuth to enable this provider",
+            text = stringResource(R.string.add_oauth_step1_tip),
             fontSize = 14.sp,
             color = Color(0xFF6B6B6B),
             fontFamily = SourceSans3,
@@ -934,7 +967,7 @@ private fun Step1Content(onStartOAuth: () -> Unit) {
                     modifier = Modifier.size(20.dp)
                 )
                 Text(
-                    text = "Connect with OAuth",
+                    text = stringResource(R.string.add_oauth_connect),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.White,
@@ -954,7 +987,7 @@ private fun Step2Content(
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "Please enter your OAuth callback URL",
+            text = stringResource(R.string.add_oauth_step2_tip),
             fontSize = 14.sp,
             color = Color(0xFF6B6B6B),
             fontFamily = SourceSans3,
@@ -1011,7 +1044,7 @@ private fun Step2Content(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Cancel",
+                    text = stringResource(R.string.common_cancel),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color(0xFF1C1C1E),
@@ -1030,7 +1063,7 @@ private fun Step2Content(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Continue",
+                    text = stringResource(R.string.common_continue),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.White,
@@ -1066,7 +1099,7 @@ private fun Step3Content(onReset: () -> Unit) {
         Spacer(modifier = Modifier.height(12.dp))
 
         Text(
-            text = "OAuth Connected!",
+            text = stringResource(R.string.add_oauth_connected),
             fontSize = 17.sp,
             fontWeight = FontWeight.SemiBold,
             color = Color(0xFF1C1C1E),
@@ -1076,7 +1109,7 @@ private fun Step3Content(onReset: () -> Unit) {
         Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            text = "You can now select models from this provider",
+            text = stringResource(R.string.add_oauth_connected_tip),
             fontSize = 13.sp,
             color = Color(0xFF8E8E93),
             fontFamily = SourceSans3
@@ -1086,7 +1119,7 @@ private fun Step3Content(onReset: () -> Unit) {
 
         TextButton(onClick = onReset) {
             Text(
-                text = "Disconnect",
+                text = stringResource(R.string.add_oauth_disconnect),
                 fontSize = 14.sp,
                 color = Color(0xFF1C1C1E).copy(alpha = 0.6f),
                 fontFamily = SourceSans3

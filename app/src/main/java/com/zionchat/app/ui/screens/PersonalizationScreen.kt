@@ -18,11 +18,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.zionchat.app.R
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.ui.components.PageTopBar
 import com.zionchat.app.ui.icons.AppIcons
@@ -85,7 +87,7 @@ fun PersonalizationScreen(navController: NavController) {
             .background(Background)
     ) {
         PageTopBar(
-            title = "Personalization",
+            title = stringResource(R.string.settings_item_personalization),
             onBack = { navController.navigateUp() }
         )
 
@@ -97,7 +99,7 @@ fun PersonalizationScreen(navController: NavController) {
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            SectionTitle(title = "Nickname")
+            SectionTitle(title = stringResource(R.string.personalization_nickname))
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -117,7 +119,7 @@ fun PersonalizationScreen(navController: NavController) {
                             Box(modifier = Modifier.fillMaxWidth()) {
                                 if (nickname.isBlank()) {
                                     Text(
-                                        text = "Enter your nickname",
+                                        text = stringResource(R.string.personalization_nickname_placeholder),
                                         fontSize = 16.sp,
                                         color = Color(0xFFC7C7CC)
                                     )
@@ -131,7 +133,7 @@ fun PersonalizationScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            SectionTitle(title = "Custom Instructions")
+            SectionTitle(title = stringResource(R.string.personalization_custom_instructions))
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -157,7 +159,7 @@ fun PersonalizationScreen(navController: NavController) {
                             Box(modifier = Modifier.fillMaxSize()) {
                                 if (instructions.isBlank()) {
                                     Text(
-                                        text = "What would you like ChatGPT to know about you to provide better responses?\n\nExample: I work as a software engineer, prefer concise answers, and am interested in AI technology.",
+                                        text = stringResource(R.string.personalization_instructions_placeholder),
                                         fontSize = 16.sp,
                                         color = Color(0xFFC7C7CC),
                                         lineHeight = 22.sp
@@ -172,7 +174,7 @@ fun PersonalizationScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            SectionTitle(title = "Memory")
+            SectionTitle(title = stringResource(R.string.personalization_memory))
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -196,14 +198,14 @@ fun PersonalizationScreen(navController: NavController) {
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "Memories",
+                        text = stringResource(R.string.personalization_memories),
                         fontSize = 16.sp,
                         fontFamily = SourceSans3,
                         color = TextPrimary,
                         modifier = Modifier.weight(1f)
                     )
                     Text(
-                        text = "${memories.size} memories",
+                        text = stringResource(R.string.personalization_memories_count, memories.size),
                         fontSize = 15.sp,
                         color = TextSecondary
                     )

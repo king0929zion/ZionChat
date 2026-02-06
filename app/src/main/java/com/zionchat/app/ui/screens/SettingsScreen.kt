@@ -1,5 +1,7 @@
 package com.zionchat.app.ui.screens
 
+import android.content.Intent
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.animateFloatAsState
@@ -78,6 +80,7 @@ fun SettingsScreen(navController: NavController) {
     val nickname by repository.nicknameFlow.collectAsState(initial = "")
     val avatarUri by repository.avatarUriFlow.collectAsState(initial = "")
     val appLanguage by repository.appLanguageFlow.collectAsState(initial = "system")
+    val appAccentColor by repository.appAccentColorFlow.collectAsState(initial = "default")
 
     var showEditProfile by remember { mutableStateOf(false) }
 
@@ -85,7 +88,6 @@ fun SettingsScreen(navController: NavController) {
     var showAppearanceMenu by remember { mutableStateOf(false) }
     var showAccentColorMenu by remember { mutableStateOf(false) }
     var selectedAppearance by remember { mutableStateOf("light") }
-    var selectedAccentColor by remember { mutableStateOf("default") }
 
     // 菜单锚点位置
     var appearanceAnchorY by remember { mutableFloatStateOf(0f) }
@@ -98,13 +100,23 @@ fun SettingsScreen(navController: NavController) {
             ?: models.firstOrNull { extractRemoteModelId(it.id) == id }?.displayName
     }
 
-    val displayName = nickname.takeIf { it.isNotBlank() } ?: "Kendall Williamson"
+    val displayName = nickname.takeIf { it.isNotBlank() } ?: stringResource(R.string.profile_default_name)
     val screenBackdrop = rememberLayerBackdrop()
     val languageLabel =
         when (appLanguage.trim().lowercase()) {
             "zh" -> stringResource(R.string.language_option_zh)
             "en" -> stringResource(R.string.language_option_en)
             else -> stringResource(R.string.language_option_system)
+        }
+    val accentColorLabel =
+        when (appAccentColor.trim().lowercase()) {
+            "blue" -> stringResource(R.string.accent_color_blue)
+            "green" -> stringResource(R.string.accent_color_green)
+            "yellow" -> stringResource(R.string.accent_color_yellow)
+            "pink" -> stringResource(R.string.accent_color_pink)
+            "orange" -> stringResource(R.string.accent_color_orange)
+            "purple" -> stringResource(R.string.accent_color_purple)
+            else -> stringResource(R.string.accent_color_default)
         }
 
     Scaffold(
@@ -130,10 +142,10 @@ fun SettingsScreen(navController: NavController) {
                 )
 
                 // My ChatGPT 分组
-                SettingsGroup(title = "My ChatGPT", itemCount = 2) {
+                SettingsGroup(title = stringResource(R.string.settings_group_my_chatgpt), itemCount = 2) {
                     SettingsItem(
                         icon = { Icon(AppIcons.Personalization, null, Modifier.size(22.dp), tint = Color.Unspecified) },
-                        label = "Personalization",
+                        label = stringResource(R.string.settings_item_personalization),
                         showDivider = true,
                         onClick = { navController.navigate("personalization") }
                     )
@@ -146,24 +158,24 @@ fun SettingsScreen(navController: NavController) {
                                 tint = Color.Unspecified
                             )
                         },
-                        label = "Apps",
+                        label = stringResource(R.string.apps),
                         onClick = { }
                     )
                 }
 
                 // Appearance 分组
-                SettingsGroup(title = "Appearance", itemCount = 2) {
+                SettingsGroup(title = stringResource(R.string.settings_group_appearance), itemCount = 2) {
                     Box(modifier = Modifier.onGloballyPositioned { coordinates ->
                         appearanceAnchorY = coordinates.positionInWindow().y
                     }) {
                         SettingsItem(
                             icon = { Icon(AppIcons.Appearance, null, Modifier.size(22.dp), tint = Color.Unspecified) },
-                            label = "Appearance",
+                            label = stringResource(R.string.settings_item_appearance),
                             value = when(selectedAppearance) {
-                                "system" -> "System"
-                                "light" -> "Light"
-                                "dark" -> "Dark"
-                                else -> "Light"
+                                "system" -> stringResource(R.string.appearance_option_system)
+                                "light" -> stringResource(R.string.appearance_option_light)
+                                "dark" -> stringResource(R.string.appearance_option_dark)
+                                else -> stringResource(R.string.appearance_option_light)
                             },
                             showChevron = true,
                             showDivider = true,
@@ -178,8 +190,8 @@ fun SettingsScreen(navController: NavController) {
                     }) {
                         SettingsItem(
                             icon = { Icon(AppIcons.Accent, null, Modifier.size(22.dp), tint = Color.Unspecified) },
-                            label = "Accent color",
-                            value = selectedAccentColor.replaceFirstChar { it.uppercase() },
+                            label = stringResource(R.string.settings_item_accent_color),
+                            value = accentColorLabel,
                             showChevron = true,
                             onClick = {
                                 showAppearanceMenu = false
@@ -260,7 +272,7 @@ fun SettingsScreen(navController: NavController) {
     EditProfileModal(
         visible = showEditProfile,
         onDismiss = { showEditProfile = false },
-        currentNickname = displayName,
+        currentNickname = nickname,
         currentAvatarUri = avatarUri,
         onAutoSave = { newNickname, newAvatarUri ->
             scope.launch {
@@ -283,11 +295,13 @@ fun SettingsScreen(navController: NavController) {
     // Accent Color 菜单
     AccentColorMenu(
         visible = showAccentColorMenu,
-        selected = selectedAccentColor,
+        selected = appAccentColor,
         anchorY = accentColorAnchorY,
         backdrop = screenBackdrop,
         onDismiss = { showAccentColorMenu = false },
-        onSelect = { selectedAccentColor = it }
+        onSelect = { key ->
+            scope.launch { repository.setAppAccentColor(key) }
+        }
     )
 }
 
@@ -414,7 +428,7 @@ fun UserProfileSection(
             contentPadding = PaddingValues(horizontal = 18.dp)
         ) {
             Text(
-                text = "Edit profile",
+                text = stringResource(R.string.settings_item_edit_profile),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 color = TextPrimary
@@ -447,9 +461,17 @@ fun EditProfileModal(
 
     // 图片选择器
     val imagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
-        uri?.let { avatarUri = it.toString() }
+        uri?.let {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    it,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            avatarUri = it.toString()
+        }
     }
 
     LaunchedEffect(visible) {
@@ -562,7 +584,7 @@ fun EditProfileModal(
 
                         // 标题
                         Text(
-                            text = "Edit Profile",
+                            text = stringResource(R.string.edit_profile_title),
                             fontSize = 17.sp,
                             fontWeight = FontWeight.SemiBold,
                             fontFamily = SourceSans3,
@@ -589,7 +611,7 @@ fun EditProfileModal(
                                             interactionSource = remember { MutableInteractionSource() },
                                             indication = null
                                         ) {
-                                            imagePicker.launch("image/*")
+                                            imagePicker.launch(arrayOf("image/*"))
                                         },
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -626,7 +648,7 @@ fun EditProfileModal(
                                 }
 
                                 Text(
-                                    text = "Tap to change photo",
+                                    text = stringResource(R.string.edit_profile_tap_change_photo),
                                     fontSize = 13.sp,
                                     fontFamily = SourceSans3,
                                     color = TextSecondary
@@ -640,7 +662,7 @@ fun EditProfileModal(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "Name",
+                                text = stringResource(R.string.edit_profile_name),
                                 fontSize = 13.sp,
                                 fontFamily = SourceSans3,
                                 color = TextSecondary
@@ -684,7 +706,7 @@ fun EditProfileModal(
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = GrayLight)
                             ) {
-                                Text(text = "Cancel", fontSize = 17.sp, color = TextPrimary)
+                                Text(text = stringResource(R.string.common_cancel), fontSize = 17.sp, color = TextPrimary)
                             }
 
                             Button(
@@ -698,7 +720,7 @@ fun EditProfileModal(
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = TextPrimary)
                             ) {
-                                Text(text = "Save", fontSize = 17.sp, color = Surface)
+                                Text(text = stringResource(R.string.common_save), fontSize = 17.sp, color = Surface)
                             }
                         }
                     }
@@ -830,22 +852,32 @@ fun SettingsItem(
     }
 }
 
-// Appearance 选项数据 - 使用正确图标：System=Monitor, Light=Sun, Dark=Moon
-private val appearanceOptions = listOf(
-    Triple("system", "System", AppIcons.Monitor),
-    Triple("light", "Light", AppIcons.Sun),
-    Triple("dark", "Dark", AppIcons.Moon)
+private data class AppearanceOption(
+    val key: String,
+    val labelRes: Int,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
 )
 
-// Accent Color 选项数据
+private val appearanceOptions = listOf(
+    AppearanceOption("system", R.string.appearance_option_system, AppIcons.Monitor),
+    AppearanceOption("light", R.string.appearance_option_light, AppIcons.Sun),
+    AppearanceOption("dark", R.string.appearance_option_dark, AppIcons.Moon)
+)
+
+private data class AccentOption(
+    val key: String,
+    val labelRes: Int,
+    val color: Color
+)
+
 private val accentColorOptions = listOf(
-    Pair("default", Color(0xFF9CA3AF)),
-    Pair("blue", Color(0xFF3B82F6)),
-    Pair("green", Color(0xFF22C55E)),
-    Pair("yellow", Color(0xFFEAB308)),
-    Pair("pink", Color(0xFFEC4899)),
-    Pair("orange", Color(0xFFF97316)),
-    Pair("purple", Color(0xFFA855F7))
+    AccentOption("default", R.string.accent_color_default, Color(0xFF5E6876)),
+    AccentOption("blue", R.string.accent_color_blue, Color(0xFF5D7FA6)),
+    AccentOption("green", R.string.accent_color_green, Color(0xFF5D8A75)),
+    AccentOption("yellow", R.string.accent_color_yellow, Color(0xFF9A8553)),
+    AccentOption("pink", R.string.accent_color_pink, Color(0xFF97657F)),
+    AccentOption("orange", R.string.accent_color_orange, Color(0xFFA07351)),
+    AccentOption("purple", R.string.accent_color_purple, Color(0xFF74669C))
 )
 
 @OptIn(ExperimentalAnimationApi::class)
@@ -916,7 +948,8 @@ fun AppearanceMenu(
                         modifier = Modifier.padding(6.dp),
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        appearanceOptions.forEach { (key, label, icon) ->
+                        appearanceOptions.forEach { option ->
+                            val key = option.key
                             val isSelected = key == selected
                             Box(
                                 modifier = Modifier
@@ -939,13 +972,13 @@ fun AppearanceMenu(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Icon(
-                                            imageVector = icon,
+                                            imageVector = option.icon,
                                             contentDescription = null,
                                             modifier = Modifier.size(18.dp),
                                             tint = TextPrimary
                                         )
                                         Text(
-                                            text = label,
+                                            text = stringResource(option.labelRes),
                                             fontSize = 15.sp,
                                             fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
                                             color = TextPrimary
@@ -1049,9 +1082,10 @@ fun AccentColorMenu(
                         modifier = Modifier.padding(6.dp),
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        accentColorOptions.forEach { (key, color) ->
+                        accentColorOptions.forEach { option ->
+                            val key = option.key
+                            val color = option.color
                             val isSelected = key == selected
-                            val isPurple = key == "purple"
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1081,20 +1115,11 @@ fun AccentColorMenu(
                                         )
 
                                         Text(
-                                            text = key.replaceFirstChar { it.uppercase() },
+                                            text = stringResource(option.labelRes),
                                             fontSize = 15.sp,
                                             fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
                                             color = TextPrimary
                                         )
-
-                                        // Plus 标签
-                                        if (isPurple) {
-                                            Text(
-                                                text = "· Plus",
-                                                fontSize = 13.sp,
-                                                color = TextSecondary
-                                            )
-                                        }
                                     }
 
                                     // 选中打勾 - 带动画
@@ -1113,16 +1138,7 @@ fun AccentColorMenu(
                                             imageVector = AppIcons.Check,
                                             contentDescription = null,
                                             modifier = Modifier.size(18.dp),
-                                            tint = when (key) {
-                                                "default" -> Color(0xFF6B7280)
-                                                "blue" -> Color(0xFF3B82F6)
-                                                "green" -> Color(0xFF22C55E)
-                                                "yellow" -> Color(0xFFCA8A04)
-                                                "pink" -> Color(0xFFEC4899)
-                                                "orange" -> Color(0xFFF97316)
-                                                "purple" -> Color(0xFFA855F7)
-                                                else -> TextPrimary
-                                            }
+                                            tint = color
                                         )
                                     }
                                 }

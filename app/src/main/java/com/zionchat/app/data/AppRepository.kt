@@ -32,10 +32,12 @@ class AppRepository(context: Context) {
     private val avatarUriKey = stringPreferencesKey("avatar_uri")
     private val customInstructionsKey = stringPreferencesKey("custom_instructions")
     private val appLanguageKey = stringPreferencesKey("app_language")
+    private val appAccentColorKey = stringPreferencesKey("app_accent_color")
     private val defaultChatModelIdKey = stringPreferencesKey("default_chat_model_id")
     private val defaultVisionModelIdKey = stringPreferencesKey("default_vision_model_id")
     private val defaultImageModelIdKey = stringPreferencesKey("default_image_model_id")
     private val defaultTitleModelIdKey = stringPreferencesKey("default_title_model_id")
+    private val supportedAccentKeys = setOf("default", "blue", "green", "yellow", "pink", "orange", "purple")
 
     private val providerListType = object : TypeToken<List<ProviderConfig>>() {}.type
     private val modelListType = object : TypeToken<List<ModelConfig>>() {}.type
@@ -254,7 +256,8 @@ class AppRepository(context: Context) {
     }
 
     val nicknameFlow: Flow<String> = prefsFlow.map { prefs ->
-        prefs[nicknameKey].orEmpty()
+        val nickname = prefs[nicknameKey].orEmpty().trim()
+        if (nickname.isNotBlank()) nickname else prefs[personalNicknameKey].orEmpty().trim()
     }
 
     val personalNicknameFlow: Flow<String> = prefsFlow.map { prefs ->
@@ -275,6 +278,11 @@ class AppRepository(context: Context) {
 
     val appLanguageFlow: Flow<String> = prefsFlow.map { prefs ->
         prefs[appLanguageKey]?.trim()?.takeIf { it.isNotBlank() } ?: "system"
+    }
+
+    val appAccentColorFlow: Flow<String> = prefsFlow.map { prefs ->
+        val key = prefs[appAccentColorKey]?.trim()?.lowercase().orEmpty()
+        if (supportedAccentKeys.contains(key)) key else "default"
     }
 
     val defaultChatModelIdFlow: Flow<String?> = prefsFlow.map { prefs ->
@@ -305,7 +313,14 @@ class AppRepository(context: Context) {
 
     suspend fun setNickname(value: String) {
         dataStore.edit { prefs ->
-            prefs[nicknameKey] = value
+            val trimmed = value.trimEnd()
+            if (trimmed.isBlank()) {
+                prefs.remove(nicknameKey)
+                prefs.remove(personalNicknameKey)
+            } else {
+                prefs[nicknameKey] = trimmed
+                prefs[personalNicknameKey] = trimmed
+            }
         }
     }
 
@@ -314,8 +329,10 @@ class AppRepository(context: Context) {
             val trimmed = value.trimEnd()
             if (trimmed.isBlank()) {
                 prefs.remove(personalNicknameKey)
+                prefs.remove(nicknameKey)
             } else {
                 prefs[personalNicknameKey] = trimmed
+                prefs[nicknameKey] = trimmed
             }
         }
     }
@@ -353,6 +370,13 @@ class AppRepository(context: Context) {
         }
     }
 
+    suspend fun setAppAccentColor(value: String) {
+        val key = value.trim().lowercase()
+        dataStore.edit { prefs ->
+            prefs[appAccentColorKey] = if (supportedAccentKeys.contains(key)) key else "default"
+        }
+    }
+
     suspend fun setDefaultChatModelId(modelId: String?) {
         dataStore.edit { prefs ->
             if (modelId.isNullOrBlank()) prefs.remove(defaultChatModelIdKey) else prefs[defaultChatModelIdKey] = modelId
@@ -385,6 +409,10 @@ class AppRepository(context: Context) {
             val legacy = prefs[nicknameKey].orEmpty().trim()
             if (prefs[personalNicknameKey].isNullOrBlank() && legacy.isNotBlank()) {
                 prefs[personalNicknameKey] = legacy
+            }
+            val personal = prefs[personalNicknameKey].orEmpty().trim()
+            if (prefs[nicknameKey].isNullOrBlank() && personal.isNotBlank()) {
+                prefs[nicknameKey] = personal
             }
 
             prefs[personalNicknameMigratedKey] = true

@@ -27,11 +27,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.zionchat.app.R
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.data.DEFAULT_PROVIDER_PRESETS
 import com.zionchat.app.data.ProviderConfig
@@ -59,7 +61,7 @@ fun ModelServicesScreen(navController: NavController) {
             .background(Background)
     ) {
         PageTopBar(
-            title = "Model services",
+            title = stringResource(R.string.model_services),
             onBack = { navController.navigateUp() },
             trailing = {
                 Box(
@@ -74,7 +76,7 @@ fun ModelServicesScreen(navController: NavController) {
                 ) {
                     Icon(
                         imageVector = AppIcons.Plus,
-                        contentDescription = "Add Provider",
+                        contentDescription = stringResource(R.string.add_provider),
                         tint = TextPrimary,
                         modifier = Modifier.size(22.dp)
                     )
@@ -141,7 +143,7 @@ private fun ProviderItem(
         modifier = Modifier
             .fillMaxWidth()
             .height(56.dp)
-            .background(GrayLight, RoundedCornerShape(14.dp))
+            .background(Surface, RoundedCornerShape(14.dp))
             .clip(RoundedCornerShape(14.dp))
             .pressableScale(pressedScale = 0.98f, onClick = onClick)
             .padding(horizontal = 16.dp),
@@ -222,7 +224,7 @@ private fun SwipeableConfiguredProviderItem(
             modifier = Modifier
                 .fillMaxSize()
                 .offset { IntOffset(swipeableState.offset.value.roundToInt(), 0) }
-                .background(GrayLight, RoundedCornerShape(14.dp))
+                .background(Surface, RoundedCornerShape(14.dp))
                 .swipeable(
                     state = swipeableState,
                     anchors = anchors,
@@ -271,16 +273,16 @@ private fun OAuthBadge() {
     Box(
         modifier = Modifier
             .height(22.dp)
-            .background(Color(0xFFEDEDED), RoundedCornerShape(11.dp))
+            .background(TextPrimary, RoundedCornerShape(11.dp))
             .padding(horizontal = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = "OAuth",
+            text = stringResource(R.string.oauth_badge),
             fontSize = 12.sp,
             fontFamily = SourceSans3,
             fontWeight = FontWeight.Medium,
-            color = TextSecondary,
+            color = Color.White,
             maxLines = 1
         )
     }

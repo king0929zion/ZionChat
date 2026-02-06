@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -152,6 +153,8 @@ fun ChatScreen(navController: NavController) {
     val customInstructions by repository.customInstructionsFlow.collectAsState(initial = "")
     val defaultChatModelId by repository.defaultChatModelIdFlow.collectAsState(initial = null)
     val defaultImageModelId by repository.defaultImageModelIdFlow.collectAsState(initial = null)
+    val appAccentColor by repository.appAccentColorFlow.collectAsState(initial = "default")
+    val accentPalette = remember(appAccentColor) { accentPaletteForKey(appAccentColor) }
 
     // 本地优先的会话选择：避免 DataStore 状态滞后导致“首条消息消失/会话跳回”
     var preferredConversationId by remember { mutableStateOf<String?>(null) }
@@ -1307,6 +1310,8 @@ fun ChatScreen(navController: NavController) {
                                 tagSheetMessageId = messageId
                                 tagSheetTagId = tagId
                             },
+                            userBubbleColor = accentPalette.bubbleColor,
+                            userBubbleTextColor = accentPalette.bubbleTextColor,
                             onEdit = { /* TODO */ },
                             onDelete = { convoId, messageId ->
                                 scope.launch { repository.deleteMessage(convoId, messageId) }
@@ -1428,7 +1433,8 @@ fun ChatScreen(navController: NavController) {
                         onStopStreaming = ::stopStreaming,
                         sendAllowed = !defaultChatModelId.isNullOrBlank(),
                         isStreaming = isStreaming,
-                        imeVisible = imeVisible
+                        imeVisible = imeVisible,
+                        actionActiveColor = accentPalette.actionColor
                     )
                 }
             }
@@ -1486,7 +1492,7 @@ fun ChatScreen(navController: NavController) {
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "Thinking",
+                            text = stringResource(R.string.thinking_label),
                             fontSize = 17.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = TextPrimary
@@ -1594,6 +1600,8 @@ fun MessageItem(
     showToolbar: Boolean = true,
     onShowReasoning: (String) -> Unit,
     onShowTag: (messageId: String, tagId: String) -> Unit,
+    userBubbleColor: Color = UserMessageBubble,
+    userBubbleTextColor: Color = TextPrimary,
     onEdit: () -> Unit,
     onDelete: (conversationId: String, messageId: String) -> Unit
 ) {
@@ -1610,7 +1618,7 @@ fun MessageItem(
             Box(
                 modifier = Modifier
                     .padding(start = 60.dp)
-                    .background(UserMessageBubble, RoundedCornerShape(18.dp))
+                    .background(userBubbleColor, RoundedCornerShape(18.dp))
                     .combinedClickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -1624,7 +1632,7 @@ fun MessageItem(
                     textStyle = TextStyle(
                         fontSize = 16.sp,
                         lineHeight = 24.sp,
-                        color = TextPrimary
+                        color = userBubbleTextColor
                     )
                 )
             }
@@ -1654,7 +1662,7 @@ fun MessageItem(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Thinking",
+                        text = stringResource(R.string.thinking_label),
                         fontSize = 15.sp,
                         fontFamily = SourceSans3,
                         fontWeight = FontWeight.SemiBold,
@@ -1816,7 +1824,7 @@ private fun MessageTagRow(
             Spacer(modifier = Modifier.width(6.dp))
         }
         Text(
-            text = if (tag.kind == "mcp") "Tool" else tag.title,
+            text = if (tag.kind == "mcp") stringResource(R.string.tool_label) else tag.title,
             fontSize = 15.sp,
             fontFamily = SourceSans3,
             fontWeight = FontWeight.SemiBold,
@@ -2480,20 +2488,20 @@ fun ToolMenuPanel(
                     // 列表项
                     ToolListItem(
                         icon = { Icon(AppIcons.Globe, null, Modifier.size(24.dp), TextPrimary) },
-                        title = "Web search",
-                        subtitle = "Find real-time news and info",
+                        title = stringResource(R.string.chat_tool_web_search),
+                        subtitle = stringResource(R.string.chat_tool_web_search_subtitle),
                         onClick = { onToolSelect("web") }
                     )
                     ToolListItem(
                         icon = { Icon(AppIcons.CreateImage, null, Modifier.size(24.dp), TextPrimary) },
-                        title = "Create image",
-                        subtitle = "Visualize anything",
+                        title = stringResource(R.string.chat_tool_create_image),
+                        subtitle = stringResource(R.string.chat_tool_create_image_subtitle),
                         onClick = { onToolSelect("image") }
                     )
                     ToolListItem(
                         icon = { Icon(AppIcons.MCPTools, null, Modifier.size(24.dp), TextPrimary) },
-                        title = "MCP Tools",
-                        subtitle = "Connect external tools",
+                        title = stringResource(R.string.settings_item_mcp_tools),
+                        subtitle = stringResource(R.string.chat_tool_mcp_subtitle),
                         onClick = { onToolSelect("mcp") }
                     )
                 }
@@ -2666,7 +2674,8 @@ private fun BottomInputArea(
     onStopStreaming: () -> Unit,
     sendAllowed: Boolean = true,
     isStreaming: Boolean = false,
-    imeVisible: Boolean = false
+    imeVisible: Boolean = false,
+    actionActiveColor: Color = TextPrimary
 ) {
     val hasText = messageText.trim().isNotEmpty()
     val hasAttachments = attachments.isNotEmpty()
@@ -2676,8 +2685,8 @@ private fun BottomInputArea(
     val actionBackground by animateColorAsState(
         targetValue =
             when {
-                actionIsStop -> TextPrimary
-                sendEnabled -> TextPrimary
+                actionIsStop -> actionActiveColor
+                sendEnabled -> actionActiveColor
                 else -> GrayLight
             },
         animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
@@ -2692,7 +2701,7 @@ private fun BottomInputArea(
         "files" -> "Files"
         "web" -> "Search"
         "image" -> "Image"
-        "mcp" -> "Tools"
+        "mcp" -> stringResource(R.string.settings_item_mcp_tools)
         else -> selectedTool?.replaceFirstChar { it.uppercase() }.orEmpty()
     }
     val toolIconRes: Int? = when (selectedTool) {
@@ -2731,7 +2740,7 @@ private fun BottomInputArea(
             ) {
                 Icon(
                     imageVector = AppIcons.ChatGPTLogo,
-                    contentDescription = "Tools",
+                    contentDescription = stringResource(R.string.settings_item_mcp_tools),
                     tint = TextPrimary,
                     modifier = Modifier.size(22.dp)
                 )
@@ -2900,7 +2909,7 @@ private fun BottomInputArea(
                             ) {
                                 if (messageText.isEmpty()) {
                                     Text(
-                                        text = "Ask anything",
+                                        text = stringResource(R.string.chat_placeholder_ask_anything),
                                         fontSize = 17.sp,
                                         lineHeight = 22.sp,
                                         color = TextSecondary
