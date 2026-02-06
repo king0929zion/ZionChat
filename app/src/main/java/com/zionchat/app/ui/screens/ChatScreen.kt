@@ -207,12 +207,7 @@ fun ChatScreen(navController: NavController) {
     val bottomBarHeightDp = with(density) { bottomBarHeightPx.toDp() }
     val bottomContentPadding = maxOf(80.dp, bottomBarHeightDp + 12.dp + bottomSystemPadding)
     val imeVisible = WindowInsets.ime.getBottom(density) > 0
-    val inputBottomInsetTarget = maxOf(imeBottomPadding, navBottomPadding)
-    val inputBottomInset by animateDpAsState(
-        targetValue = inputBottomInsetTarget,
-        animationSpec = tween(durationMillis = 170, easing = FastOutSlowInEasing),
-        label = "input_bottom_inset"
-    )
+    val inputBottomInset = bottomSystemPadding
 
     // Pending 消息：在 DataStore 落盘前立即显示，彻底修复“首条消息消失”
     var pendingMessages by remember { mutableStateOf<List<PendingMessage>>(emptyList()) }
@@ -1205,7 +1200,7 @@ fun ChatScreen(navController: NavController) {
             }
             val bottomFadeHeight by animateDpAsState(
                 targetValue = bottomFadeHeightTarget,
-                animationSpec = tween(durationMillis = 170, easing = FastOutSlowInEasing),
+                animationSpec = tween(durationMillis = 90, easing = FastOutSlowInEasing),
                 label = "bottom_fade_height"
             )
             if (bottomFadeHeight > 0.dp) {
