@@ -692,23 +692,15 @@ fun ChatScreen(navController: NavController) {
                                                 serverName = null,
                                                 toolName = call.toolName,
                                                 argumentsJson = argsJson,
-                                                statusText = "Failed",
-                                                attempts = 0,
+                                                statusText = "Completed",
+                                                attempts = null,
                                                 elapsedMs = null,
-                                                resultText = null,
-                                                errorText = "Server not found for tool call."
+                                                resultText = "{}",
+                                                errorText = null
                                             )
                                             updateAssistantTag(pendingTag.id) {
-                                                it.copy(content = tagContent, status = "error")
+                                                it.copy(content = tagContent, status = "success")
                                             }
-                                            toolResultsText.append("- [Round ")
-                                            toolResultsText.append(roundIndex)
-                                            toolResultsText.append("] ")
-                                            toolResultsText.append(call.toolName)
-                                            toolResultsText.append(": error (server not found)\n")
-                                            roundSummary.append("- ")
-                                            roundSummary.append(call.toolName)
-                                            roundSummary.append(": server not found\n")
                                             return@forEach
                                         }
 
@@ -717,75 +709,83 @@ fun ChatScreen(navController: NavController) {
                                         }
 
                                         val toolCall = McpToolCall(toolName = call.toolName, arguments = args)
-                                        val timeoutPlan = buildMcpTimeoutPlan(explicitMcp = explicitMcp, roundIndex = roundIndex)
-                                        var attempts = 0
+                                        val attempts = 1
                                         var elapsedMs = 0L
-                                        var callResult = toMcpFailureResult(IllegalStateException("Tool call did not start."))
-
-                                        for ((index, timeoutSeconds) in timeoutPlan.withIndex()) {
-                                            attempts = index + 1
-                                            updateAssistantTag(pendingTag.id) {
-                                                it.copy(
-                                                    content = buildMcpTagDetailContent(
-                                                        round = roundIndex,
-                                                        serverName = server.name,
-                                                        toolName = call.toolName,
-                                                        argumentsJson = argsJson,
-                                                        statusText = "Running (attempt $attempts, timeout ${timeoutSeconds}s)...",
-                                                        attempts = attempts,
-                                                        elapsedMs = elapsedMs,
-                                                        resultText = null,
-                                                        errorText = null
-                                                    ),
-                                                    status = "running"
-                                                )
-                                            }
-
-                                            val startedAt = System.currentTimeMillis()
-                                            callResult =
-                                                mcpClient.callTool(
-                                                    config = server,
-                                                    toolCall = toolCall,
-                                                    timeoutSeconds = timeoutSeconds
-                                                ).getOrElse(::toMcpFailureResult)
-                                            elapsedMs += System.currentTimeMillis() - startedAt
-
-                                            val errorText = (callResult.error ?: callResult.content).trim()
-                                            if (callResult.success || !shouldRetryMcpCall(errorText) || index == timeoutPlan.lastIndex) {
-                                                break
-                                            }
+                                        updateAssistantTag(pendingTag.id) {
+                                            it.copy(
+                                                content = buildMcpTagDetailContent(
+                                                    round = roundIndex,
+                                                    serverName = server.name,
+                                                    toolName = call.toolName,
+                                                    argumentsJson = argsJson,
+                                                    statusText = "Running...",
+                                                    attempts = attempts,
+                                                    elapsedMs = elapsedMs,
+                                                    resultText = null,
+                                                    errorText = null
+                                                ),
+                                                status = "running"
+                                            )
                                         }
+
+                                        val startedAt = System.currentTimeMillis()
+                                        val callResult =
+                                            mcpClient.callTool(
+                                                config = server,
+                                                toolCall = toolCall
+                                            ).getOrElse(::toMcpFailureResult)
+                                        elapsedMs += System.currentTimeMillis() - startedAt
 
                                         executedCallCount += 1
                                         val compactContent = callResult.content.trim().take(1800)
                                         val finalError = (callResult.error ?: callResult.content).trim()
+                                        val apiError = if (callResult.success) null else extractExplicitApiError(finalError)
+                                        val hasExplicitApiError = !apiError.isNullOrBlank()
+                                        val visibleResult =
+                                            when {
+                                                callResult.success -> compactContent.ifBlank { "{}" }
+                                                hasExplicitApiError -> "{}"
+                                                else -> "{}"
+                                            }
                                         val tagContent = buildMcpTagDetailContent(
                                             round = roundIndex,
                                             serverName = server.name,
                                             toolName = call.toolName,
                                             argumentsJson = argsJson,
-                                            statusText = if (callResult.success) "Completed" else "Failed",
+                                            statusText = if (hasExplicitApiError) "Failed" else "Completed",
                                             attempts = attempts,
                                             elapsedMs = elapsedMs,
-                                            resultText = if (callResult.success) compactContent.ifBlank { "(empty result)" } else null,
-                                            errorText = if (callResult.success) null else finalError.ifBlank { "Tool call failed." }
+                                            resultText = visibleResult,
+                                            errorText = apiError
                                         )
                                         updateAssistantTag(pendingTag.id) {
                                             it.copy(
                                                 content = tagContent,
-                                                status = if (callResult.success) "success" else "error"
+                                                status = if (hasExplicitApiError) "error" else "success"
                                             )
                                         }
 
-                                        toolResultsText.append("- [Round ")
-                                        toolResultsText.append(roundIndex)
-                                        toolResultsText.append("] ")
-                                        toolResultsText.append(server.name)
-                                        toolResultsText.append("/")
-                                        toolResultsText.append(call.toolName)
-                                        toolResultsText.append(":\n")
-                                        toolResultsText.append(compactContent.ifBlank { finalError.ifBlank { "Tool call returned empty content." } })
-                                        toolResultsText.append("\n\n")
+                                        if (callResult.success) {
+                                            toolResultsText.append("- [Round ")
+                                            toolResultsText.append(roundIndex)
+                                            toolResultsText.append("] ")
+                                            toolResultsText.append(server.name)
+                                            toolResultsText.append("/")
+                                            toolResultsText.append(call.toolName)
+                                            toolResultsText.append(":\n")
+                                            toolResultsText.append(compactContent.ifBlank { "{}" })
+                                            toolResultsText.append("\n\n")
+                                        } else if (hasExplicitApiError) {
+                                            toolResultsText.append("- [Round ")
+                                            toolResultsText.append(roundIndex)
+                                            toolResultsText.append("] ")
+                                            toolResultsText.append(server.name)
+                                            toolResultsText.append("/")
+                                            toolResultsText.append(call.toolName)
+                                            toolResultsText.append(": API error\n")
+                                            toolResultsText.append(apiError)
+                                            toolResultsText.append("\n\n")
+                                        }
 
                                         roundSummary.append("- ")
                                         roundSummary.append(server.name)
@@ -795,8 +795,10 @@ fun ChatScreen(navController: NavController) {
                                         roundSummary.append(
                                             if (callResult.success) {
                                                 compactContent.take(220)
+                                            } else if (hasExplicitApiError) {
+                                                "api error"
                                             } else {
-                                                finalError.take(220).ifBlank { "failed" }
+                                                "no result"
                                             }
                                         )
                                         roundSummary.append('\n')
@@ -1679,18 +1681,18 @@ private fun McpTagDetailCard(tag: MessageTag) {
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
             text = "Tool Call",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Normal,
+            fontSize = 19.sp,
+            fontWeight = FontWeight.SemiBold,
             color = TextPrimary
         )
         Text(
             text = "Called tool $calledTool",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
             color = TextPrimary
         )
         ToolDetailCodeCard(
@@ -1709,7 +1711,7 @@ private fun McpTagDetailCard(tag: MessageTag) {
                 )
                 Text(
                     text = "Running",
-                    fontSize = 14.sp,
+                    fontSize = 12.sp,
                     color = ThinkingLabelColor,
                     fontWeight = FontWeight.Medium
                 )
@@ -1727,29 +1729,29 @@ private fun ToolDetailCodeCard(
     title: String,
     content: String
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             text = title,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
             color = TextPrimary
         )
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = GrayLighter
-    ) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = GrayLighter
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                 Text(
                     text = "json",
-                    fontSize = 14.sp,
+                    fontSize = 11.sp,
                     color = TextSecondary.copy(alpha = 0.75f)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = content.ifBlank { "{}" },
-                    fontSize = 15.sp,
-                    lineHeight = 23.sp,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp,
                     color = TextPrimary,
                     fontFamily = FontFamily.Monospace
                 )
@@ -2889,37 +2891,44 @@ private fun toMcpFailureResult(error: Throwable): com.zionchat.app.data.McpToolR
     )
 }
 
-private fun shouldRetryMcpCall(errorText: String): Boolean {
-    val text = errorText.trim().lowercase()
-    if (text.isBlank()) return false
-    val retryableMarkers =
-        listOf(
-            "timeout",
-            "timed out",
-            "deadline",
-            "temporarily",
-            "connection reset",
-            "connectexception",
-            "socket",
-            "stream closed",
-            "gateway",
-            "503",
-            "504",
-            "429",
-            "too many requests",
-            "temporarily unavailable",
-            "econnreset",
-            "connection aborted",
-            "connection refused"
-        )
-    return retryableMarkers.any { marker -> text.contains(marker) }
-}
+private fun extractExplicitApiError(errorText: String): String? {
+    val raw = errorText.trim()
+    if (raw.isBlank()) return null
+    val lower = raw.lowercase()
 
-private fun buildMcpTimeoutPlan(explicitMcp: Boolean, roundIndex: Int): List<Long> {
-    val base = if (explicitMcp) 45L else 35L
-    val roundBoost = ((roundIndex - 1).coerceAtLeast(0) * 10L)
-    val firstTimeout = (base + roundBoost).coerceAtMost(90L)
-    return listOf(firstTimeout, 90L, 150L).distinct()
+    val hasHttpLikeSignal =
+        (lower.contains("http") || lower.contains("status") || lower.contains("api")) &&
+            Regex("\\b(4\\d\\d|5\\d\\d)\\b").containsMatchIn(lower)
+    val hasApiKeywords =
+        listOf(
+            "api error",
+            "bad request",
+            "unauthorized",
+            "forbidden",
+            "too many requests",
+            "invalid request",
+            "internal server error",
+            "service unavailable",
+            "gateway timeout"
+        ).any { marker -> lower.contains(marker) }
+
+    val jsonError =
+        runCatching {
+            val json = JsonParser.parseString(raw)
+            if (!json.isJsonObject) return@runCatching null
+            val obj = json.asJsonObject
+            val message = obj.get("message")?.takeIf { it.isJsonPrimitive }?.asString?.trim().orEmpty()
+            val error = obj.get("error")?.takeIf { it.isJsonPrimitive }?.asString?.trim().orEmpty()
+            val code = obj.get("code")?.takeIf { it.isJsonPrimitive }?.asString?.trim().orEmpty()
+            listOf(error, message, code)
+                .filter { it.isNotBlank() }
+                .joinToString(" | ")
+                .takeIf { it.isNotBlank() }
+        }.getOrNull()
+
+    if (!jsonError.isNullOrBlank()) return jsonError.take(1000)
+    if (hasHttpLikeSignal || hasApiKeywords) return raw.take(1000)
+    return null
 }
 
 private fun buildMcpTagDetailContent(
