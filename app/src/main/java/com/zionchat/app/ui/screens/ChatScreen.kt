@@ -46,6 +46,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -53,6 +54,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -122,10 +124,13 @@ fun ChatScreen(navController: NavController) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     var showToolMenu by remember { mutableStateOf(false) }
     var selectedTool by remember { mutableStateOf<String?>(null) }
     var messageText by remember { mutableStateOf("") }
     var imageAttachments by remember { mutableStateOf<List<PendingImageAttachment>>(emptyList()) }
+    var inputFieldFocused by remember { mutableStateOf(false) }
+    var lastKeyboardHideRequestAtMs by remember { mutableLongStateOf(0L) }
     var showThinkingSheet by remember { mutableStateOf(false) }
     var thinkingSheetText by remember { mutableStateOf<String?>(null) }
     val thinkingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -156,6 +161,12 @@ fun ChatScreen(navController: NavController) {
     val defaultImageModelId by repository.defaultImageModelIdFlow.collectAsState(initial = null)
     val appAccentColor by repository.appAccentColorFlow.collectAsState(initial = "default")
     val accentPalette = remember(appAccentColor) { accentPaletteForKey(appAccentColor) }
+
+    // Avoid IME restore loops on cold start/resume.
+    LaunchedEffect(Unit) {
+        delay(80)
+        focusManager.clearFocus(force = true)
+    }
 
     // 本地优先的会话选择：避免 DataStore 状态滞后导致“首条消息消失/会话跳回”
     var preferredConversationId by remember { mutableStateOf<String?>(null) }
@@ -209,12 +220,15 @@ fun ChatScreen(navController: NavController) {
     val topBarHeightDp = with(density) { if (topBarHeightPx == 0) 66.dp else topBarHeightPx.toDp() }
     val statusBarTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val listTopPadding = statusBarTopPadding + topBarHeightDp + 8.dp
+    val imeBottomPx = WindowInsets.ime.getBottom(density)
+    val imeVisibilityThresholdPx = with(density) { 24.dp.roundToPx() }
+    val imeVisible = inputFieldFocused && imeBottomPx > imeVisibilityThresholdPx
     val imeBottomPadding = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
     val navBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val bottomSystemPadding = maxOf(imeBottomPadding, navBottomPadding)
+    val bottomSystemPadding =
+        if (imeVisible) maxOf(imeBottomPadding, navBottomPadding) else navBottomPadding
     val bottomBarHeightDp = with(density) { bottomBarHeightPx.toDp() }
     val bottomContentPadding = maxOf(80.dp, bottomBarHeightDp + 12.dp + bottomSystemPadding)
-    val imeVisible = WindowInsets.ime.getBottom(density) > 0
     val inputBottomInset = bottomSystemPadding
 
     // Pending 消息：在 DataStore 落盘前立即显示，彻底修复“首条消息消失”
@@ -319,6 +333,19 @@ fun ChatScreen(navController: NavController) {
         if (!isStreaming) return
         stopRequestedByUser = true
         streamingJob?.cancel(CancellationException("Stopped by user."))
+    }
+
+    fun hideKeyboardIfNeeded(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (!force) {
+            if (now - lastKeyboardHideRequestAtMs < 220L) return
+            if (!imeVisible && !inputFieldFocused) return
+        } else if (now - lastKeyboardHideRequestAtMs < 120L) {
+            return
+        }
+        lastKeyboardHideRequestAtMs = now
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
     }
 
     fun sendMessage() {
@@ -1353,7 +1380,7 @@ fun ChatScreen(navController: NavController) {
                                 && message.id == streamingMessageId,
                             showToolbar = showToolbar,
                             onShowReasoning = { reasoning ->
-                                keyboardController?.hide()
+                                hideKeyboardIfNeeded(force = true)
                                 showToolMenu = false
                                 tagSheetMessageId = null
                                 tagSheetTagId = null
@@ -1361,7 +1388,7 @@ fun ChatScreen(navController: NavController) {
                                 showThinkingSheet = true
                             },
                             onShowTag = { messageId, tagId ->
-                                keyboardController?.hide()
+                                hideKeyboardIfNeeded(force = true)
                                 showToolMenu = false
                                 showThinkingSheet = false
                                 thinkingSheetText = null
@@ -1477,7 +1504,7 @@ fun ChatScreen(navController: NavController) {
                                 return@BottomInputArea
                             }
                             if (imeVisible) {
-                                keyboardController?.hide()
+                                hideKeyboardIfNeeded(force = true)
                                 scope.launch {
                                     delay(180)
                                     showToolMenu = true
@@ -1494,6 +1521,7 @@ fun ChatScreen(navController: NavController) {
                         sendAllowed = !defaultChatModelId.isNullOrBlank(),
                         isStreaming = isStreaming,
                         imeVisible = imeVisible,
+                        onInputFocusChanged = { focused -> inputFieldFocused = focused },
                         actionActiveColor = accentPalette.actionColor
                     )
                 }
@@ -1508,12 +1536,12 @@ fun ChatScreen(navController: NavController) {
                     when (tool) {
                         "camera" -> {
                             showToolMenu = false
-                            keyboardController?.hide()
+                            hideKeyboardIfNeeded(force = true)
                             cameraLauncher.launch(null)
                         }
                         "photos" -> {
                             showToolMenu = false
-                            keyboardController?.hide()
+                            hideKeyboardIfNeeded(force = true)
                             photoPickerLauncher.launch("image/*")
                         }
                         else -> {
@@ -2763,6 +2791,7 @@ private fun BottomInputArea(
     sendAllowed: Boolean = true,
     isStreaming: Boolean = false,
     imeVisible: Boolean = false,
+    onInputFocusChanged: (Boolean) -> Unit = {},
     actionActiveColor: Color = TextPrimary
 ) {
     val hasText = messageText.trim().isNotEmpty()
@@ -2974,6 +3003,7 @@ private fun BottomInputArea(
                         onValueChange = onMessageChange,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .onFocusChanged { state -> onInputFocusChanged(state.isFocused) }
                             .heightIn(min = 24.dp, max = maxTextHeight),
                         textStyle = TextStyle(
                             fontSize = 17.sp,
