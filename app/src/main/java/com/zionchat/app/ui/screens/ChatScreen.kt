@@ -1898,13 +1898,14 @@ private fun MessageTagRow(
         }
     Row(
         modifier = Modifier
-            .padding(vertical = 10.dp)
+            .padding(vertical = 12.dp)
             .animateContentSize(animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing))
             .pressableScale(
                 pressedScale = 0.98f,
                 onClick = { onShowTag(messageId, tag.id) }
             ),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         if (tag.kind == "mcp") {
             Icon(
@@ -1913,7 +1914,6 @@ private fun MessageTagRow(
                 tint = ThinkingLabelColor,
                 modifier = Modifier.size(14.dp)
             )
-            Spacer(modifier = Modifier.width(6.dp))
         }
         Text(
             text = displayText,
@@ -1922,7 +1922,6 @@ private fun MessageTagRow(
             fontWeight = FontWeight.SemiBold,
             color = ThinkingLabelColor
         )
-        Spacer(modifier = Modifier.width(6.dp))
         if (tagRunning) {
             CircularProgressIndicator(
                 modifier = Modifier.size(13.dp),

@@ -21,7 +21,7 @@
     <string name="settings_item_model_services">模型服务</string>
     <string name="settings_item_mcp_tools">MCP 工具</string>
 
-    <string name="language_title">语言</string>
+    <string name="language_title">Language</string>
     <string name="language_option_system">跟随系统</string>
     <string name="language_option_system_subtitle">使用设备语言</string>
     <string name="language_option_en">English</string>
