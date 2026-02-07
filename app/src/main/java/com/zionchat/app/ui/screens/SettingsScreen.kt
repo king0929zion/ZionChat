@@ -160,7 +160,7 @@ fun SettingsScreen(navController: NavController) {
                             )
                         },
                         label = stringResource(R.string.apps),
-                        onClick = { }
+                        onClick = { navController.navigate("apps") }
                     )
                 }
 

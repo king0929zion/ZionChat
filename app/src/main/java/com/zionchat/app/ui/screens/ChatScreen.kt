@@ -2208,7 +2208,10 @@ fun SidebarContent(
                     )
                 },
                 label = "Apps",
-                onClick = { }
+                onClick = {
+                    onClose()
+                    navController.navigate("apps")
+                }
             )
         }
 

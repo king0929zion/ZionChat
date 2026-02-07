@@ -132,6 +132,7 @@ class MainActivity : AppCompatActivity() {
                         ) {
                             composable("chat") { ChatScreen(navController) }
                             composable("settings") { SettingsScreen(navController) }
+                            composable("apps") { AppsScreen(navController) }
                             composable("language") { LanguageScreen(navController) }
                             composable("personalization") { PersonalizationScreen(navController) }
                             composable("memories") { MemoriesScreen(navController) }
