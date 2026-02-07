@@ -85,11 +85,10 @@ class MainActivity : AppCompatActivity() {
                                         else -> LocaleListCompat.getEmptyLocaleList()
                                     }
                                 val currentLocales = AppCompatDelegate.getApplicationLocales()
-                                if (currentLocales != locales) {
+                                val currentTags = currentLocales.toLanguageTags().trim()
+                                val targetTags = locales.toLanguageTags().trim()
+                                if (currentTags != targetTags) {
                                     AppCompatDelegate.setApplicationLocales(locales)
-                                    if (!isFinishing && !isDestroyed) {
-                                        recreate()
-                                    }
                                 }
                             }
                         }
