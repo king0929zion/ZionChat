@@ -24,6 +24,7 @@ class AppRepository(context: Context) {
     private val modelsKey = stringPreferencesKey("models_json")
     private val conversationsKey = stringPreferencesKey("conversations_json")
     private val memoriesKey = stringPreferencesKey("memories_json")
+    private val savedAppsKey = stringPreferencesKey("saved_apps_json")
     private val currentConversationIdKey = stringPreferencesKey("current_conversation_id")
     private val nicknameKey = stringPreferencesKey("nickname")
     private val personalNicknameKey = stringPreferencesKey("personal_nickname")
@@ -44,6 +45,7 @@ class AppRepository(context: Context) {
     private val modelListType = object : TypeToken<List<ModelConfig>>() {}.type
     private val conversationListType = object : TypeToken<List<Conversation>>() {}.type
     private val memoryListType = object : TypeToken<List<MemoryItem>>() {}.type
+    private val savedAppListType = object : TypeToken<List<SavedApp>>() {}.type
 
     private fun safeTrim(value: String?): String = value?.trim().orEmpty()
 
@@ -171,6 +173,26 @@ class AppRepository(context: Context) {
         return MemoryItem(id = id, content = content, createdAt = createdAt)
     }
 
+    private fun sanitizeSavedApp(app: SavedApp?): SavedApp? {
+        if (app == null) return null
+        val name = safeTrim(app.name)
+        val html = app.html.trim()
+        if (name.isBlank() || html.isBlank()) return null
+
+        val id = safeTrim(app.id).ifBlank { UUID.randomUUID().toString() }
+        val createdAt = app.createdAt.takeIf { it > 0 } ?: System.currentTimeMillis()
+        val updatedAt = app.updatedAt.takeIf { it > 0 } ?: createdAt
+        return SavedApp(
+            id = id,
+            sourceTagId = safeTrimOrNull(app.sourceTagId),
+            name = name.take(80),
+            description = safeTrim(app.description).take(180),
+            html = html,
+            createdAt = createdAt,
+            updatedAt = updatedAt
+        )
+    }
+
     private fun sanitizeMcpToolParameter(param: McpToolParameter?): McpToolParameter? {
         if (param == null) return null
         val name = safeTrim(param.name)
@@ -250,6 +272,15 @@ class AppRepository(context: Context) {
             .orEmpty()
             .mapNotNull(::sanitizeMemory)
             .sortedByDescending { it.createdAt }
+    }
+
+    val savedAppsFlow: Flow<List<SavedApp>> = prefsFlow.map { prefs ->
+        val json = prefs[savedAppsKey] ?: "[]"
+        runCatching { gson.fromJson<List<SavedApp>>(json, savedAppListType) }
+            .getOrNull()
+            .orEmpty()
+            .mapNotNull(::sanitizeSavedApp)
+            .sortedByDescending { it.updatedAt }
     }
 
     val currentConversationIdFlow: Flow<String?> = prefsFlow.map { prefs ->
@@ -646,6 +677,46 @@ class AppRepository(context: Context) {
         }
     }
 
+    suspend fun updateMessageTag(
+        conversationId: String,
+        messageId: String,
+        tagId: String,
+        update: (MessageTag) -> MessageTag
+    ) {
+        val conversations = conversationsFlow.first().toMutableList()
+        val index = conversations.indexOfFirst { it.id == conversationId }
+        if (index < 0) return
+
+        val conversation = conversations[index]
+        var touched = false
+        val updatedMessages =
+            conversation.messages.map { msg ->
+                if (msg.id != messageId) return@map msg
+                val updatedTags =
+                    msg.tags.orEmpty().map { tag ->
+                        if (tag.id == tagId) {
+                            touched = true
+                            update(tag)
+                        } else {
+                            tag
+                        }
+                    }
+                msg.copy(tags = updatedTags)
+            }
+        if (!touched) return
+
+        val updatedConversation =
+            conversation.copy(
+                messages = updatedMessages,
+                updatedAt = System.currentTimeMillis()
+            )
+        conversations.removeAt(index)
+        conversations.add(0, updatedConversation)
+        dataStore.edit { prefs ->
+            prefs[conversationsKey] = gson.toJson(conversations)
+        }
+    }
+
     suspend fun deleteMessage(conversationId: String, messageId: String) {
         val conversations = conversationsFlow.first().toMutableList()
         val index = conversations.indexOfFirst { it.id == conversationId }
@@ -694,6 +765,49 @@ class AppRepository(context: Context) {
     suspend fun clearMemories() {
         dataStore.edit { prefs ->
             prefs[memoriesKey] = "[]"
+        }
+    }
+
+    suspend fun upsertSavedApp(app: SavedApp) {
+        val sanitizedIncoming = sanitizeSavedApp(app) ?: return
+        val savedApps = savedAppsFlow.first().toMutableList()
+        val matchIndex =
+            savedApps.indexOfFirst {
+                it.id == sanitizedIncoming.id ||
+                    (
+                        !sanitizedIncoming.sourceTagId.isNullOrBlank() &&
+                            it.sourceTagId == sanitizedIncoming.sourceTagId
+                        )
+            }
+        val merged =
+            if (matchIndex >= 0) {
+                savedApps[matchIndex].copy(
+                    sourceTagId = sanitizedIncoming.sourceTagId ?: savedApps[matchIndex].sourceTagId,
+                    name = sanitizedIncoming.name,
+                    description = sanitizedIncoming.description,
+                    html = sanitizedIncoming.html,
+                    updatedAt = System.currentTimeMillis()
+                )
+            } else {
+                sanitizedIncoming.copy(updatedAt = System.currentTimeMillis())
+            }
+
+        if (matchIndex >= 0) {
+            savedApps[matchIndex] = merged
+        } else {
+            savedApps.add(0, merged)
+        }
+        dataStore.edit { prefs ->
+            prefs[savedAppsKey] = gson.toJson(savedApps)
+        }
+    }
+
+    suspend fun deleteSavedApp(appId: String) {
+        val key = appId.trim()
+        if (key.isBlank()) return
+        val apps = savedAppsFlow.first().filterNot { it.id == key }
+        dataStore.edit { prefs ->
+            prefs[savedAppsKey] = gson.toJson(apps)
         }
     }
 

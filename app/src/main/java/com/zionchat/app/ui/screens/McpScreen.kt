@@ -267,7 +267,7 @@ fun McpListItem(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = AppIcons.Globe,
+                    imageVector = AppIcons.MCPTools,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                     tint = TextSecondary

@@ -120,4 +120,11 @@
     <string name="chat_tool_app_builder_subtitle">Build an HTML app from specs</string>
     <string name="app_dev_preview_title">Preview</string>
     <string name="app_dev_preview_unavailable">Preview is unavailable until HTML is generated.</string>
+    <string name="app_dev_input_placeholder">Describe the changes you want...</string>
+    <string name="app_dev_update_failed">Failed to update app.</string>
+    <string name="app_dev_saved_tip">Saved to Apps</string>
+    <string name="apps_my_apps">My apps</string>
+    <string name="apps_featured">Featured</string>
+    <string name="apps_empty_saved">No saved apps yet. Save from the app developer card to see it here.</string>
+    <string name="apps_saved_from_chat">Saved from chat</string>
 </resources>

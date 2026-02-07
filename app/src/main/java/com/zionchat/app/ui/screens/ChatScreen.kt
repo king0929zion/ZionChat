@@ -57,6 +57,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -80,6 +81,7 @@ import com.zionchat.app.data.McpClient
 import com.zionchat.app.data.McpConfig
 import com.zionchat.app.data.McpToolCall
 import com.zionchat.app.data.ProviderConfig
+import com.zionchat.app.data.SavedApp
 import com.zionchat.app.data.extractRemoteModelId
 import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.AppSheetDragHandle
@@ -141,6 +143,8 @@ fun ChatScreen(navController: NavController) {
     var tagSheetMessageId by remember { mutableStateOf<String?>(null) }
     var tagSheetTagId by remember { mutableStateOf<String?>(null) }
     val tagSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var appWorkspaceMessageId by remember { mutableStateOf<String?>(null) }
+    var appWorkspaceTagId by remember { mutableStateOf<String?>(null) }
 
     val photoPickerLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -157,6 +161,7 @@ fun ChatScreen(navController: NavController) {
         }
 
     val conversations by repository.conversationsFlow.collectAsState(initial = emptyList())
+    val savedApps by repository.savedAppsFlow.collectAsState(initial = emptyList())
     val currentConversationId by repository.currentConversationIdFlow.collectAsState(initial = null)
     val nickname by repository.nicknameFlow.collectAsState(initial = "")
     val avatarUri by repository.avatarUriFlow.collectAsState(initial = "")
@@ -1163,8 +1168,8 @@ fun ChatScreen(navController: NavController) {
                                         val payload =
                                             pendingPayload.copy(
                                                 name = parsedSpec.name,
-                                                subtitle = parsedSpec.description.take(64).ifBlank { "HTML app ready" },
-                                                description = parsedSpec.description,
+                                                subtitle = compactAppDescription(parsedSpec.description, "HTML app ready"),
+                                                description = compactAppDescription(parsedSpec.description, "HTML app"),
                                                 style = parsedSpec.style,
                                                 features = parsedSpec.features,
                                                 progress = 100,
@@ -1574,8 +1579,22 @@ fun ChatScreen(navController: NavController) {
                                 showToolMenu = false
                                 showThinkingSheet = false
                                 thinkingSheetText = null
-                                tagSheetMessageId = messageId
-                                tagSheetTagId = tagId
+                                val clickedTag =
+                                    localMessages.firstOrNull { it.id == messageId }
+                                        ?.tags
+                                        .orEmpty()
+                                        .firstOrNull { it.id == tagId }
+                                if (clickedTag?.kind == "app_dev") {
+                                    tagSheetMessageId = null
+                                    tagSheetTagId = null
+                                    appWorkspaceMessageId = messageId
+                                    appWorkspaceTagId = tagId
+                                } else {
+                                    appWorkspaceMessageId = null
+                                    appWorkspaceTagId = null
+                                    tagSheetMessageId = messageId
+                                    tagSheetTagId = tagId
+                                }
                             },
                             userBubbleColor = accentPalette.bubbleColor,
                             userBubbleSecondaryColor = accentPalette.bubbleColorSecondary,
@@ -1858,6 +1877,110 @@ fun ChatScreen(navController: NavController) {
                         }
                     }
                 }
+            }
+
+            val activeAppWorkspaceTag = remember(localMessages, appWorkspaceMessageId, appWorkspaceTagId) {
+                val messageId = appWorkspaceMessageId?.trim().orEmpty()
+                val tagId = appWorkspaceTagId?.trim().orEmpty()
+                if (messageId.isBlank() || tagId.isBlank()) {
+                    null
+                } else {
+                    localMessages.firstOrNull { it.id == messageId }
+                        ?.tags
+                        .orEmpty()
+                        .firstOrNull { it.id == tagId && it.kind == "app_dev" }
+                }
+            }
+            if (!appWorkspaceTagId.isNullOrBlank() && activeAppWorkspaceTag == null) {
+                LaunchedEffect(localMessages, appWorkspaceTagId, appWorkspaceMessageId) {
+                    appWorkspaceMessageId = null
+                    appWorkspaceTagId = null
+                }
+            }
+
+            activeAppWorkspaceTag?.let { tag ->
+                AppDevWorkspaceScreen(
+                    tag = tag,
+                    onDismiss = {
+                        appWorkspaceMessageId = null
+                        appWorkspaceTagId = null
+                    },
+                    onUpdate = { updatedPayload ->
+                        val convoId = effectiveConversationId?.trim().orEmpty()
+                        val messageId = appWorkspaceMessageId?.trim().orEmpty()
+                        val tagId = appWorkspaceTagId?.trim().orEmpty()
+                        if (convoId.isBlank() || messageId.isBlank() || tagId.isBlank()) return@AppDevWorkspaceScreen
+                        scope.launch {
+                            repository.updateMessageTag(
+                                conversationId = convoId,
+                                messageId = messageId,
+                                tagId = tagId
+                            ) { current ->
+                                current.copy(
+                                    title = updatedPayload.name,
+                                    content = encodeAppDevTagPayload(updatedPayload),
+                                    status = updatedPayload.status
+                                )
+                            }
+                        }
+                    },
+                    onSave = { payload ->
+                        val tagId = appWorkspaceTagId?.trim().orEmpty()
+                        scope.launch {
+                            repository.upsertSavedApp(
+                                com.zionchat.app.data.SavedApp(
+                                    sourceTagId = tagId.takeIf { it.isNotBlank() },
+                                    name = payload.name,
+                                    description = payload.description.ifBlank { payload.subtitle },
+                                    html = payload.html
+                                )
+                            )
+                        }
+                    },
+                    findSavedApp = {
+                        val tagId = appWorkspaceTagId?.trim().orEmpty()
+                        if (tagId.isBlank()) null else savedApps.firstOrNull { it.sourceTagId == tagId }
+                    },
+                    onApplyUpdate = { currentHtml, requestText ->
+                        val allModels = repository.modelsFlow.first()
+                        if (allModels.isEmpty()) {
+                            error("No models available.")
+                        }
+                        val preferredAppModelKey =
+                            repository.defaultAppBuilderModelIdFlow.first()?.trim()?.takeIf { it.isNotBlank() }
+                        val fallbackChatModelKey =
+                            repository.defaultChatModelIdFlow.first()?.trim()?.takeIf { it.isNotBlank() }
+                        val appModel =
+                            preferredAppModelKey?.let { key ->
+                                allModels.firstOrNull { it.id == key }
+                                    ?: allModels.firstOrNull { extractRemoteModelId(it.id) == key }
+                            }
+                                ?: fallbackChatModelKey?.let { key ->
+                                    allModels.firstOrNull { it.id == key }
+                                        ?: allModels.firstOrNull { extractRemoteModelId(it.id) == key }
+                                }
+                                ?: allModels.firstOrNull()
+                                ?: error("No model available for app updates.")
+
+                        val providers = repository.providersFlow.first()
+                        val providerRaw =
+                            appModel.providerId?.let { pid -> providers.firstOrNull { it.id == pid } }
+                                ?: providers.firstOrNull()
+                                ?: error("No provider configured.")
+                        if (providerRaw.apiUrl.isBlank() || providerRaw.apiKey.isBlank()) {
+                            error("Provider is not configured.")
+                        }
+                        val provider = providerAuthManager.ensureValidProvider(providerRaw)
+                        reviseHtmlAppFromPrompt(
+                            chatApiClient = chatApiClient,
+                            provider = provider,
+                            modelId = extractRemoteModelId(appModel.id),
+                            extraHeaders = appModel.headers,
+                            currentHtml = currentHtml,
+                            requestText = requestText
+                        )
+                    }
+                )
             }
         }
     }
@@ -2181,17 +2304,17 @@ private fun AppDevToolTagCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(cardBackground, RoundedCornerShape(20.dp))
+            .padding(vertical = 6.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(cardBackground, RoundedCornerShape(18.dp))
             .pressableScale(pressedScale = 0.98f, onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 20.dp),
+            .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(56.dp)
+                .size(52.dp)
                 .clip(CircleShape)
                 .background(Color(0xFF1C1C1E), CircleShape),
             contentAlignment = Alignment.Center
@@ -2206,18 +2329,20 @@ private fun AppDevToolTagCard(
 
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
                 text = payload.name,
-                fontSize = 17.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Normal,
                 color = Color(0xFF1C1C1E)
             )
             Text(
                 text = payload.subtitle,
                 fontSize = 14.sp,
-                color = Color(0xFF8E8E93)
+                color = Color(0xFF8E8E93),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Box(
                 modifier = Modifier
@@ -2368,6 +2493,347 @@ private fun AppDevTagDetailCard(tag: MessageTag) {
                         )
                     }
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppDevWorkspaceScreen(
+    tag: MessageTag,
+    onDismiss: () -> Unit,
+    onUpdate: (AppDevTagPayload) -> Unit,
+    onSave: (AppDevTagPayload) -> Unit,
+    findSavedApp: () -> SavedApp?,
+    onApplyUpdate: suspend (currentHtml: String, requestText: String) -> String
+) {
+    val scope = rememberCoroutineScope()
+    val navBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val savedApp = findSavedApp()
+    val updateFailedText = stringResource(R.string.app_dev_update_failed)
+    var payload by remember(tag.id, tag.content, tag.status) {
+        mutableStateOf(
+            parseAppDevTagPayload(
+                content = tag.content,
+                fallbackName = tag.title.ifBlank { "App development" },
+                fallbackStatus = tag.status
+            )
+        )
+    }
+    var requestText by remember(tag.id) { mutableStateOf("") }
+    var applying by remember { mutableStateOf(false) }
+    var errorText by remember { mutableStateOf<String?>(null) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .zIndex(20f)
+            .background(Background)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(horizontal = 16.dp)
+                .padding(top = 8.dp, bottom = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Surface, CircleShape)
+                        .pressableScale(pressedScale = 0.95f, onClick = onDismiss),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Back,
+                        contentDescription = null,
+                        tint = TextPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Surface, CircleShape)
+                        .pressableScale(
+                            enabled = payload.html.isNotBlank(),
+                            pressedScale = 0.95f
+                        ) {
+                            if (payload.html.isBlank()) return@pressableScale
+                            val savedPayload =
+                                payload.copy(
+                                    subtitle = compactAppDescription(payload.description, payload.subtitle),
+                                    status = "success",
+                                    progress = 100,
+                                    error = null
+                                )
+                            payload = savedPayload
+                            onUpdate(savedPayload)
+                            onSave(savedPayload)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Check,
+                        contentDescription = null,
+                        tint = if (payload.html.isBlank()) TextSecondary else TextPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = payload.name,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = compactAppDescription(payload.description, payload.subtitle),
+                fontSize = 13.sp,
+                color = TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (savedApp != null) {
+                Text(
+                    text = stringResource(R.string.app_dev_saved_tip),
+                    fontSize = 12.sp,
+                    color = TextSecondary.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                shape = RoundedCornerShape(20.dp),
+                color = Surface
+            ) {
+                val html = payload.html.trim()
+                if (html.isBlank()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = payload.error?.ifBlank { null }
+                                ?: stringResource(R.string.app_dev_preview_unavailable),
+                            fontSize = 14.sp,
+                            color = TextSecondary
+                        )
+                    }
+                } else {
+                    AndroidView(
+                        modifier = Modifier.fillMaxSize(),
+                        factory = { context ->
+                            WebView(context).apply {
+                                settings.javaScriptEnabled = true
+                                settings.domStorageEnabled = true
+                                settings.allowFileAccess = false
+                                settings.allowContentAccess = false
+                                webViewClient = WebViewClient()
+                                webChromeClient = WebChromeClient()
+                            }
+                        },
+                        update = { webView ->
+                            webView.loadDataWithBaseURL(
+                                null,
+                                html,
+                                "text/html",
+                                "utf-8",
+                                null
+                            )
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            if (!errorText.isNullOrBlank()) {
+                Text(
+                    text = errorText.orEmpty(),
+                    fontSize = 12.sp,
+                    color = Color(0xFFFF3B30),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = navBottomPadding),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(26.dp),
+                    color = Surface
+                ) {
+                    BasicTextField(
+                        value = requestText,
+                        onValueChange = { requestText = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        textStyle = TextStyle(
+                            fontSize = 16.sp,
+                            color = TextPrimary
+                        ),
+                        singleLine = true,
+                        cursorBrush = SolidColor(TextPrimary),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(
+                            onSend = {
+                                if (requestText.isBlank() || applying) return@KeyboardActions
+                                val prompt = requestText.trim()
+                                requestText = ""
+                                applying = true
+                                errorText = null
+                                scope.launch {
+                                    val runningPayload = payload.copy(status = "running", progress = 45, error = null)
+                                    payload = runningPayload
+                                    onUpdate(runningPayload)
+                                    runCatching {
+                                        onApplyUpdate(payload.html, prompt)
+                                    }.fold(
+                                        onSuccess = { html ->
+                                            val successPayload =
+                                                payload.copy(
+                                                    subtitle = compactAppDescription(prompt, payload.subtitle),
+                                                    description = compactAppDescription(prompt, payload.description),
+                                                    html = normalizeGeneratedHtml(html),
+                                                    status = "success",
+                                                    progress = 100,
+                                                    error = null
+                                                )
+                                            payload = successPayload
+                                            onUpdate(successPayload)
+                                        },
+                                        onFailure = { error ->
+                                            val message =
+                                                error.message?.trim()
+                                                    .orEmpty()
+                                                    .ifBlank { updateFailedText }
+                                            errorText = message
+                                            val failedPayload =
+                                                payload.copy(
+                                                    status = "error",
+                                                    progress = 0,
+                                                    error = message
+                                                )
+                                            payload = failedPayload
+                                            onUpdate(failedPayload)
+                                        }
+                                    )
+                                    applying = false
+                                }
+                            }
+                        ),
+                        decorationBox = { innerTextField ->
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                if (requestText.isBlank()) {
+                                    Text(
+                                        text = stringResource(R.string.app_dev_input_placeholder),
+                                        fontSize = 16.sp,
+                                        color = TextSecondary
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF1C1C1E), CircleShape)
+                        .pressableScale(
+                            enabled = !applying && requestText.isNotBlank(),
+                            pressedScale = 0.95f
+                        ) {
+                            if (requestText.isBlank() || applying) return@pressableScale
+                            val prompt = requestText.trim()
+                            requestText = ""
+                            applying = true
+                            errorText = null
+                            scope.launch {
+                                val runningPayload = payload.copy(status = "running", progress = 45, error = null)
+                                payload = runningPayload
+                                onUpdate(runningPayload)
+                                runCatching {
+                                    onApplyUpdate(payload.html, prompt)
+                                }.fold(
+                                    onSuccess = { html ->
+                                        val successPayload =
+                                            payload.copy(
+                                                subtitle = compactAppDescription(prompt, payload.subtitle),
+                                                description = compactAppDescription(prompt, payload.description),
+                                                html = normalizeGeneratedHtml(html),
+                                                status = "success",
+                                                progress = 100,
+                                                error = null
+                                            )
+                                        payload = successPayload
+                                        onUpdate(successPayload)
+                                    },
+                                    onFailure = { error ->
+                                        val message =
+                                            error.message?.trim()
+                                                .orEmpty()
+                                                .ifBlank { updateFailedText }
+                                        errorText = message
+                                        val failedPayload =
+                                            payload.copy(
+                                                status = "error",
+                                                progress = 0,
+                                                error = message
+                                            )
+                                        payload = failedPayload
+                                        onUpdate(failedPayload)
+                                    }
+                                )
+                                applying = false
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (applying) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White
+                        )
+                    } else {
+                        Icon(
+                            imageVector = AppIcons.Send,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
             }
         }
     }
@@ -2986,7 +3452,7 @@ fun ToolMenuPanel(
                         onClick = { onToolSelect("mcp") }
                     )
                     ToolListItem(
-                        icon = { Icon(AppIcons.Apps, null, Modifier.size(24.dp), TextPrimary) },
+                        icon = { Icon(AppIcons.AppDeveloper, null, Modifier.size(24.dp), TextPrimary) },
                         title = stringResource(R.string.chat_tool_app_builder),
                         subtitle = stringResource(R.string.chat_tool_app_builder_subtitle),
                         onClick = { onToolSelect("app_builder") }
@@ -3202,7 +3668,7 @@ private fun BottomInputArea(
         "web" -> AppIcons.Globe
         "image" -> AppIcons.CreateImage
         "mcp" -> AppIcons.MCPTools
-        "app_builder" -> AppIcons.Apps
+        "app_builder" -> AppIcons.AppDeveloper
         else -> AppIcons.Globe
     }
     val bottomPadding = bottomInputBottomPadding(imeVisible)
@@ -3734,11 +4200,11 @@ private fun parseAppDevTagPayload(
         json?.get("name")?.takeIf { it.isJsonPrimitive }?.asString?.trim()
             ?.takeIf { it.isNotBlank() }
             ?: fallbackName
-    val subtitle =
+    val subtitleRaw =
         json?.get("subtitle")?.takeIf { it.isJsonPrimitive }?.asString?.trim()
             ?.takeIf { it.isNotBlank() }
             ?: "Developing app"
-    val description = json?.get("description")?.takeIf { it.isJsonPrimitive }?.asString?.trim().orEmpty()
+    val descriptionRaw = json?.get("description")?.takeIf { it.isJsonPrimitive }?.asString?.trim().orEmpty()
     val style = json?.get("style")?.takeIf { it.isJsonPrimitive }?.asString?.trim().orEmpty()
     val features =
         json?.getAsJsonArray("features")
@@ -3748,10 +4214,12 @@ private fun parseAppDevTagPayload(
     val status = json?.get("status")?.takeIf { it.isJsonPrimitive }?.asString?.trim().orEmpty().ifBlank { fallbackStatus.orEmpty() }
     val html = json?.get("html")?.takeIf { it.isJsonPrimitive }?.asString.orEmpty()
     val error = json?.get("error")?.takeIf { it.isJsonPrimitive }?.asString?.trim()?.takeIf { it.isNotBlank() }
+    val compactDescription = compactAppDescription(descriptionRaw, subtitleRaw)
+    val compactSubtitle = compactAppDescription(subtitleRaw, compactDescription)
     return AppDevTagPayload(
         name = name,
-        subtitle = subtitle,
-        description = description,
+        subtitle = compactSubtitle,
+        description = compactDescription,
         style = style,
         features = features,
         progress = progress.coerceIn(0, 100),
@@ -3759,6 +4227,19 @@ private fun parseAppDevTagPayload(
         html = html,
         error = error
     )
+}
+
+private fun compactAppDescription(primary: String, fallback: String = "Developing app"): String {
+    val raw =
+        primary
+            .replace(Regex("\\s+"), " ")
+            .replace(Regex("[\\r\\n]+"), " ")
+            .trim()
+    val simplified = raw.trimEnd('.', '。', '!', '！', '?', '？')
+    if (simplified.isBlank()) {
+        return fallback.trim().ifBlank { "Developing app" }.take(56)
+    }
+    return simplified.take(56)
 }
 
 private suspend fun generateHtmlAppFromSpec(
@@ -3773,6 +4254,7 @@ private suspend fun generateHtmlAppFromSpec(
             append("You are an app development assistant. ")
             append("Return only a complete HTML document. ")
             append("Use clean semantic markup, responsive layout, and production-ready inline CSS/JS. ")
+            append("Keep copy concise and direct. Avoid filler text. ")
             append("Do not add markdown fences.")
         }
 
@@ -3796,6 +4278,56 @@ private suspend fun generateHtmlAppFromSpec(
             appendLine("- Include all requested features.")
             appendLine("- Mobile + desktop responsive.")
             appendLine("- Keep visuals polished and coherent with the specified style.")
+            appendLine("- Keep user-facing descriptions short and practical.")
+        }
+
+    val raw =
+        collectStreamContent(
+            chatApiClient = chatApiClient,
+            provider = provider,
+            modelId = modelId,
+            messages = listOf(
+                Message(role = "system", content = systemPrompt),
+                Message(role = "user", content = userPrompt)
+            ),
+            extraHeaders = extraHeaders
+        )
+    return normalizeGeneratedHtml(raw)
+}
+
+private suspend fun reviseHtmlAppFromPrompt(
+    chatApiClient: ChatApiClient,
+    provider: ProviderConfig,
+    modelId: String,
+    extraHeaders: List<HttpHeader>,
+    currentHtml: String,
+    requestText: String
+): String {
+    val current = currentHtml.trim()
+    if (current.isBlank()) {
+        error("Current HTML is empty.")
+    }
+    val request = requestText.trim()
+    if (request.isBlank()) {
+        error("Update request is empty.")
+    }
+
+    val systemPrompt =
+        buildString {
+            append("You are an app development assistant. ")
+            append("Update the provided HTML app according to user request. ")
+            append("Return only the full updated HTML document. ")
+            append("Keep copy concise and direct. ")
+            append("Do not add markdown fences.")
+        }
+    val userPrompt =
+        buildString {
+            appendLine("Update this app based on the request.")
+            append("Request: ")
+            appendLine(request)
+            appendLine()
+            appendLine("Current HTML:")
+            appendLine(current)
         }
 
     val raw =
@@ -4197,7 +4729,7 @@ private fun buildAppDeveloperToolInstruction(
         appendLine()
         appendLine("Required arguments:")
         appendLine("- name: app name")
-        appendLine("- description: short product description")
+        appendLine("- description: concise description (one short sentence, no filler)")
         appendLine("- style: visual style direction")
         appendLine("- features: array of detailed functional requirements")
     }.trim()

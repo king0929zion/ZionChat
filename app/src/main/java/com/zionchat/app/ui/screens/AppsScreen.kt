@@ -1,5 +1,8 @@
 package com.zionchat.app.ui.screens
 
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -17,9 +20,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -27,8 +32,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,11 +46,24 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
+import com.zionchat.app.LocalAppRepository
+import com.zionchat.app.R
+import com.zionchat.app.data.SavedApp
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
+import com.zionchat.app.ui.theme.Background
+import com.zionchat.app.ui.theme.SourceSans3
+import com.zionchat.app.ui.theme.TextPrimary
+import com.zionchat.app.ui.theme.TextSecondary
+import com.zionchat.app.ui.theme.Surface as SurfaceColor
+import androidx.compose.ui.res.stringResource
 
 private data class AppItemUi(
     val name: String,
@@ -64,9 +84,12 @@ private enum class AppIconStyle {
 
 @Composable
 fun AppsScreen(navController: NavController) {
+    val repository = LocalAppRepository.current
+    val savedApps by repository.savedAppsFlow.collectAsState(initial = emptyList())
     val categories = remember { listOf("Featured", "Lifestyle", "Productivity") }
     var selectedCategory by remember { mutableStateOf(categories.first()) }
-    val apps = remember {
+    var selectedSavedApp by remember { mutableStateOf<SavedApp?>(null) }
+    val featuredApps = remember {
         listOf(
             AppItemUi("Airtable", "Add structured data to ChatGPT", AppIconStyle.Airtable),
             AppItemUi("Apple Music", "Build playlists and find music", AppIconStyle.AppleMusic),
@@ -79,24 +102,26 @@ fun AppsScreen(navController: NavController) {
     }
 
     Scaffold(
-        containerColor = Color.White,
+        containerColor = Background,
         topBar = {
             AppsTopBar(
                 onBack = { navController.popBackStack() },
-                onAdd = { }
+                onAdd = { navController.navigate("chat") }
             )
         }
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.White)
+                .background(Background)
                 .padding(padding)
         ) {
+            Spacer(modifier = Modifier.height(8.dp))
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 14.dp)
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -105,7 +130,7 @@ fun AppsScreen(navController: NavController) {
                     Box(
                         modifier = Modifier
                             .clip(CircleShape)
-                            .background(if (isActive) Color(0xFFF2F2F7) else Color.Transparent, CircleShape)
+                            .background(if (isActive) Color(0xFFEDEDF2) else Color.Transparent, CircleShape)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
@@ -117,7 +142,7 @@ fun AppsScreen(navController: NavController) {
                             text = category,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Medium,
-                            color = Color(0xFF1C1C1E)
+                            color = TextPrimary
                         )
                     }
                 }
@@ -125,14 +150,65 @@ fun AppsScreen(navController: NavController) {
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(items = apps, key = { it.name }) { item ->
+                item(key = "saved_title") {
+                    Text(
+                        text = stringResource(R.string.apps_my_apps),
+                        fontSize = 13.sp,
+                        fontFamily = SourceSans3,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 4.dp)
+                    )
+                }
+
+                if (savedApps.isEmpty()) {
+                    item(key = "saved_empty") {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            color = SurfaceColor
+                        ) {
+                            Text(
+                                text = stringResource(R.string.apps_empty_saved),
+                                fontSize = 14.sp,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
+                            )
+                        }
+                    }
+                } else {
+                    items(items = savedApps, key = { it.id }) { app ->
+                        SavedAppRow(
+                            app = app,
+                            onClick = { selectedSavedApp = app }
+                        )
+                    }
+                }
+
+                item(key = "featured_title") {
+                    Text(
+                        text = stringResource(R.string.apps_featured),
+                        fontSize = 13.sp,
+                        fontFamily = SourceSans3,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 4.dp)
+                    )
+                }
+
+                items(items = featuredApps, key = { it.name }) { item ->
                     AppItemRow(item = item, onClick = { })
                 }
             }
         }
+    }
+
+    selectedSavedApp?.let { app ->
+        SavedAppPreviewDialog(
+            app = app,
+            onDismiss = { selectedSavedApp = null }
+        )
     }
 }
 
@@ -144,23 +220,24 @@ private fun AppsTopBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .background(Background)
+            .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.statusBars)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(Color(0xFFF5F5F7), CircleShape)
+                .background(SurfaceColor, CircleShape)
                 .pressableScale(pressedScale = 0.95f, onClick = onBack),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = AppIcons.Back,
                 contentDescription = "Back",
-                tint = Color(0xFF1C1C1E),
-                modifier = Modifier.size(22.dp)
+                tint = TextPrimary,
+                modifier = Modifier.size(20.dp)
             )
         }
 
@@ -169,10 +246,10 @@ private fun AppsTopBar(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "Apps",
+                text = stringResource(R.string.apps),
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF1C1C1E)
+                color = TextPrimary
             )
         }
 
@@ -180,16 +257,172 @@ private fun AppsTopBar(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(Color(0xFFF5F5F7), CircleShape)
+                .background(SurfaceColor, CircleShape)
                 .pressableScale(pressedScale = 0.95f, onClick = onAdd),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = AppIcons.Plus,
                 contentDescription = "Add",
-                tint = Color(0xFF1C1C1E),
+                tint = TextPrimary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SavedAppRow(
+    app: SavedApp,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressedBackground by animateColorAsState(
+        targetValue = if (isPressed) Color(0xFFF1F1F4) else Color.White,
+        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+        label = "saved_app_pressed_bg"
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(pressedBackground, RoundedCornerShape(16.dp))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF1C1C1E), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = AppIcons.Apps,
+                contentDescription = null,
+                tint = Color.White,
                 modifier = Modifier.size(22.dp)
             )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = app.name,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Normal,
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = app.description.ifBlank { stringResource(R.string.apps_saved_from_chat) },
+                fontSize = 13.sp,
+                color = TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Icon(
+            imageVector = AppIcons.ChevronRight,
+            contentDescription = null,
+            tint = Color(0xFFC7C7CC),
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
+@Composable
+private fun SavedAppPreviewDialog(
+    app: SavedApp,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Background)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.statusBars)
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 8.dp, bottom = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(SurfaceColor, CircleShape)
+                            .pressableScale(pressedScale = 0.95f, onClick = onDismiss),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Back,
+                            contentDescription = null,
+                            tint = TextPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Text(
+                        text = app.name,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp)
+                            .weight(1f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    shape = RoundedCornerShape(20.dp),
+                    color = SurfaceColor
+                ) {
+                    AndroidView(
+                        modifier = Modifier.fillMaxSize(),
+                        factory = { context ->
+                            WebView(context).apply {
+                                settings.javaScriptEnabled = true
+                                settings.domStorageEnabled = true
+                                settings.allowFileAccess = false
+                                settings.allowContentAccess = false
+                                webViewClient = WebViewClient()
+                                webChromeClient = WebChromeClient()
+                            }
+                        },
+                        update = { webView ->
+                            webView.loadDataWithBaseURL(
+                                null,
+                                app.html,
+                                "text/html",
+                                "utf-8",
+                                null
+                            )
+                        }
+                    )
+                }
+            }
         }
     }
 }
@@ -202,7 +435,7 @@ private fun AppItemRow(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val pressedBackground by animateColorAsState(
-        targetValue = if (isPressed) Color(0xFFF5F5F7) else Color.Transparent,
+        targetValue = if (isPressed) Color(0xFFF1F1F4) else Color.Transparent,
         animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
         label = "app_item_pressed_bg"
     )
@@ -227,12 +460,12 @@ private fun AppItemRow(
                 text = item.name,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Normal,
-                color = Color(0xFF1C1C1E)
+                color = TextPrimary
             )
             Text(
                 text = item.subtitle,
                 fontSize = 14.sp,
-                color = Color(0xFF8E8E93)
+                color = TextSecondary
             )
         }
         Icon(
@@ -313,10 +546,7 @@ private fun AppIcon(
                         .border(width = 1.dp, color = Color(0xFFE5E5EA), shape = CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                    ) {
+                    Box(modifier = Modifier.size(28.dp)) {
                         Box(
                             modifier = Modifier
                                 .size(10.dp)

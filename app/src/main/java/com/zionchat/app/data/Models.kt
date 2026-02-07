@@ -76,3 +76,13 @@ data class MemoryItem(
     val content: String,
     val createdAt: Long = System.currentTimeMillis()
 )
+
+data class SavedApp(
+    val id: String = UUID.randomUUID().toString(),
+    val sourceTagId: String? = null,
+    val name: String,
+    val description: String,
+    val html: String,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)

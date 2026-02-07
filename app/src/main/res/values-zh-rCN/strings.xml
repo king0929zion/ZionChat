@@ -120,4 +120,11 @@
     <string name="chat_tool_app_builder_subtitle">按规范生成 HTML 应用</string>
     <string name="app_dev_preview_title">预览</string>
     <string name="app_dev_preview_unavailable">尚未生成 HTML，暂不可预览。</string>
+    <string name="app_dev_input_placeholder">告诉我你要修改什么...</string>
+    <string name="app_dev_update_failed">应用更新失败。</string>
+    <string name="app_dev_saved_tip">已保存到 Apps</string>
+    <string name="apps_my_apps">我的应用</string>
+    <string name="apps_featured">精选应用</string>
+    <string name="apps_empty_saved">还没有已保存应用。请在应用开发卡片中保存后查看。</string>
+    <string name="apps_saved_from_chat">来自对话保存</string>
 </resources>
