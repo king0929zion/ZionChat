@@ -13,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -44,6 +45,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -66,6 +70,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.navigation.NavController
 import com.zionchat.app.R
 import com.zionchat.app.LocalAppRepository
@@ -1069,7 +1074,7 @@ fun ChatScreen(navController: NavController) {
                                         description = parsedSpec?.description.orEmpty(),
                                         style = parsedSpec?.style.orEmpty(),
                                         features = parsedSpec?.features.orEmpty(),
-                                        progress = 45,
+                                        progress = 8,
                                         status = "running",
                                         html = "",
                                         error = null
@@ -1152,6 +1157,34 @@ fun ChatScreen(navController: NavController) {
                                 }
 
                                 val startedAt = System.currentTimeMillis()
+                                var streamedProgress = pendingPayload.progress
+                                var lastProgressUpdateAtMs = 0L
+                                fun updateAppDevProgress(progressValue: Int) {
+                                    val normalized = progressValue.coerceIn(8, 95)
+                                    val now = System.currentTimeMillis()
+                                    if (normalized <= streamedProgress) return
+                                    if (now - lastProgressUpdateAtMs < 90L) return
+                                    streamedProgress = normalized
+                                    lastProgressUpdateAtMs = now
+                                    updateAssistantTag(pendingTag.id) { current ->
+                                        val existing =
+                                            parseAppDevTagPayload(
+                                                content = current.content,
+                                                fallbackName = parsedSpec.name,
+                                                fallbackStatus = "running"
+                                            )
+                                        val updated =
+                                            existing.copy(
+                                                progress = normalized,
+                                                status = "running",
+                                                error = null
+                                            )
+                                        current.copy(
+                                            content = encodeAppDevTagPayload(updated),
+                                            status = "running"
+                                        )
+                                    }
+                                }
                                 val htmlResult =
                                     runCatching {
                                         generateHtmlAppFromSpec(
@@ -1159,7 +1192,8 @@ fun ChatScreen(navController: NavController) {
                                             provider = appProvider,
                                             modelId = extractRemoteModelId(appModel.id),
                                             extraHeaders = appModel.headers,
-                                            spec = parsedSpec
+                                            spec = parsedSpec,
+                                            onProgress = ::updateAppDevProgress
                                         )
                                     }
                                 val elapsedMs = System.currentTimeMillis() - startedAt
@@ -1941,7 +1975,7 @@ fun ChatScreen(navController: NavController) {
                         val tagId = appWorkspaceTagId?.trim().orEmpty()
                         if (tagId.isBlank()) null else savedApps.firstOrNull { it.sourceTagId == tagId }
                     },
-                    onApplyUpdate = { currentHtml, requestText ->
+                    onApplyUpdate = { currentHtml, requestText, onProgress ->
                         val allModels = repository.modelsFlow.first()
                         if (allModels.isEmpty()) {
                             error("No models available.")
@@ -1977,7 +2011,8 @@ fun ChatScreen(navController: NavController) {
                             modelId = extractRemoteModelId(appModel.id),
                             extraHeaders = appModel.headers,
                             currentHtml = currentHtml,
-                            requestText = requestText
+                            requestText = requestText,
+                            onProgress = onProgress
                         )
                     }
                 )
@@ -2309,27 +2344,23 @@ private fun AppDevToolTagCard(
             .background(cardBackground, RoundedCornerShape(18.dp))
             .pressableScale(pressedScale = 0.98f, onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(52.dp)
+                .size(46.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF1C1C1E), CircleShape),
+                .background(Color.White, CircleShape)
+                .border(width = 1.dp, color = Color(0xFFE7E7EC), shape = CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = AppIcons.Apps,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(28.dp)
-            )
+            AppDevRingGlyph(modifier = Modifier.size(24.dp))
         }
 
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
                 text = payload.name,
@@ -2344,9 +2375,10 @@ private fun AppDevToolTagCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            Spacer(modifier = Modifier.height(4.dp))
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.72f)
+                    .fillMaxWidth()
                     .height(6.dp)
                     .clip(RoundedCornerShape(3.dp))
                     .background(Color(0xFFE5E5EA), RoundedCornerShape(3.dp))
@@ -2365,12 +2397,6 @@ private fun AppDevToolTagCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = "${payload.progress.coerceIn(0, 100)}%",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color(0xFF8E8E93)
-            )
             if (isTagRunning(tag)) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(14.dp),
@@ -2386,6 +2412,29 @@ private fun AppDevToolTagCard(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun AppDevRingGlyph(
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier) {
+        val strokeWidth = size.minDimension * 0.24f
+        val arcDiameter = size.minDimension - strokeWidth
+        val topLeft = Offset(
+            x = (size.width - arcDiameter) / 2f,
+            y = (size.height - arcDiameter) / 2f
+        )
+        drawArc(
+            color = Color.Black,
+            startAngle = -90f,
+            sweepAngle = 312f,
+            useCenter = false,
+            topLeft = topLeft,
+            size = Size(arcDiameter, arcDiameter),
+            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+        )
     }
 }
 
@@ -2505,7 +2554,7 @@ private fun AppDevWorkspaceScreen(
     onUpdate: (AppDevTagPayload) -> Unit,
     onSave: (AppDevTagPayload) -> Unit,
     findSavedApp: () -> SavedApp?,
-    onApplyUpdate: suspend (currentHtml: String, requestText: String) -> String
+    onApplyUpdate: suspend (currentHtml: String, requestText: String, onProgress: (Int) -> Unit) -> String
 ) {
     val scope = rememberCoroutineScope()
     val navBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -2523,6 +2572,64 @@ private fun AppDevWorkspaceScreen(
     var requestText by remember(tag.id) { mutableStateOf("") }
     var applying by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
+    fun submitUpdateRequest() {
+        if (requestText.isBlank() || applying) return
+        val prompt = requestText.trim()
+        requestText = ""
+        applying = true
+        errorText = null
+        scope.launch {
+            var streamedProgress = 10
+            val runningPayload = payload.copy(status = "running", progress = streamedProgress, error = null)
+            payload = runningPayload
+            onUpdate(runningPayload)
+            runCatching {
+                onApplyUpdate(payload.html, prompt) { progress ->
+                    val normalized = progress.coerceIn(streamedProgress, 95)
+                    if (normalized <= streamedProgress) return@onApplyUpdate
+                    streamedProgress = normalized
+                    val streamingPayload =
+                        payload.copy(
+                            status = "running",
+                            progress = normalized,
+                            error = null
+                        )
+                    payload = streamingPayload
+                    onUpdate(streamingPayload)
+                }
+            }.fold(
+                onSuccess = { html ->
+                    val successPayload =
+                        payload.copy(
+                            subtitle = compactAppDescription(prompt, payload.subtitle),
+                            description = compactAppDescription(prompt, payload.description),
+                            html = normalizeGeneratedHtml(html),
+                            status = "success",
+                            progress = 100,
+                            error = null
+                        )
+                    payload = successPayload
+                    onUpdate(successPayload)
+                },
+                onFailure = { error ->
+                    val message =
+                        error.message?.trim()
+                            .orEmpty()
+                            .ifBlank { updateFailedText }
+                    errorText = message
+                    val failedPayload =
+                        payload.copy(
+                            status = "error",
+                            progress = 0,
+                            error = message
+                        )
+                    payload = failedPayload
+                    onUpdate(failedPayload)
+                }
+            )
+            applying = false
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -2703,51 +2810,7 @@ private fun AppDevWorkspaceScreen(
                         cursorBrush = SolidColor(TextPrimary),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(
-                            onSend = {
-                                if (requestText.isBlank() || applying) return@KeyboardActions
-                                val prompt = requestText.trim()
-                                requestText = ""
-                                applying = true
-                                errorText = null
-                                scope.launch {
-                                    val runningPayload = payload.copy(status = "running", progress = 45, error = null)
-                                    payload = runningPayload
-                                    onUpdate(runningPayload)
-                                    runCatching {
-                                        onApplyUpdate(payload.html, prompt)
-                                    }.fold(
-                                        onSuccess = { html ->
-                                            val successPayload =
-                                                payload.copy(
-                                                    subtitle = compactAppDescription(prompt, payload.subtitle),
-                                                    description = compactAppDescription(prompt, payload.description),
-                                                    html = normalizeGeneratedHtml(html),
-                                                    status = "success",
-                                                    progress = 100,
-                                                    error = null
-                                                )
-                                            payload = successPayload
-                                            onUpdate(successPayload)
-                                        },
-                                        onFailure = { error ->
-                                            val message =
-                                                error.message?.trim()
-                                                    .orEmpty()
-                                                    .ifBlank { updateFailedText }
-                                            errorText = message
-                                            val failedPayload =
-                                                payload.copy(
-                                                    status = "error",
-                                                    progress = 0,
-                                                    error = message
-                                                )
-                                            payload = failedPayload
-                                            onUpdate(failedPayload)
-                                        }
-                                    )
-                                    applying = false
-                                }
-                            }
+                            onSend = { submitUpdateRequest() }
                         ),
                         decorationBox = { innerTextField ->
                             Box(modifier = Modifier.fillMaxWidth()) {
@@ -2773,49 +2836,7 @@ private fun AppDevWorkspaceScreen(
                             enabled = !applying && requestText.isNotBlank(),
                             pressedScale = 0.95f
                         ) {
-                            if (requestText.isBlank() || applying) return@pressableScale
-                            val prompt = requestText.trim()
-                            requestText = ""
-                            applying = true
-                            errorText = null
-                            scope.launch {
-                                val runningPayload = payload.copy(status = "running", progress = 45, error = null)
-                                payload = runningPayload
-                                onUpdate(runningPayload)
-                                runCatching {
-                                    onApplyUpdate(payload.html, prompt)
-                                }.fold(
-                                    onSuccess = { html ->
-                                        val successPayload =
-                                            payload.copy(
-                                                subtitle = compactAppDescription(prompt, payload.subtitle),
-                                                description = compactAppDescription(prompt, payload.description),
-                                                html = normalizeGeneratedHtml(html),
-                                                status = "success",
-                                                progress = 100,
-                                                error = null
-                                            )
-                                        payload = successPayload
-                                        onUpdate(successPayload)
-                                    },
-                                    onFailure = { error ->
-                                        val message =
-                                            error.message?.trim()
-                                                .orEmpty()
-                                                .ifBlank { updateFailedText }
-                                        errorText = message
-                                        val failedPayload =
-                                            payload.copy(
-                                                status = "error",
-                                                progress = 0,
-                                                error = message
-                                            )
-                                        payload = failedPayload
-                                        onUpdate(failedPayload)
-                                    }
-                                )
-                                applying = false
-                            }
+                            submitUpdateRequest()
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -4032,7 +4053,8 @@ private suspend fun collectStreamContent(
     provider: ProviderConfig,
     modelId: String,
     messages: List<Message>,
-    extraHeaders: List<HttpHeader>
+    extraHeaders: List<HttpHeader>,
+    onChunk: ((String) -> Unit)? = null
 ): String {
     val sb = StringBuilder()
     chatApiClient.chatCompletionsStream(
@@ -4041,7 +4063,10 @@ private suspend fun collectStreamContent(
         messages = messages,
         extraHeaders = extraHeaders
     ).collect { delta ->
-        delta.content?.let { sb.append(it) }
+        delta.content?.let { chunk ->
+            sb.append(chunk)
+            onChunk?.invoke(chunk)
+        }
     }
     return sb.toString().trim()
 }
@@ -4247,7 +4272,8 @@ private suspend fun generateHtmlAppFromSpec(
     provider: ProviderConfig,
     modelId: String,
     extraHeaders: List<HttpHeader>,
-    spec: AppDevToolSpec
+    spec: AppDevToolSpec,
+    onProgress: ((Int) -> Unit)? = null
 ): String {
     val systemPrompt =
         buildString {
@@ -4281,6 +4307,12 @@ private suspend fun generateHtmlAppFromSpec(
             appendLine("- Keep user-facing descriptions short and practical.")
         }
 
+    var emittedProgress = 10
+    var chunkCount = 0
+    var charCount = 0
+    val startedAtMs = System.currentTimeMillis()
+    onProgress?.invoke(emittedProgress)
+
     val raw =
         collectStreamContent(
             chatApiClient = chatApiClient,
@@ -4290,8 +4322,23 @@ private suspend fun generateHtmlAppFromSpec(
                 Message(role = "system", content = systemPrompt),
                 Message(role = "user", content = userPrompt)
             ),
-            extraHeaders = extraHeaders
+            extraHeaders = extraHeaders,
+            onChunk = { chunk ->
+                chunkCount += 1
+                charCount += chunk.length
+                val elapsedBoost = ((System.currentTimeMillis() - startedAtMs) / 550L).toInt().coerceAtMost(18)
+                val chunkBoost = (chunkCount * 3).coerceAtMost(48)
+                val sizeBoost = (charCount / 140).coerceAtMost(18)
+                val nextProgress = (10 + elapsedBoost + chunkBoost + sizeBoost).coerceAtMost(94)
+                if (nextProgress > emittedProgress) {
+                    emittedProgress = nextProgress
+                    onProgress?.invoke(nextProgress)
+                }
+            }
         )
+    if (emittedProgress < 94) {
+        onProgress?.invoke(94)
+    }
     return normalizeGeneratedHtml(raw)
 }
 
@@ -4301,7 +4348,8 @@ private suspend fun reviseHtmlAppFromPrompt(
     modelId: String,
     extraHeaders: List<HttpHeader>,
     currentHtml: String,
-    requestText: String
+    requestText: String,
+    onProgress: ((Int) -> Unit)? = null
 ): String {
     val current = currentHtml.trim()
     if (current.isBlank()) {
@@ -4330,6 +4378,12 @@ private suspend fun reviseHtmlAppFromPrompt(
             appendLine(current)
         }
 
+    var emittedProgress = 12
+    var chunkCount = 0
+    var charCount = 0
+    val startedAtMs = System.currentTimeMillis()
+    onProgress?.invoke(emittedProgress)
+
     val raw =
         collectStreamContent(
             chatApiClient = chatApiClient,
@@ -4339,8 +4393,23 @@ private suspend fun reviseHtmlAppFromPrompt(
                 Message(role = "system", content = systemPrompt),
                 Message(role = "user", content = userPrompt)
             ),
-            extraHeaders = extraHeaders
+            extraHeaders = extraHeaders,
+            onChunk = { chunk ->
+                chunkCount += 1
+                charCount += chunk.length
+                val elapsedBoost = ((System.currentTimeMillis() - startedAtMs) / 520L).toInt().coerceAtMost(16)
+                val chunkBoost = (chunkCount * 3).coerceAtMost(50)
+                val sizeBoost = (charCount / 150).coerceAtMost(16)
+                val nextProgress = (12 + elapsedBoost + chunkBoost + sizeBoost).coerceAtMost(94)
+                if (nextProgress > emittedProgress) {
+                    emittedProgress = nextProgress
+                    onProgress?.invoke(nextProgress)
+                }
+            }
         )
+    if (emittedProgress < 94) {
+        onProgress?.invoke(94)
+    }
     return normalizeGeneratedHtml(raw)
 }
 
