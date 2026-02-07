@@ -77,7 +77,13 @@ class MainActivity : AppCompatActivity() {
                                         "zh" -> LocaleListCompat.forLanguageTags("zh-CN")
                                         else -> LocaleListCompat.getEmptyLocaleList()
                                     }
-                                AppCompatDelegate.setApplicationLocales(locales)
+                                val currentLocales = AppCompatDelegate.getApplicationLocales()
+                                if (currentLocales != locales) {
+                                    AppCompatDelegate.setApplicationLocales(locales)
+                                    if (!isFinishing && !isDestroyed) {
+                                        recreate()
+                                    }
+                                }
                             }
                         }
                         LaunchedEffect(Unit) {

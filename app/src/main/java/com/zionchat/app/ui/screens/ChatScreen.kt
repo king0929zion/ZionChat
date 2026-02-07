@@ -97,7 +97,6 @@ import kotlinx.coroutines.withContext
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.animateColor
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
@@ -661,11 +660,21 @@ fun ChatScreen(navController: NavController) {
                         val inlineCallRegex = Regex("(?is)<(?:mcp_call|tool_call)\\b[^>]*>(.*?)</(?:mcp_call|tool_call)>")
                         val inlineCallStartRegex = Regex("(?is)<(?:mcp_call|tool_call)\\b")
                         var inlineCallTail = ""
+                        var thinkingInlineCallTail = ""
                         var stoppedForToolCall = false
                         var inThink = false
                         var remainder = ""
                         val keepTail = 12
                         var lastUiUpdateMs = 0L
+
+                        fun captureStreamedCallPayload(payload: String) {
+                            val cleaned = payload.trim()
+                            if (cleaned.isBlank()) return
+                            streamedCallBlocks += cleaned
+                            if (!streamHasReadyValidCall && parseMcpToolCallsPayload(cleaned).isNotEmpty()) {
+                                streamHasReadyValidCall = true
+                            }
+                        }
 
                         fun appendVisibleWithInlineCallExtraction(text: String, flush: Boolean = false) {
                             if (text.isEmpty() && !flush) return
@@ -680,10 +689,7 @@ fun ChatScreen(navController: NavController) {
                                 }
                                 val payload = match.groupValues.getOrNull(1)?.trim().orEmpty()
                                 if (payload.isNotBlank()) {
-                                    streamedCallBlocks += payload
-                                    if (!streamHasReadyValidCall && parseMcpToolCallsPayload(payload).isNotEmpty()) {
-                                        streamHasReadyValidCall = true
-                                    }
+                                    captureStreamedCallPayload(payload)
                                 }
                                 cursor = match.range.last + 1
                             }
@@ -710,6 +716,50 @@ fun ChatScreen(navController: NavController) {
                                     inlineCallTail = remaining.takeLast(safeTailLen)
                                 } else {
                                     inlineCallTail = remaining
+                                }
+                            }
+                        }
+
+                        fun appendThinkingWithInlineCallExtraction(text: String, flush: Boolean = false) {
+                            if (text.isEmpty() && !flush) return
+                            var source = thinkingInlineCallTail + text
+                            thinkingInlineCallTail = ""
+                            if (source.isEmpty()) return
+
+                            var cursor = 0
+                            inlineCallRegex.findAll(source).forEach { match ->
+                                if (match.range.first > cursor) {
+                                    roundThinkingRaw.append(source.substring(cursor, match.range.first))
+                                }
+                                val payload = match.groupValues.getOrNull(1)?.trim().orEmpty()
+                                if (payload.isNotBlank()) {
+                                    captureStreamedCallPayload(payload)
+                                }
+                                cursor = match.range.last + 1
+                            }
+
+                            if (cursor >= source.length) return
+                            val remaining = source.substring(cursor)
+                            val openIdx = inlineCallStartRegex.find(remaining)?.range?.first ?: -1
+                            if (openIdx >= 0) {
+                                if (openIdx > 0) {
+                                    roundThinkingRaw.append(remaining.substring(0, openIdx))
+                                }
+                                val tailCandidate = remaining.substring(openIdx)
+                                if (flush) {
+                                    roundThinkingRaw.append(tailCandidate)
+                                } else {
+                                    thinkingInlineCallTail = tailCandidate
+                                }
+                            } else if (flush) {
+                                roundThinkingRaw.append(remaining)
+                            } else {
+                                val safeTailLen = 24
+                                if (remaining.length > safeTailLen) {
+                                    roundThinkingRaw.append(remaining.dropLast(safeTailLen))
+                                    thinkingInlineCallTail = remaining.takeLast(safeTailLen)
+                                } else {
+                                    thinkingInlineCallTail = remaining
                                 }
                             }
                         }
@@ -764,14 +814,14 @@ fun ChatScreen(navController: NavController) {
                                     if (next < 0) {
                                         val safeEnd = maxOf(cursor, source.length - keepTail)
                                         if (safeEnd > cursor) {
-                                            roundThinkingRaw.append(source.substring(cursor, safeEnd))
+                                            appendThinkingWithInlineCallExtraction(source.substring(cursor, safeEnd))
                                         }
                                         remainder = source.substring(safeEnd)
                                         return
                                     }
 
                                     if (next > cursor) {
-                                        roundThinkingRaw.append(source.substring(cursor, next))
+                                        appendThinkingWithInlineCallExtraction(source.substring(cursor, next))
                                     }
 
                                     inThink = false
@@ -793,7 +843,7 @@ fun ChatScreen(navController: NavController) {
                             reasoningEffort = selectedModel.reasoningEffort,
                             conversationId = safeConversationId
                         ).takeWhile { delta ->
-                            delta.reasoning?.takeIf { it.isNotBlank() }?.let { roundThinkingRaw.append(it) }
+                            delta.reasoning?.takeIf { it.isNotBlank() }?.let { appendThinkingWithInlineCallExtraction(it) }
                             delta.content?.let { appendWithThinkExtraction(it) }
 
                             val now = System.currentTimeMillis()
@@ -807,10 +857,13 @@ fun ChatScreen(navController: NavController) {
                                 lastUiUpdateMs = now
                             }
 
+                            val hasOpenInlineTagTail =
+                                inlineCallStartRegex.containsMatchIn(inlineCallTail) ||
+                                    inlineCallStartRegex.containsMatchIn(thinkingInlineCallTail)
                             val hasReadyValidCall =
                                 canUseMcp &&
                                     streamHasReadyValidCall &&
-                                    !inlineCallStartRegex.containsMatchIn(inlineCallTail)
+                                    !hasOpenInlineTagTail
                             if (hasReadyValidCall) {
                                 stoppedForToolCall = true
                             }
@@ -819,7 +872,9 @@ fun ChatScreen(navController: NavController) {
 
                         if (remainder.isNotEmpty()) {
                             if (inThink) {
-                                roundThinkingRaw.append(remainder)
+                                if (!stoppedForToolCall) {
+                                    appendThinkingWithInlineCallExtraction(remainder, flush = true)
+                                }
                             } else if (!stoppedForToolCall) {
                                 appendVisibleWithInlineCallExtraction(remainder, flush = true)
                             }
@@ -827,6 +882,7 @@ fun ChatScreen(navController: NavController) {
                         }
                         if (!stoppedForToolCall) {
                             appendVisibleWithInlineCallExtraction("", flush = true)
+                            appendThinkingWithInlineCallExtraction("", flush = true)
                         }
 
                         val thinkingSplit = splitThinkingFromContent(roundVisibleRaw.toString())
@@ -1888,23 +1944,24 @@ private fun MessageTagRow(
 private fun McpTagDetailCard(tag: MessageTag) {
     val detail = remember(tag.content) { parseMcpTagDetail(tag.content) }
     val isRunning = isTagRunning(tag)
-    val argumentsText = remember(detail.argumentsJson) { formatToolDetailJson(detail.argumentsJson) }
-    val resultRaw =
+    val detailsRaw =
         when {
+            isRunning && detail.argumentsJson.isNotBlank() -> detail.argumentsJson
+            isRunning -> "Running..."
             detail.error.isNotBlank() -> detail.error
             detail.result.isNotBlank() -> detail.result
-            isRunning -> "Running..."
+            detail.argumentsJson.isNotBlank() -> detail.argumentsJson
             else -> "{}"
         }
-    val resultText = remember(resultRaw) { formatToolDetailJson(resultRaw) }
+    val detailsText = remember(detailsRaw) { formatToolDetailJson(detailsRaw) }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         ToolDetailCodeCard(
-            title = "Arguments",
-            content = argumentsText
+            title = "Details",
+            content = detailsText
         )
         if (isRunning) {
             Row(
@@ -1924,10 +1981,6 @@ private fun McpTagDetailCard(tag: MessageTag) {
                 )
             }
         }
-        ToolDetailCodeCard(
-            title = "Result",
-            content = resultText
-        )
     }
 }
 
@@ -3609,6 +3662,11 @@ private fun parseMcpToolCallsPayload(text: String): List<PlannedMcpToolCall> {
     val callsElement =
         when {
             root.isJsonObject && root.asJsonObject.has("calls") -> root.asJsonObject.get("calls")
+            root.isJsonObject && root.asJsonObject.has("mcp_call") -> root.asJsonObject.get("mcp_call")
+            root.isJsonObject && root.asJsonObject.has("tool_call") -> root.asJsonObject.get("tool_call")
+            root.isJsonObject && root.asJsonObject.has("call") -> root.asJsonObject.get("call")
+            root.isJsonObject && root.asJsonObject.has("toolCall") -> root.asJsonObject.get("toolCall")
+            root.isJsonObject && root.asJsonObject.has("mcpCall") -> root.asJsonObject.get("mcpCall")
             else -> root
         }
 
@@ -3622,20 +3680,51 @@ private fun parseMcpToolCallsPayload(text: String): List<PlannedMcpToolCall> {
     fun getString(obj: com.google.gson.JsonObject, vararg keys: String): String? {
         return keys.asSequence().mapNotNull { key ->
             val el = runCatching { obj.get(key) }.getOrNull() ?: return@mapNotNull null
-            if (!el.isJsonPrimitive || !el.asJsonPrimitive.isString) return@mapNotNull null
-            el.asString.trim().takeIf { it.isNotBlank() }
+            if (!el.isJsonPrimitive) return@mapNotNull null
+            val value = runCatching { el.asString }.getOrNull()?.trim().orEmpty()
+            value.takeIf { it.isNotBlank() }
         }.firstOrNull()
     }
 
     fun getArgsObject(obj: com.google.gson.JsonObject): com.google.gson.JsonObject {
-        return runCatching { obj.getAsJsonObject("arguments") }.getOrNull()
-            ?: runCatching { obj.getAsJsonObject("args") }.getOrNull()
-            ?: runCatching { obj.getAsJsonObject("input") }.getOrNull()
+        fun fromKey(key: String): com.google.gson.JsonObject? {
+            val el = runCatching { obj.get(key) }.getOrNull() ?: return null
+            if (el.isJsonObject) return el.asJsonObject
+            if (el.isJsonPrimitive && el.asJsonPrimitive.isString) {
+                val raw = el.asString.trim()
+                if (raw.isBlank()) return null
+                return runCatching {
+                    JsonParser.parseString(raw)
+                        .takeIf { it.isJsonObject }
+                        ?.asJsonObject
+                }.getOrNull()
+            }
+            return null
+        }
+        return fromKey("arguments")
+            ?: fromKey("args")
+            ?: fromKey("input")
+            ?: fromKey("params")
+            ?: fromKey("parameters")
             ?: com.google.gson.JsonObject()
     }
 
+    fun normalizeCallObject(obj: com.google.gson.JsonObject): com.google.gson.JsonObject {
+        val nested =
+            listOf("mcp_call", "tool_call", "call", "toolCall", "mcpCall")
+                .asSequence()
+                .mapNotNull { key ->
+                    runCatching { obj.get(key) }.getOrNull()
+                        ?.takeIf { it.isJsonObject }
+                        ?.asJsonObject
+                }
+                .firstOrNull()
+        return nested ?: obj
+    }
+
     val strictParsed = callsArray.mapNotNull { el ->
-        val obj = runCatching { el.asJsonObject }.getOrNull() ?: return@mapNotNull null
+        val rawObj = runCatching { el.asJsonObject }.getOrNull() ?: return@mapNotNull null
+        val obj = normalizeCallObject(rawObj)
         val toolName = getString(obj, "toolName", "tool_name", "tool", "name").orEmpty()
         if (toolName.isBlank()) return@mapNotNull null
 
@@ -3683,7 +3772,7 @@ private fun parseLooseMcpToolCall(text: String): PlannedMcpToolCall? {
             .trim()
 
     val argsFromJson =
-        extractObjectField(text, listOf("arguments", "args", "input"))
+        extractObjectField(text, listOf("arguments", "args", "input", "params", "parameters"))
             ?.let { raw ->
                 runCatching { JsonParser.parseString(raw).asJsonObject }.getOrNull()
             }
@@ -3691,6 +3780,16 @@ private fun parseLooseMcpToolCall(text: String): PlannedMcpToolCall? {
             ?.associate { entry -> entry.key to entry.value.toKotlinAny() }
             .orEmpty()
             .toMutableMap()
+
+    if (argsFromJson.isEmpty()) {
+        extractQuotedField(text, listOf("arguments", "args", "input", "params", "parameters"))
+            ?.takeIf { it.startsWith("{") && it.endsWith("}") }
+            ?.let { raw ->
+                runCatching { JsonParser.parseString(raw).asJsonObject }.getOrNull()
+            }
+            ?.entrySet()
+            ?.forEach { entry -> argsFromJson[entry.key] = entry.value.toKotlinAny() }
+    }
 
     if (argsFromJson.isEmpty()) {
         extractQuotedField(text, listOf("value"))?.takeIf { it.isNotBlank() }?.let { value ->
@@ -3707,19 +3806,34 @@ private fun parseLooseMcpToolCall(text: String): PlannedMcpToolCall? {
 
 private fun extractQuotedField(text: String, keys: List<String>): String? {
     keys.forEach { key ->
-        val regex = Regex("\"${Regex.escape(key)}\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"", setOf(RegexOption.IGNORE_CASE))
-        val value = regex.find(text)?.groupValues?.getOrNull(1)?.trim().orEmpty()
-        if (value.isNotBlank()) {
-            val decoded = runCatching { JsonParser.parseString("\"$value\"").asString }.getOrDefault(value)
-            return decoded.trim()
-        }
+        val escapedKey = Regex.escape(key)
+        val quotedRegex = Regex("\"$escapedKey\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"", setOf(RegexOption.IGNORE_CASE))
+        val looseQuotedRegex = Regex("\\b$escapedKey\\b\\s*[:=]\\s*\"((?:\\\\.|[^\"\\\\])*)\"", setOf(RegexOption.IGNORE_CASE))
+        val looseSingleQuotedRegex = Regex("\\b$escapedKey\\b\\s*[:=]\\s*'([^']*)'", setOf(RegexOption.IGNORE_CASE))
+        val bareRegex = Regex("\\b$escapedKey\\b\\s*[:=]\\s*([^,\\n\\r}\\]]+)", setOf(RegexOption.IGNORE_CASE))
+
+        val value =
+            quotedRegex.find(text)?.groupValues?.getOrNull(1)
+                ?: looseQuotedRegex.find(text)?.groupValues?.getOrNull(1)
+                ?: looseSingleQuotedRegex.find(text)?.groupValues?.getOrNull(1)
+                ?: bareRegex.find(text)?.groupValues?.getOrNull(1)
+
+        val raw = value?.trim().orEmpty()
+        if (raw.isBlank()) return@forEach
+
+        val normalized = raw.removePrefix("\"").removeSuffix("\"").removePrefix("'").removeSuffix("'").trim()
+        if (normalized.isBlank()) return@forEach
+
+        val decoded = runCatching { JsonParser.parseString("\"$normalized\"").asString }.getOrDefault(normalized)
+        return decoded.trim()
     }
     return null
 }
 
 private fun extractObjectField(text: String, keys: List<String>): String? {
     keys.forEach { key ->
-        val markerRegex = Regex("\"${Regex.escape(key)}\"\\s*:\\s*\\{", setOf(RegexOption.IGNORE_CASE))
+        val escapedKey = Regex.escape(key)
+        val markerRegex = Regex("(?:\"$escapedKey\"|\\b$escapedKey\\b)\\s*:\\s*\\{", setOf(RegexOption.IGNORE_CASE))
         val marker = markerRegex.find(text) ?: return@forEach
         val start = marker.range.last
         val end = findMatchingBraceEnd(text, start)
