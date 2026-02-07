@@ -38,11 +38,6 @@ import okhttp3.OkHttpClient
 import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
-    companion object {
-        @Volatile
-        private var lastLocaleApplyKey: String? = null
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -80,11 +75,11 @@ class MainActivity : AppCompatActivity() {
                         LocalOAuthClient provides appContainer.oauthClient,
                         LocalProviderAuthManager provides appContainer.providerAuthManager
                     ) {
-                        val appLanguage by appContainer.repository.appLanguageFlow.collectAsState(initial = "system")
+                        val appLanguage by appContainer.repository.appLanguageFlow.collectAsState(initial = "__pending__")
                         LaunchedEffect(appLanguage) {
                             runCatching {
                                 val normalizedLanguage = appLanguage.trim().lowercase()
-                                if (lastLocaleApplyKey == normalizedLanguage) return@runCatching
+                                if (normalizedLanguage !in setOf("system", "en", "zh")) return@runCatching
                                 val locales =
                                     when (normalizedLanguage) {
                                         "en" -> LocaleListCompat.forLanguageTags("en")
@@ -100,10 +95,7 @@ class MainActivity : AppCompatActivity() {
                                         else -> !currentLocales.isEmpty
                                     }
                                 if (shouldApply) {
-                                    lastLocaleApplyKey = normalizedLanguage
                                     AppCompatDelegate.setApplicationLocales(locales)
-                                } else {
-                                    lastLocaleApplyKey = normalizedLanguage
                                 }
                             }
                         }
