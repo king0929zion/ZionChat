@@ -257,8 +257,7 @@ private fun SavedAppRow(
             modifier = Modifier
                 .size(44.dp)
                 .clip(CircleShape)
-                .background(Color.White, CircleShape)
-                .border(width = 1.dp, color = Color(0xFFE7E7EC), shape = CircleShape),
+                .background(Color.White, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             AppDevRingGlyph(modifier = Modifier.size(24.dp))

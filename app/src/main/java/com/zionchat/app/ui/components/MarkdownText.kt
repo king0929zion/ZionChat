@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Text
@@ -29,6 +32,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,6 +63,15 @@ import org.commonmark.node.Text as MarkdownTextNode
 import org.commonmark.node.ThematicBreak
 import org.commonmark.parser.Parser
 
+private sealed class MarkdownSegment {
+    data class Text(val markdown: String) : MarkdownSegment()
+    data class Table(
+        val headers: List<String>,
+        val aligns: List<TextAlign>,
+        val rows: List<List<String>>
+    ) : MarkdownSegment()
+}
+
 @Composable
 fun MarkdownText(
     markdown: String,
@@ -67,11 +80,91 @@ fun MarkdownText(
     linkColor: Color = AccentBlue
 ) {
     val parser = remember { Parser.builder().build() }
-    val document = remember(markdown) { parser.parse(markdown) as Document }
+    val segments = remember(markdown) { splitMarkdownSegments(markdown) }
 
     Column(modifier = modifier, verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
-        renderChildren(document, textStyle, linkColor)
+        segments.forEach { segment ->
+            when (segment) {
+                is MarkdownSegment.Text -> {
+                    if (segment.markdown.isNotBlank()) {
+                        val document = parser.parse(segment.markdown) as Document
+                        renderChildren(document, textStyle, linkColor)
+                    }
+                }
+
+                is MarkdownSegment.Table -> {
+                    MarkdownTableBlock(segment, textStyle)
+                }
+            }
+        }
     }
+}
+
+@Composable
+private fun MarkdownTableBlock(
+    table: MarkdownSegment.Table,
+    textStyle: TextStyle
+) {
+    val horizontalState = rememberScrollState()
+    val columnCount = maxOf(table.headers.size, table.rows.maxOfOrNull { it.size } ?: 0).coerceAtLeast(1)
+    val minCellWidth = 120.dp
+    val shape = RoundedCornerShape(12.dp)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .border(width = 1.dp, color = GrayLight, shape = shape)
+            .horizontalScroll(horizontalState)
+    ) {
+        Row(modifier = Modifier.background(GrayLighter)) {
+            repeat(columnCount) { index ->
+                MarkdownTableCell(
+                    text = table.headers.getOrNull(index).orEmpty(),
+                    textStyle = textStyle.copy(fontWeight = FontWeight.SemiBold),
+                    textAlign = table.aligns.getOrNull(index) ?: TextAlign.Start,
+                    minWidth = minCellWidth
+                )
+            }
+        }
+
+        table.rows.forEachIndexed { rowIndex, row ->
+            Row(
+                modifier =
+                    if (rowIndex % 2 == 0) {
+                        Modifier.background(Color.White)
+                    } else {
+                        Modifier.background(Color(0xFFF9F9FB))
+                    }
+            ) {
+                repeat(columnCount) { index ->
+                    MarkdownTableCell(
+                        text = row.getOrNull(index).orEmpty(),
+                        textStyle = textStyle,
+                        textAlign = table.aligns.getOrNull(index) ?: TextAlign.Start,
+                        minWidth = minCellWidth
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MarkdownTableCell(
+    text: String,
+    textStyle: TextStyle,
+    textAlign: TextAlign,
+    minWidth: Dp
+) {
+    Text(
+        text = text,
+        style = textStyle.copy(textAlign = textAlign, lineHeight = 21.sp),
+        modifier = Modifier
+            .width(minWidth)
+            .border(width = 0.5.dp, color = GrayLight)
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    )
 }
 
 @Composable
@@ -315,6 +408,104 @@ private fun collectInlineImages(parent: Node): List<Image> {
     }
     walk(parent)
     return out
+}
+
+private fun splitMarkdownSegments(markdown: String): List<MarkdownSegment> {
+    if (markdown.isBlank()) return listOf(MarkdownSegment.Text(""))
+    val lines = markdown.replace("\r\n", "\n").replace('\r', '\n').split('\n')
+    val segments = mutableListOf<MarkdownSegment>()
+    val textBuffer = StringBuilder()
+    var inFence = false
+    var index = 0
+
+    fun flushText() {
+        if (textBuffer.isNotEmpty()) {
+            segments += MarkdownSegment.Text(textBuffer.toString().trim('\n'))
+            textBuffer.clear()
+        }
+    }
+
+    while (index < lines.size) {
+        val line = lines[index]
+        val trimmed = line.trim()
+        val startsFence = trimmed.startsWith("```")
+        if (!inFence && index + 1 < lines.size && isTableHeaderLine(line) && isTableDividerLine(lines[index + 1])) {
+            val headers = parseTableLine(line)
+            val aligns = parseTableAligns(lines[index + 1])
+            val rows = mutableListOf<List<String>>()
+            var cursor = index + 2
+            while (cursor < lines.size) {
+                val rowLine = lines[cursor]
+                if (!isTableDataLine(rowLine)) break
+                val rowValues = parseTableLine(rowLine)
+                if (rowValues.isNotEmpty()) {
+                    rows += rowValues
+                }
+                cursor += 1
+            }
+            flushText()
+            segments += MarkdownSegment.Table(headers = headers, aligns = aligns, rows = rows)
+            index = cursor
+            continue
+        }
+
+        textBuffer.append(line)
+        if (index != lines.lastIndex) textBuffer.append('\n')
+        if (startsFence) {
+            inFence = !inFence
+        }
+        index += 1
+    }
+
+    flushText()
+    if (segments.isEmpty()) {
+        return listOf(MarkdownSegment.Text(markdown))
+    }
+    return segments
+}
+
+private fun isTableHeaderLine(line: String): Boolean {
+    val trimmed = line.trim()
+    if (!trimmed.contains('|')) return false
+    if (trimmed.startsWith("```")) return false
+    return parseTableLine(trimmed).size >= 2
+}
+
+private fun isTableDividerLine(line: String): Boolean {
+    val trimmed = line.trim()
+    if (!trimmed.contains('-')) return false
+    if (!trimmed.contains('|')) return false
+    return Regex("^\\s*\\|?\\s*:?-{3,}:?\\s*(\\|\\s*:?-{3,}:?\\s*)+\\|?\\s*$").matches(trimmed)
+}
+
+private fun isTableDataLine(line: String): Boolean {
+    val trimmed = line.trim()
+    if (trimmed.isBlank()) return false
+    if (!trimmed.contains('|')) return false
+    if (trimmed.startsWith("```")) return false
+    if (isTableDividerLine(trimmed)) return false
+    return parseTableLine(trimmed).isNotEmpty()
+}
+
+private fun parseTableLine(line: String): List<String> {
+    var raw = line.trim()
+    if (raw.startsWith("|")) raw = raw.drop(1)
+    if (raw.endsWith("|")) raw = raw.dropLast(1)
+    if (raw.isBlank()) return emptyList()
+    return raw
+        .split(Regex("(?<!\\\\)\\|"))
+        .map { it.replace("\\|", "|").trim() }
+}
+
+private fun parseTableAligns(line: String): List<TextAlign> {
+    return parseTableLine(line).map { token ->
+        val value = token.trim()
+        when {
+            value.startsWith(":") && value.endsWith(":") -> TextAlign.Center
+            value.endsWith(":") -> TextAlign.End
+            else -> TextAlign.Start
+        }
+    }
 }
 
 private fun buildInlineAnnotatedString(parent: Node, linkColor: Color): AnnotatedString {

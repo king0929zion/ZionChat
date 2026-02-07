@@ -87,6 +87,7 @@ import com.zionchat.app.data.McpClient
 import com.zionchat.app.data.McpConfig
 import com.zionchat.app.data.McpToolCall
 import com.zionchat.app.data.ProviderConfig
+import com.zionchat.app.data.SavedApp
 import com.zionchat.app.data.extractRemoteModelId
 import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.AppSheetDragHandle
@@ -700,6 +701,7 @@ fun ChatScreen(navController: NavController) {
 
                     var roundIndex = 1
                     while (roundIndex <= maxRounds) {
+                        val savedAppsSnapshot = repository.savedAppsFlow.first()
                         val mcpInstruction =
                             if (canUseMcp) {
                                 buildMcpToolCallInstruction(
@@ -714,7 +716,8 @@ fun ChatScreen(navController: NavController) {
                             if (canUseAppBuilder) {
                                 buildAppDeveloperToolInstruction(
                                     roundIndex = roundIndex,
-                                    maxCallsPerRound = maxCallsPerRound
+                                    maxCallsPerRound = maxCallsPerRound,
+                                    savedApps = savedAppsSnapshot
                                 )
                             } else {
                                 null
@@ -1086,22 +1089,31 @@ fun ChatScreen(navController: NavController) {
                             val argsJson = prettyGson.toJson(args)
 
                             if (isBuiltInAppDeveloperCall(call)) {
-                                val rawName =
-                                    (args["name"] as? String)?.trim()
-                                        ?.takeIf { it.isNotBlank() }
-                                        ?: "App development"
                                 val parsedSpec = parseAppDevToolSpec(args)
+                                val savedAppsSnapshot = repository.savedAppsFlow.first()
+                                val targetSavedApp = parsedSpec?.let { resolveExistingSavedApp(it, savedAppsSnapshot) }
+                                val rawName =
+                                    normalizeAppDisplayName(
+                                        (args["name"] as? String)?.trim().orEmpty()
+                                            .ifBlank { parsedSpec?.name.orEmpty() }
+                                            .ifBlank { targetSavedApp?.name.orEmpty() }
+                                            .ifBlank { "App development" }
+                                    )
+                                val mode = parsedSpec?.mode ?: "create"
                                 val pendingPayload =
                                     AppDevTagPayload(
                                         name = rawName,
-                                        subtitle = "Developing app",
-                                        description = parsedSpec?.description.orEmpty(),
+                                        subtitle = if (mode == "edit") "Updating app" else "Developing app",
+                                        description = parsedSpec?.description?.takeIf { it.isNotBlank() }
+                                            ?: targetSavedApp?.description.orEmpty(),
                                         style = parsedSpec?.style.orEmpty(),
                                         features = parsedSpec?.features.orEmpty(),
                                         progress = 8,
                                         status = "running",
-                                        html = "",
-                                        error = null
+                                        html = if (mode == "edit") targetSavedApp?.html.orEmpty() else "",
+                                        error = null,
+                                        sourceAppId = targetSavedApp?.id,
+                                        mode = mode
                                     )
                                 val pendingTag =
                                     MessageTag(
@@ -1132,12 +1144,25 @@ fun ChatScreen(navController: NavController) {
                                             progress = 0,
                                             status = "error",
                                             error =
-                                                "Missing required fields. Provide name, description, style, and features."
+                                                "Invalid arguments. Use create mode with name/description/style/features, or edit mode with target app + editRequest."
                                         )
                                     updateAssistantTag(pendingTag.id) {
                                         it.copy(content = encodeAppDevTagPayload(payload), status = "error")
                                     }
                                     roundSummary.append("- app_developer: invalid arguments\n")
+                                    return@forEach
+                                }
+                                if (parsedSpec.mode == "edit" && targetSavedApp == null) {
+                                    val payload =
+                                        pendingPayload.copy(
+                                            progress = 0,
+                                            status = "error",
+                                            error = "Target saved app was not found. Provide targetAppId or exact targetAppName."
+                                        )
+                                    updateAssistantTag(pendingTag.id) {
+                                        it.copy(content = encodeAppDevTagPayload(payload), status = "error")
+                                    }
+                                    roundSummary.append("- app_developer: target app missing\n")
                                     return@forEach
                                 }
 
@@ -1183,6 +1208,31 @@ fun ChatScreen(navController: NavController) {
                                 val startedAt = System.currentTimeMillis()
                                 var streamedProgress = pendingPayload.progress
                                 var lastProgressUpdateAtMs = 0L
+                                var lastDraftUpdateAtMs = 0L
+                                fun updateAppDevDraft(rawDraft: String) {
+                                    val draft = stripMarkdownCodeFences(rawDraft).trim()
+                                    if (draft.length < 40) return
+                                    val now = System.currentTimeMillis()
+                                    if (now - lastDraftUpdateAtMs < 170L) return
+                                    lastDraftUpdateAtMs = now
+                                    updateAssistantTag(pendingTag.id) { current ->
+                                        val existing =
+                                            parseAppDevTagPayload(
+                                                content = current.content,
+                                                fallbackName = parsedSpec.name.ifBlank { rawName },
+                                                fallbackStatus = "running"
+                                            )
+                                        val updated =
+                                            existing.copy(
+                                                html = draft.take(120_000),
+                                                status = "running",
+                                                error = null,
+                                                mode = parsedSpec.mode,
+                                                sourceAppId = targetSavedApp?.id ?: existing.sourceAppId
+                                            )
+                                        current.copy(content = encodeAppDevTagPayload(updated), status = "running")
+                                    }
+                                }
                                 fun updateAppDevProgress(progressValue: Int) {
                                     val normalized = progressValue.coerceIn(8, 95)
                                     val now = System.currentTimeMillis()
@@ -1201,7 +1251,9 @@ fun ChatScreen(navController: NavController) {
                                             existing.copy(
                                                 progress = normalized,
                                                 status = "running",
-                                                error = null
+                                                error = null,
+                                                mode = parsedSpec.mode,
+                                                sourceAppId = targetSavedApp?.id ?: existing.sourceAppId
                                             )
                                         current.copy(
                                             content = encodeAppDevTagPayload(updated),
@@ -1211,56 +1263,115 @@ fun ChatScreen(navController: NavController) {
                                 }
                                 val htmlResult =
                                     runCatching {
-                                        generateHtmlAppFromSpec(
-                                            chatApiClient = chatApiClient,
-                                            provider = appProvider,
-                                            modelId = extractRemoteModelId(appModel.id),
-                                            extraHeaders = appModel.headers,
-                                            spec = parsedSpec,
-                                            onProgress = ::updateAppDevProgress
-                                        )
+                                        if (parsedSpec.mode == "edit") {
+                                            reviseHtmlAppFromPrompt(
+                                                chatApiClient = chatApiClient,
+                                                provider = appProvider,
+                                                modelId = extractRemoteModelId(appModel.id),
+                                                extraHeaders = appModel.headers,
+                                                currentHtml = targetSavedApp?.html.orEmpty(),
+                                                requestText = parsedSpec.editRequest.orEmpty(),
+                                                onProgress = ::updateAppDevProgress,
+                                                onDraftHtml = ::updateAppDevDraft
+                                            )
+                                        } else {
+                                            generateHtmlAppFromSpec(
+                                                chatApiClient = chatApiClient,
+                                                provider = appProvider,
+                                                modelId = extractRemoteModelId(appModel.id),
+                                                extraHeaders = appModel.headers,
+                                                spec = parsedSpec,
+                                                onProgress = ::updateAppDevProgress,
+                                                onDraftHtml = ::updateAppDevDraft
+                                            )
+                                        }
                                     }
                                 val elapsedMs = System.currentTimeMillis() - startedAt
-                                htmlResult.fold(
-                                    onSuccess = { html ->
-                                        val payload =
-                                            pendingPayload.copy(
-                                                name = parsedSpec.name,
-                                                subtitle = compactAppDescription(parsedSpec.description, "HTML app ready"),
-                                                description = compactAppDescription(parsedSpec.description, "HTML app"),
-                                                style = parsedSpec.style,
-                                                features = parsedSpec.features,
-                                                progress = 100,
-                                                status = "success",
-                                                html = html,
-                                                error = null
+                                val html = htmlResult.getOrNull()
+                                if (html != null) {
+                                    val finalName =
+                                        if (parsedSpec.mode == "edit") {
+                                            normalizeAppDisplayName(
+                                                parsedSpec.name.takeIf { it.isNotBlank() } ?: targetSavedApp?.name.orEmpty()
                                             )
-                                        updateAssistantTag(pendingTag.id) {
-                                            it.copy(
-                                                title = parsedSpec.name,
-                                                content = encodeAppDevTagPayload(payload),
-                                                status = "success"
-                                            )
+                                        } else {
+                                            parsedSpec.name
                                         }
-                                        roundSummary.append("- app_developer: generated ")
-                                        roundSummary.append(parsedSpec.name.take(80))
-                                        roundSummary.append(" in ")
-                                        roundSummary.append(formatElapsedDuration(elapsedMs))
-                                        roundSummary.append('\n')
-                                    },
-                                    onFailure = { error ->
+                                    val finalSubtitle =
+                                        if (parsedSpec.mode == "edit") {
+                                            compactAppDescription(parsedSpec.editRequest.orEmpty(), "App updated")
+                                        } else {
+                                            compactAppDescription(parsedSpec.description, "HTML app ready")
+                                        }
+                                    val finalDescription =
+                                        if (parsedSpec.mode == "edit") {
+                                            compactAppDescription(
+                                                parsedSpec.editRequest.orEmpty(),
+                                                targetSavedApp?.description.orEmpty().ifBlank { "Updated HTML app" }
+                                            )
+                                        } else {
+                                            compactAppDescription(parsedSpec.description, "HTML app")
+                                        }
+                                    val payload =
+                                        pendingPayload.copy(
+                                            name = finalName,
+                                            subtitle = finalSubtitle,
+                                            description = finalDescription,
+                                            style = parsedSpec.style.ifBlank { pendingPayload.style },
+                                            features = if (parsedSpec.features.isNotEmpty()) parsedSpec.features else pendingPayload.features,
+                                            progress = 100,
+                                            status = "success",
+                                            html = html,
+                                            error = null,
+                                            sourceAppId = targetSavedApp?.id,
+                                            mode = parsedSpec.mode
+                                        )
+                                    updateAssistantTag(pendingTag.id) {
+                                        it.copy(
+                                            title = finalName,
+                                            content = encodeAppDevTagPayload(payload),
+                                            status = "success"
+                                        )
+                                    }
+
+                                    if (parsedSpec.mode == "edit" && targetSavedApp != null) {
+                                        repository.upsertSavedApp(
+                                            targetSavedApp.copy(
+                                                name = finalName,
+                                                description = finalDescription,
+                                                html = html,
+                                                updatedAt = System.currentTimeMillis()
+                                            )
+                                        )
+                                    }
+
+                                    roundSummary.append("- app_developer: ")
+                                    roundSummary.append(if (parsedSpec.mode == "edit") "updated " else "generated ")
+                                    roundSummary.append(finalName.take(80))
+                                    roundSummary.append(" in ")
+                                    roundSummary.append(formatElapsedDuration(elapsedMs))
+                                    roundSummary.append('\n')
+                                } else {
+                                    val error = htmlResult.exceptionOrNull()
+                                    updateAssistantTag(pendingTag.id) { current ->
+                                        val existing =
+                                            parseAppDevTagPayload(
+                                                content = current.content,
+                                                fallbackName = rawName,
+                                                fallbackStatus = "running"
+                                            )
                                         val payload =
-                                            pendingPayload.copy(
+                                            existing.copy(
                                                 progress = 0,
                                                 status = "error",
-                                                error = error.message?.trim().orEmpty().ifBlank { "App generation failed." }
+                                                error = error?.message?.trim().orEmpty().ifBlank { "App generation failed." },
+                                                sourceAppId = targetSavedApp?.id ?: existing.sourceAppId,
+                                                mode = parsedSpec.mode
                                             )
-                                        updateAssistantTag(pendingTag.id) {
-                                            it.copy(content = encodeAppDevTagPayload(payload), status = "error")
-                                        }
-                                        roundSummary.append("- app_developer: failed\n")
+                                        current.copy(content = encodeAppDevTagPayload(payload), status = "error")
                                     }
-                                )
+                                    roundSummary.append("- app_developer: failed\n")
+                                }
                                 return@forEach
                             }
 
@@ -1991,6 +2102,7 @@ fun ChatScreen(navController: NavController) {
                         scope.launch {
                             repository.upsertSavedApp(
                                 com.zionchat.app.data.SavedApp(
+                                    id = payload.sourceAppId ?: java.util.UUID.randomUUID().toString(),
                                     sourceTagId = tagId.takeIf { it.isNotBlank() },
                                     name = payload.name,
                                     description = payload.description.ifBlank { payload.subtitle },
@@ -2314,30 +2426,23 @@ private fun AppDevToolTagCard(
         )
     }
     val progressFraction = (payload.progress.coerceIn(0, 100) / 100f)
-    val cardBackground by animateColorAsState(
-        targetValue = if (isTagRunning(tag)) Color(0xFFF9F9FB) else Color.White,
-        animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
-        label = "app_dev_card_bg"
-    )
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
             .clip(RoundedCornerShape(18.dp))
-            .background(cardBackground, RoundedCornerShape(18.dp))
+            .background(Color.White, RoundedCornerShape(18.dp))
             .pressableScale(pressedScale = 0.98f, onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
             modifier = Modifier
                 .size(50.dp)
                 .align(Alignment.CenterVertically)
-                .clip(CircleShape)
-                .background(Color.White, CircleShape)
-                .border(width = 1.dp, color = Color(0xFFE7E7EC), shape = CircleShape),
+                .clip(CircleShape),
             contentAlignment = Alignment.Center
         ) {
             AppDevRingGlyph(modifier = Modifier.size(28.dp))
@@ -2550,6 +2655,9 @@ private fun AppDevWorkspaceScreen(
             )
         )
     }
+    var workspaceTab by remember(tag.id) {
+        mutableStateOf(if (payload.status.equals("running", ignoreCase = true)) "code" else "preview")
+    }
 
     Box(
         modifier = Modifier
@@ -2561,11 +2669,12 @@ private fun AppDevWorkspaceScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.navigationBars))
-                .padding(horizontal = 16.dp)
                 .padding(top = 8.dp, bottom = 6.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -2633,53 +2742,207 @@ private fun AppDevWorkspaceScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Surface(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
-                shape = RoundedCornerShape(20.dp),
-                color = Surface
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AppWorkspaceTabChip(
+                    label = "Preview",
+                    selected = workspaceTab == "preview",
+                    onClick = { workspaceTab = "preview" }
+                )
+                AppWorkspaceTabChip(
+                    label = "Code",
+                    selected = workspaceTab == "code",
+                    onClick = { workspaceTab = "code" }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
             ) {
                 val html = payload.html.trim()
-                if (html.isBlank()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = payload.error?.ifBlank { null }
-                                ?: stringResource(R.string.app_dev_preview_unavailable),
-                            fontSize = 14.sp,
-                            color = TextSecondary
-                        )
-                    }
+                if (workspaceTab == "code") {
+                    AppDevCodeSurface(
+                        html = html,
+                        error = payload.error,
+                        isRunning = payload.status.equals("running", ignoreCase = true)
+                    )
                 } else {
-                    AndroidView(
-                        modifier = Modifier.fillMaxSize(),
-                        factory = { context ->
-                            WebView(context).apply {
-                                settings.javaScriptEnabled = true
-                                settings.domStorageEnabled = true
-                                settings.allowFileAccess = false
-                                settings.allowContentAccess = false
-                                webViewClient = WebViewClient()
-                                webChromeClient = WebChromeClient()
-                            }
-                        },
-                        update = { webView ->
-                            webView.loadDataWithBaseURL(
-                                null,
-                                html,
-                                "text/html",
-                                "utf-8",
-                                null
+                    if (html.isBlank()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = payload.error?.ifBlank { null }
+                                    ?: stringResource(R.string.app_dev_preview_unavailable),
+                                fontSize = 14.sp,
+                                color = TextSecondary
                             )
                         }
-                    )
+                    } else {
+                        val workspaceBaseUrl =
+                            remember(payload.sourceAppId) {
+                                val key = payload.sourceAppId?.trim().orEmpty().ifBlank { "draft" }
+                                "https://workspace-app.zionchat.local/app/$key/"
+                            }
+                        AndroidView(
+                            modifier = Modifier.fillMaxSize(),
+                            factory = { context ->
+                                WebView(context).apply {
+                                    settings.javaScriptEnabled = true
+                                    settings.domStorageEnabled = true
+                                    settings.databaseEnabled = true
+                                    settings.allowFileAccess = false
+                                    settings.allowContentAccess = false
+                                    webViewClient = WebViewClient()
+                                    webChromeClient = WebChromeClient()
+                                }
+                            },
+                            update = { webView ->
+                                webView.loadDataWithBaseURL(
+                                    workspaceBaseUrl,
+                                    html,
+                                    "text/html",
+                                    "utf-8",
+                                    null
+                                )
+                            }
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun AppWorkspaceTabChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(if (selected) Surface else GrayLight, RoundedCornerShape(999.dp))
+            .pressableScale(pressedScale = 0.96f, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            color = if (selected) TextPrimary else TextSecondary,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+private fun AppDevCodeSurface(
+    html: String,
+    error: String?,
+    isRunning: Boolean
+) {
+    val codeText = remember(html) { prettyFormatHtmlForCodeView(html) }
+    val scrollState = rememberScrollState()
+    val horizontalState = rememberScrollState()
+    val lineCount = remember(codeText) { codeText.lines().size.coerceAtLeast(1) }
+    val lineNumberText = remember(lineCount) {
+        buildString {
+            for (i in 1..lineCount) {
+                append(i)
+                if (i != lineCount) append('\n')
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF111214))
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        if (codeText.isBlank()) {
+            Text(
+                text = error?.ifBlank { null }
+                    ?: if (isRunning) "Generating code..." else "No code available.",
+                fontSize = 14.sp,
+                color = Color.White.copy(alpha = 0.72f)
+            )
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .horizontalScroll(horizontalState)
+                    .verticalScroll(scrollState)
+            ) {
+                Text(
+                    text = lineNumberText,
+                    fontSize = 12.sp,
+                    lineHeight = 19.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = Color.White.copy(alpha = 0.42f),
+                    softWrap = false
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = codeText,
+                    fontSize = 12.sp,
+                    lineHeight = 19.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = Color.White.copy(alpha = 0.92f),
+                    softWrap = false
+                )
+            }
+        }
+    }
+}
+
+private fun prettyFormatHtmlForCodeView(raw: String): String {
+    val clean = stripMarkdownCodeFences(raw).trim()
+    if (clean.isBlank()) return ""
+    val tokens = clean
+        .replace("><", ">\n<")
+        .lines()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+    val sb = StringBuilder()
+    var indent = 0
+    tokens.forEach { token ->
+        val closeTag = token.startsWith("</")
+        val selfClosing =
+            token.endsWith("/>") ||
+                token.startsWith("<!DOCTYPE", ignoreCase = true) ||
+                token.startsWith("<!--") ||
+                token.startsWith("<meta", ignoreCase = true) ||
+                token.startsWith("<link", ignoreCase = true) ||
+                token.startsWith("<br", ignoreCase = true) ||
+                token.startsWith("<hr", ignoreCase = true) ||
+                token.startsWith("<img", ignoreCase = true) ||
+                token.startsWith("<input", ignoreCase = true)
+        if (closeTag) indent = (indent - 1).coerceAtLeast(0)
+        repeat(indent) { sb.append("  ") }
+        sb.append(token)
+        sb.append('\n')
+        val openTag =
+            token.startsWith("<") &&
+                !token.startsWith("</") &&
+                !token.startsWith("<!") &&
+                !selfClosing &&
+                token.contains('>')
+        if (openTag) indent += 1
+    }
+    return sb.toString().trimEnd()
 }
 
 @Composable
@@ -3928,10 +4191,14 @@ private fun parseJsonStringArray(text: String): List<String> {
 }
 
 private data class AppDevToolSpec(
+    val mode: String,
     val name: String,
     val description: String,
     val style: String,
-    val features: List<String>
+    val features: List<String>,
+    val targetAppId: String? = null,
+    val targetAppName: String? = null,
+    val editRequest: String? = null
 )
 
 private data class AppDevTagPayload(
@@ -3943,7 +4210,9 @@ private data class AppDevTagPayload(
     val progress: Int,
     val status: String,
     val html: String,
-    val error: String? = null
+    val error: String? = null,
+    val sourceAppId: String? = null,
+    val mode: String = "create"
 )
 
 private data class PlannedMcpToolCall(
@@ -3957,10 +4226,12 @@ private fun shouldEnableAppBuilderForPrompt(userPrompt: String): Boolean {
     if (text.isBlank()) return false
     val patterns = listOf(
         Regex("(?i)\\b(create|build|develop|make)\\b.{0,24}\\b(app|website|web app|html app|landing page)\\b"),
+        Regex("(?i)\\b(edit|update|revise|modify|refactor|improve)\\b.{0,24}\\b(app|website|web app|html app|page|saved app)\\b"),
         Regex("(?i)\\b(html app|web app|single page app|landing page)\\b"),
         Regex("创建.{0,10}(应用|app|网页|网站|页面)"),
         Regex("开发.{0,10}(应用|app|网页|网站|页面)"),
-        Regex("做(一个|个)?.{0,8}(应用|app|网页|网站|页面)")
+        Regex("做(一个|个)?.{0,8}(应用|app|网页|网站|页面)"),
+        Regex("(修改|编辑|更新|优化|重构).{0,12}(应用|app|网页|网站|页面)")
     )
     return patterns.any { it.containsMatchIn(text) }
 }
@@ -4052,9 +4323,20 @@ private fun parseAppDevToolSpec(arguments: Map<String, Any?>): AppDevToolSpec? {
         }.distinct().take(12)
     }
 
+    val modeRaw = anyString("mode", "operation", "intent", "action")
+    val mode =
+        when (modeRaw.trim().lowercase()) {
+            "edit", "update", "revise", "modify", "refactor", "patch" -> "edit"
+            else -> "create"
+        }
     val name = normalizeAppDisplayName(anyString("name", "title", "appName", "app_name"))
     val description = anyString("description", "desc", "summary")
     val style = anyString("style", "theme", "visualStyle", "design")
+    val targetAppId = anyString("targetAppId", "target_app_id", "appId", "existingAppId", "sourceAppId")
+    val targetAppName = anyString("targetAppName", "target_app_name", "existingAppName", "appToEdit", "editAppName")
+    val editRequest =
+        anyString("editRequest", "request", "updateRequest", "changeRequest", "instruction", "prompt")
+            .ifBlank { anyString("details", "detail", "scope", "requirement") }
     val features =
         anyStringList("features", "requirements", "specs", "functionalities")
             .ifEmpty {
@@ -4066,12 +4348,30 @@ private fun parseAppDevToolSpec(arguments: Map<String, Any?>): AppDevToolSpec? {
                     .orEmpty()
             }
 
+    if (mode == "edit") {
+        if (editRequest.isBlank()) return null
+        return AppDevToolSpec(
+            mode = mode,
+            name = name.take(80),
+            description = description.take(260),
+            style = style.take(120),
+            features = features.take(10),
+            targetAppId = targetAppId.takeIf { it.isNotBlank() }?.take(120),
+            targetAppName = targetAppName.takeIf { it.isNotBlank() }?.take(80),
+            editRequest = editRequest.take(800)
+        )
+    }
+
     if (name.isBlank() || description.isBlank() || style.isBlank() || features.isEmpty()) return null
     return AppDevToolSpec(
+        mode = mode,
         name = normalizeAppDisplayName(name).take(80),
         description = description.take(260),
         style = style.take(120),
-        features = features.take(10)
+        features = features.take(10),
+        targetAppId = targetAppId.takeIf { it.isNotBlank() }?.take(120),
+        targetAppName = targetAppName.takeIf { it.isNotBlank() }?.take(80),
+        editRequest = editRequest.takeIf { it.isNotBlank() }?.take(800)
     )
 }
 
@@ -4103,6 +4403,8 @@ private fun parseAppDevTagPayload(
     val status = json?.get("status")?.takeIf { it.isJsonPrimitive }?.asString?.trim().orEmpty().ifBlank { fallbackStatus.orEmpty() }
     val html = json?.get("html")?.takeIf { it.isJsonPrimitive }?.asString.orEmpty()
     val error = json?.get("error")?.takeIf { it.isJsonPrimitive }?.asString?.trim()?.takeIf { it.isNotBlank() }
+    val sourceAppId = json?.get("sourceAppId")?.takeIf { it.isJsonPrimitive }?.asString?.trim()?.takeIf { it.isNotBlank() }
+    val mode = json?.get("mode")?.takeIf { it.isJsonPrimitive }?.asString?.trim()?.takeIf { it.isNotBlank() } ?: "create"
     val compactDescription = compactAppDescription(descriptionRaw, subtitleRaw)
     val compactSubtitle = compactAppDescription(subtitleRaw, compactDescription)
     return AppDevTagPayload(
@@ -4114,7 +4416,9 @@ private fun parseAppDevTagPayload(
         progress = progress.coerceIn(0, 100),
         status = status,
         html = html,
-        error = error
+        error = error,
+        sourceAppId = sourceAppId,
+        mode = mode
     )
 }
 
@@ -4131,13 +4435,67 @@ private fun compactAppDescription(primary: String, fallback: String = "Developin
     return simplified.take(56)
 }
 
+private fun resolveExistingSavedApp(
+    spec: AppDevToolSpec,
+    savedApps: List<SavedApp>
+): SavedApp? {
+    if (savedApps.isEmpty()) return null
+    if (spec.mode != "edit") return null
+
+    val byId = spec.targetAppId?.trim().orEmpty()
+    if (byId.isNotBlank()) {
+        if (byId.equals("latest", ignoreCase = true) || byId.equals("last", ignoreCase = true)) {
+            return savedApps.maxByOrNull { it.updatedAt }
+        }
+        savedApps.firstOrNull { it.id.equals(byId, ignoreCase = true) }?.let { return it }
+    }
+
+    val candidates = mutableListOf<String>()
+    spec.targetAppName?.trim()?.takeIf { it.isNotBlank() }?.let { candidates += it }
+    spec.name.trim().takeIf { it.isNotBlank() && !it.equals("app", ignoreCase = true) }?.let { candidates += it }
+
+    candidates.forEach { keyword ->
+        savedApps.firstOrNull { it.name.trim().equals(keyword, ignoreCase = true) }?.let { return it }
+    }
+    candidates.forEach { keyword ->
+        val lower = keyword.lowercase()
+        val byContain = savedApps.filter { it.name.lowercase().contains(lower) }
+        if (byContain.size == 1) return byContain.first()
+    }
+
+    return if (savedApps.size == 1) savedApps.first() else null
+}
+
+private fun summarizeSavedAppsForInstruction(savedApps: List<SavedApp>, limit: Int = 10): String {
+    if (savedApps.isEmpty()) return "No saved apps."
+    return buildString {
+        savedApps
+            .sortedByDescending { it.updatedAt }
+            .take(limit)
+            .forEachIndexed { index, app ->
+                append(index + 1)
+                append(". id=")
+                append(app.id)
+                append(" | name=")
+                append(normalizeAppDisplayName(app.name).take(80))
+                val desc = compactAppDescription(app.description, "")
+                if (desc.isNotBlank()) {
+                    append(" | desc=")
+                    append(desc.take(80))
+                }
+                append('\n')
+            }
+    }.trimEnd()
+}
+
 private suspend fun generateHtmlAppFromSpec(
     chatApiClient: ChatApiClient,
     provider: ProviderConfig,
     modelId: String,
     extraHeaders: List<HttpHeader>,
     spec: AppDevToolSpec,
-    onProgress: ((Int) -> Unit)? = null
+    onProgress: ((Int) -> Unit)? = null,
+    onDraftHtml: ((String) -> Unit)? = null
 ): String {
     val systemPrompt =
         buildString {
@@ -4176,6 +4534,8 @@ private suspend fun generateHtmlAppFromSpec(
     var chunkCount = 0
     var charCount = 0
     val startedAtMs = System.currentTimeMillis()
+    var lastDraftUpdateAtMs = 0L
+    val draftBuilder = StringBuilder()
     onProgress?.invoke(emittedProgress)
 
     val raw =
@@ -4189,6 +4549,7 @@ private suspend fun generateHtmlAppFromSpec(
             ),
             extraHeaders = extraHeaders,
             onChunk = { chunk ->
+                draftBuilder.append(chunk)
                 chunkCount += 1
                 charCount += chunk.length
                 val elapsedBoost = ((System.currentTimeMillis() - startedAtMs) / 550L).toInt().coerceAtMost(18)
@@ -4199,8 +4560,14 @@ private suspend fun generateHtmlAppFromSpec(
                     emittedProgress = nextProgress
                     onProgress?.invoke(nextProgress)
                 }
+                val now = System.currentTimeMillis()
+                if (now - lastDraftUpdateAtMs >= 180L) {
+                    onDraftHtml?.invoke(draftBuilder.toString())
+                    lastDraftUpdateAtMs = now
+                }
             }
         )
+    onDraftHtml?.invoke(draftBuilder.toString())
     if (emittedProgress < 94) {
         onProgress?.invoke(94)
     }
@@ -4214,7 +4581,8 @@ private suspend fun reviseHtmlAppFromPrompt(
     extraHeaders: List<HttpHeader>,
     currentHtml: String,
     requestText: String,
-    onProgress: ((Int) -> Unit)? = null
+    onProgress: ((Int) -> Unit)? = null,
+    onDraftHtml: ((String) -> Unit)? = null
 ): String {
     val current = currentHtml.trim()
     if (current.isBlank()) {
@@ -4247,6 +4615,8 @@ private suspend fun reviseHtmlAppFromPrompt(
     var chunkCount = 0
     var charCount = 0
     val startedAtMs = System.currentTimeMillis()
+    var lastDraftUpdateAtMs = 0L
+    val draftBuilder = StringBuilder()
     onProgress?.invoke(emittedProgress)
 
     val raw =
@@ -4260,6 +4630,7 @@ private suspend fun reviseHtmlAppFromPrompt(
             ),
             extraHeaders = extraHeaders,
             onChunk = { chunk ->
+                draftBuilder.append(chunk)
                 chunkCount += 1
                 charCount += chunk.length
                 val elapsedBoost = ((System.currentTimeMillis() - startedAtMs) / 520L).toInt().coerceAtMost(16)
@@ -4270,8 +4641,14 @@ private suspend fun reviseHtmlAppFromPrompt(
                     emittedProgress = nextProgress
                     onProgress?.invoke(nextProgress)
                 }
+                val now = System.currentTimeMillis()
+                if (now - lastDraftUpdateAtMs >= 180L) {
+                    onDraftHtml?.invoke(draftBuilder.toString())
+                    lastDraftUpdateAtMs = now
+                }
             }
         )
+    onDraftHtml?.invoke(draftBuilder.toString())
     if (emittedProgress < 94) {
         onProgress?.invoke(94)
     }
@@ -4648,7 +5025,8 @@ private fun extractInlineMcpCallBlocks(content: String): InlineMcpCallExtraction
 
 private fun buildAppDeveloperToolInstruction(
     roundIndex: Int,
-    maxCallsPerRound: Int
+    maxCallsPerRound: Int,
+    savedApps: List<SavedApp>
 ): String {
     return buildString {
         appendLine("Built-in tool available: app_developer.")
@@ -4658,14 +5036,23 @@ private fun buildAppDeveloperToolInstruction(
         appendLine("First write a normal visible reply, then append tool call tags if needed.")
         appendLine("At most $maxCallsPerRound tool calls in this round.")
         appendLine()
+        appendLine("Saved apps context:")
+        appendLine(summarizeSavedAppsForInstruction(savedApps))
+        appendLine()
         appendLine("Tool call format:")
         appendLine("<tool_call>{\"serverId\":\"builtin_app_developer\",\"toolName\":\"app_developer\",\"arguments\":{...}}</tool_call>")
         appendLine()
-        appendLine("Required arguments:")
+        appendLine("For create mode, required arguments:")
+        appendLine("- mode: \"create\" (or omit)")
         appendLine("- name: app name in ONE language only (Chinese OR English), never bilingual")
         appendLine("- description: concise description (one short sentence, no filler)")
         appendLine("- style: visual style direction")
         appendLine("- features: array of detailed functional requirements")
+        appendLine()
+        appendLine("For edit mode, required arguments:")
+        appendLine("- mode: \"edit\"")
+        appendLine("- targetAppId or targetAppName: choose from saved apps context above")
+        appendLine("- editRequest: clear and detailed modification request")
     }.trim()
 }
 
