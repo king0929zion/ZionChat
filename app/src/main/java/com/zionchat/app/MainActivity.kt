@@ -78,16 +78,22 @@ class MainActivity : AppCompatActivity() {
                         val appLanguage by appContainer.repository.appLanguageFlow.collectAsState(initial = "system")
                         LaunchedEffect(appLanguage) {
                             runCatching {
+                                val normalizedLanguage = appLanguage.trim().lowercase()
                                 val locales =
-                                    when (appLanguage.trim().lowercase()) {
+                                    when (normalizedLanguage) {
                                         "en" -> LocaleListCompat.forLanguageTags("en")
                                         "zh" -> LocaleListCompat.forLanguageTags("zh-CN")
                                         else -> LocaleListCompat.getEmptyLocaleList()
                                     }
                                 val currentLocales = AppCompatDelegate.getApplicationLocales()
-                                val currentTags = currentLocales.toLanguageTags().trim()
-                                val targetTags = locales.toLanguageTags().trim()
-                                if (currentTags != targetTags) {
+                                val currentLanguage = currentLocales[0]?.language?.lowercase()
+                                val shouldApply =
+                                    when (normalizedLanguage) {
+                                        "en" -> currentLanguage != "en"
+                                        "zh" -> currentLanguage != "zh"
+                                        else -> !currentLocales.isEmpty
+                                    }
+                                if (shouldApply) {
                                     AppCompatDelegate.setApplicationLocales(locales)
                                 }
                             }
