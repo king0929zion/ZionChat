@@ -56,6 +56,7 @@
     <string name="accent_color_pink">Pink</string>
     <string name="accent_color_orange">Orange</string>
     <string name="accent_color_purple">Purple</string>
+    <string name="accent_color_black">Black</string>
 
     <string name="personalization_nickname">Nickname</string>
     <string name="personalization_nickname_placeholder">Enter your nickname</string>
@@ -108,6 +109,7 @@
 
     <string name="thinking_label">Thinking</string>
     <string name="tool_label">Tool</string>
+    <string name="tool_label_with_name">%1$s · %2$s</string>
     <string name="chat_placeholder_ask_anything">Ask anything</string>
     <string name="chat_tool_web_search">Web search</string>
     <string name="chat_tool_web_search_subtitle">Find real-time news and info</string>

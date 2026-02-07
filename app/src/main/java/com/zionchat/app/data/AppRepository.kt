@@ -37,7 +37,7 @@ class AppRepository(context: Context) {
     private val defaultVisionModelIdKey = stringPreferencesKey("default_vision_model_id")
     private val defaultImageModelIdKey = stringPreferencesKey("default_image_model_id")
     private val defaultTitleModelIdKey = stringPreferencesKey("default_title_model_id")
-    private val supportedAccentKeys = setOf("default", "blue", "green", "yellow", "pink", "orange", "purple")
+    private val supportedAccentKeys = setOf("default", "blue", "green", "yellow", "pink", "orange", "purple", "black")
 
     private val providerListType = object : TypeToken<List<ProviderConfig>>() {}.type
     private val modelListType = object : TypeToken<List<ModelConfig>>() {}.type

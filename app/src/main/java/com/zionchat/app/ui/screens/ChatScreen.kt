@@ -11,6 +11,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
@@ -96,6 +97,7 @@ import kotlinx.coroutines.withContext
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateColor
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
@@ -1311,7 +1313,9 @@ fun ChatScreen(navController: NavController) {
                                 tagSheetTagId = tagId
                             },
                             userBubbleColor = accentPalette.bubbleColor,
+                            userBubbleSecondaryColor = accentPalette.bubbleColorSecondary,
                             userBubbleTextColor = accentPalette.bubbleTextColor,
+                            thinkingPulseColor = accentPalette.thinkingPulseColor,
                             onEdit = { /* TODO */ },
                             onDelete = { convoId, messageId ->
                                 scope.launch { repository.deleteMessage(convoId, messageId) }
@@ -1601,7 +1605,9 @@ fun MessageItem(
     onShowReasoning: (String) -> Unit,
     onShowTag: (messageId: String, tagId: String) -> Unit,
     userBubbleColor: Color = UserMessageBubble,
+    userBubbleSecondaryColor: Color? = null,
     userBubbleTextColor: Color = TextPrimary,
+    thinkingPulseColor: Color = TextPrimary,
     onEdit: () -> Unit,
     onDelete: (conversationId: String, messageId: String) -> Unit
 ) {
@@ -1610,6 +1616,7 @@ fun MessageItem(
 
     val isUser = message.role == "user"
     if (isUser) {
+        val bubbleShape = RoundedCornerShape(18.dp)
         // User message (right aligned)
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1618,7 +1625,24 @@ fun MessageItem(
             Box(
                 modifier = Modifier
                     .padding(start = 60.dp)
-                    .background(userBubbleColor, RoundedCornerShape(18.dp))
+                    .then(
+                        if (userBubbleSecondaryColor != null) {
+                            Modifier
+                                .background(
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(userBubbleColor, userBubbleSecondaryColor)
+                                    ),
+                                    shape = bubbleShape
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = Color.White.copy(alpha = 0.08f),
+                                    shape = bubbleShape
+                                )
+                        } else {
+                            Modifier.background(userBubbleColor, bubbleShape)
+                        }
+                    )
                     .combinedClickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -1652,6 +1676,22 @@ fun MessageItem(
         ) {
             val reasoningText = message.reasoning?.trim().orEmpty()
             if (reasoningText.isNotBlank()) {
+                val thinkingTint =
+                    if (isStreaming) {
+                        val thinkingTransition = rememberInfiniteTransition(label = "thinking_label_pulse")
+                        thinkingTransition.animateColor(
+                            initialValue = ThinkingLabelColor,
+                            targetValue = thinkingPulseColor,
+                            animationSpec =
+                                infiniteRepeatable(
+                                    animation = tween(720, easing = FastOutSlowInEasing),
+                                    repeatMode = RepeatMode.Reverse
+                                ),
+                            label = "thinking_label_color"
+                        ).value
+                    } else {
+                        ThinkingLabelColor
+                    }
                 Row(
                     modifier = Modifier
                         .padding(bottom = 6.dp)
@@ -1666,12 +1706,12 @@ fun MessageItem(
                         fontSize = 15.sp,
                         fontFamily = SourceSans3,
                         fontWeight = FontWeight.SemiBold,
-                        color = ThinkingLabelColor
+                        color = thinkingTint
                     )
                     Icon(
                         imageVector = AppIcons.ChevronRight,
                         contentDescription = null,
-                        tint = ThinkingLabelColor,
+                        tint = thinkingTint,
                         modifier = Modifier.size(14.dp)
                     )
                 }
@@ -1731,24 +1771,7 @@ fun MessageItem(
                 )
             }
 
-            if (isStreaming) {
-                val infiniteTransition = rememberInfiniteTransition(label = "cursor_pulse")
-                val cursorAlpha by infiniteTransition.animateFloat(
-                    initialValue = 0.3f,
-                    targetValue = 1f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(600, easing = LinearEasing),
-                        repeatMode = RepeatMode.Reverse
-                    ),
-                    label = "cursor_alpha"
-                )
-                Box(
-                    modifier = Modifier
-                        .padding(top = 10.dp)
-                        .size(8.dp)
-                        .background(TextSecondary.copy(alpha = cursorAlpha), CircleShape)
-                )
-            } else if (showToolbar) {
+            if (!isStreaming && showToolbar) {
                 // Message action buttons (assistant only)
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -1804,9 +1827,22 @@ private fun MessageTagRow(
     onShowTag: (messageId: String, tagId: String) -> Unit
 ) {
     val tagRunning = isTagRunning(tag)
+    val toolName = remember(tag.title) {
+        tag.title.trim().takeIf { it.isNotBlank() && !it.equals("tool", ignoreCase = true) }
+    }
+    val displayText =
+        if (tag.kind == "mcp") {
+            if (toolName == null) {
+                stringResource(R.string.tool_label)
+            } else {
+                stringResource(R.string.tool_label_with_name, stringResource(R.string.tool_label), toolName)
+            }
+        } else {
+            tag.title
+        }
     Row(
         modifier = Modifier
-            .padding(bottom = 6.dp)
+            .padding(vertical = 10.dp)
             .animateContentSize(animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing))
             .pressableScale(
                 pressedScale = 0.98f,
@@ -1824,7 +1860,7 @@ private fun MessageTagRow(
             Spacer(modifier = Modifier.width(6.dp))
         }
         Text(
-            text = if (tag.kind == "mcp") stringResource(R.string.tool_label) else tag.title,
+            text = displayText,
             fontSize = 15.sp,
             fontFamily = SourceSans3,
             fontWeight = FontWeight.SemiBold,

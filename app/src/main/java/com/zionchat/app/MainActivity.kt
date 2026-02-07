@@ -3,9 +3,9 @@ package com.zionchat.app
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Build
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -30,7 +30,7 @@ import com.zionchat.app.ui.screens.*
 import com.zionchat.app.ui.theme.ZionChatTheme
 import okhttp3.OkHttpClient
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 

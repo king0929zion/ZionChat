@@ -8,14 +8,16 @@ data class AccentPalette(
     val key: String,
     val actionColor: Color,
     val bubbleColor: Color,
-    val bubbleTextColor: Color
+    val bubbleTextColor: Color,
+    val bubbleColorSecondary: Color? = null,
+    val thinkingPulseColor: Color = actionColor
 )
 
 private val defaultAccentPalette =
     AccentPalette(
         key = "default",
-        actionColor = Color(0xFF5E6876),
-        bubbleColor = Color(0xFFE9EDF3),
+        actionColor = Color(0xFF9CA3AF),
+        bubbleColor = Color(0xFFEFF2F6),
         bubbleTextColor = Color(0xFF1E2733)
     )
 
@@ -25,48 +27,56 @@ private val accentPaletteMap =
         "blue" to
             AccentPalette(
                 key = "blue",
-                actionColor = Color(0xFF5D7FA6),
-                bubbleColor = Color(0xFFE9F0F8),
-                bubbleTextColor = Color(0xFF1F2D3D)
+                actionColor = Color(0xFF3B82F6),
+                bubbleColor = Color(0xFFE8F1FF),
+                bubbleTextColor = Color(0xFF173A66)
             ),
         "green" to
             AccentPalette(
                 key = "green",
-                actionColor = Color(0xFF5D8A75),
-                bubbleColor = Color(0xFFEAF4EF),
-                bubbleTextColor = Color(0xFF1F3229)
+                actionColor = Color(0xFF22C55E),
+                bubbleColor = Color(0xFFE7F8EE),
+                bubbleTextColor = Color(0xFF174227)
             ),
         "yellow" to
             AccentPalette(
                 key = "yellow",
-                actionColor = Color(0xFF9A8553),
-                bubbleColor = Color(0xFFF5F1E8),
-                bubbleTextColor = Color(0xFF3B3120)
+                actionColor = Color(0xFFEAB308),
+                bubbleColor = Color(0xFFFFF6DE),
+                bubbleTextColor = Color(0xFF5E4700)
             ),
         "pink" to
             AccentPalette(
                 key = "pink",
-                actionColor = Color(0xFF97657F),
-                bubbleColor = Color(0xFFF5EBF1),
-                bubbleTextColor = Color(0xFF352230)
+                actionColor = Color(0xFFEC4899),
+                bubbleColor = Color(0xFFFFEBF5),
+                bubbleTextColor = Color(0xFF5F1F42)
             ),
         "orange" to
             AccentPalette(
                 key = "orange",
-                actionColor = Color(0xFFA07351),
-                bubbleColor = Color(0xFFF6EEE8),
-                bubbleTextColor = Color(0xFF392A20)
+                actionColor = Color(0xFFF97316),
+                bubbleColor = Color(0xFFFFEFE4),
+                bubbleTextColor = Color(0xFF663410)
             ),
         "purple" to
             AccentPalette(
                 key = "purple",
-                actionColor = Color(0xFF74669C),
-                bubbleColor = Color(0xFFEEEAF7),
-                bubbleTextColor = Color(0xFF2B2540)
+                actionColor = Color(0xFFA855F7),
+                bubbleColor = Color(0xFFF2E9FF),
+                bubbleTextColor = Color(0xFF45246E)
+            ),
+        "black" to
+            AccentPalette(
+                key = "black",
+                actionColor = Color(0xFF111214),
+                bubbleColor = Color(0xFF2C2D31),
+                bubbleTextColor = Color(0xFFF7F7F8),
+                bubbleColorSecondary = Color(0xFF16171A),
+                thinkingPulseColor = Color(0xFF6B8BFF)
             )
     )
 
 fun accentPaletteForKey(key: String?): AccentPalette {
     return accentPaletteMap[key?.trim()?.lowercase()] ?: defaultAccentPalette
 }
-

@@ -116,6 +116,7 @@ fun SettingsScreen(navController: NavController) {
             "pink" -> stringResource(R.string.accent_color_pink)
             "orange" -> stringResource(R.string.accent_color_orange)
             "purple" -> stringResource(R.string.accent_color_purple)
+            "black" -> stringResource(R.string.accent_color_black)
             else -> stringResource(R.string.accent_color_default)
         }
 
@@ -871,13 +872,14 @@ private data class AccentOption(
 )
 
 private val accentColorOptions = listOf(
-    AccentOption("default", R.string.accent_color_default, Color(0xFF5E6876)),
-    AccentOption("blue", R.string.accent_color_blue, Color(0xFF5D7FA6)),
-    AccentOption("green", R.string.accent_color_green, Color(0xFF5D8A75)),
-    AccentOption("yellow", R.string.accent_color_yellow, Color(0xFF9A8553)),
-    AccentOption("pink", R.string.accent_color_pink, Color(0xFF97657F)),
-    AccentOption("orange", R.string.accent_color_orange, Color(0xFFA07351)),
-    AccentOption("purple", R.string.accent_color_purple, Color(0xFF74669C))
+    AccentOption("default", R.string.accent_color_default, Color(0xFF9CA3AF)),
+    AccentOption("blue", R.string.accent_color_blue, Color(0xFF3B82F6)),
+    AccentOption("green", R.string.accent_color_green, Color(0xFF22C55E)),
+    AccentOption("yellow", R.string.accent_color_yellow, Color(0xFFEAB308)),
+    AccentOption("pink", R.string.accent_color_pink, Color(0xFFEC4899)),
+    AccentOption("orange", R.string.accent_color_orange, Color(0xFFF97316)),
+    AccentOption("purple", R.string.accent_color_purple, Color(0xFFA855F7)),
+    AccentOption("black", R.string.accent_color_black, Color(0xFF111214))
 )
 
 @OptIn(ExperimentalAnimationApi::class)
