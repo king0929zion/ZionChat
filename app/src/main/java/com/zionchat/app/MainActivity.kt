@@ -6,6 +6,12 @@ import android.os.Build
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -29,6 +35,7 @@ import coil3.svg.SvgDecoder
 import com.zionchat.app.ui.screens.*
 import com.zionchat.app.ui.theme.ZionChatTheme
 import okhttp3.OkHttpClient
+import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -91,7 +98,31 @@ class MainActivity : AppCompatActivity() {
                         }
                         NavHost(
                             navController = navController,
-                            startDestination = "chat"
+                            startDestination = "chat",
+                            enterTransition = {
+                                slideInHorizontally(
+                                    initialOffsetX = { fullWidth -> (fullWidth * 0.28f).roundToInt() },
+                                    animationSpec = tween(durationMillis = 340, easing = FastOutSlowInEasing)
+                                ) + fadeIn(animationSpec = tween(durationMillis = 240))
+                            },
+                            exitTransition = {
+                                slideOutHorizontally(
+                                    targetOffsetX = { fullWidth -> (-fullWidth * 0.1f).roundToInt() },
+                                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                                ) + fadeOut(animationSpec = tween(durationMillis = 200))
+                            },
+                            popEnterTransition = {
+                                slideInHorizontally(
+                                    initialOffsetX = { fullWidth -> (-fullWidth * 0.18f).roundToInt() },
+                                    animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing)
+                                ) + fadeIn(animationSpec = tween(durationMillis = 220))
+                            },
+                            popExitTransition = {
+                                slideOutHorizontally(
+                                    targetOffsetX = { fullWidth -> (fullWidth * 0.32f).roundToInt() },
+                                    animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing)
+                                ) + fadeOut(animationSpec = tween(durationMillis = 220))
+                            }
                         ) {
                             composable("chat") { ChatScreen(navController) }
                             composable("settings") { SettingsScreen(navController) }
