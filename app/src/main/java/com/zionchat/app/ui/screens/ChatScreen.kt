@@ -2435,14 +2435,14 @@ private fun AppDevToolTagCard(
             .clip(RoundedCornerShape(18.dp))
             .background(Color.White, RoundedCornerShape(18.dp))
             .pressableScale(pressedScale = 0.98f, onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
             modifier = Modifier
                 .size(50.dp)
-                .align(Alignment.CenterVertically)
+                .padding(top = 2.dp)
                 .clip(CircleShape),
             contentAlignment = Alignment.Center
         ) {
@@ -2451,22 +2451,22 @@ private fun AppDevToolTagCard(
 
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalArrangement = Arrangement.spacedBy(1.dp)
         ) {
             Text(
                 text = payload.name,
-                fontSize = 16.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Normal,
                 color = Color(0xFF1C1C1E)
             )
             Text(
                 text = payload.subtitle,
-                fontSize = 14.sp,
+                fontSize = 12.sp,
                 color = Color(0xFF8E8E93),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2485,7 +2485,7 @@ private fun AppDevToolTagCard(
         }
 
         Row(
-            modifier = Modifier.align(Alignment.CenterVertically),
+            modifier = Modifier.padding(top = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -2656,9 +2656,6 @@ private fun AppDevWorkspaceScreen(
             )
         )
     }
-    var workspaceTab by remember(tag.id) {
-        mutableStateOf(if (payload.status.equals("running", ignoreCase = true)) "code" else "preview")
-    }
 
     Box(
         modifier = Modifier
@@ -2743,38 +2740,18 @@ private fun AppDevWorkspaceScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                AppWorkspaceTabChip(
-                    label = "Preview",
-                    selected = workspaceTab == "preview",
-                    onClick = { workspaceTab = "preview" }
-                )
-                AppWorkspaceTabChip(
-                    label = "Code",
-                    selected = workspaceTab == "code",
-                    onClick = { workspaceTab = "code" }
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
             ) {
                 val html = payload.html.trim()
-                if (workspaceTab == "code") {
+                val isRunning = payload.status.equals("running", ignoreCase = true)
+                if (isRunning) {
                     AppDevCodeSurface(
                         html = html,
                         error = payload.error,
-                        isRunning = payload.status.equals("running", ignoreCase = true)
+                        isRunning = true
                     )
                 } else {
                     if (html.isBlank()) {
@@ -2826,29 +2803,6 @@ private fun AppDevWorkspaceScreen(
 }
 
 @Composable
-private fun AppWorkspaceTabChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(if (selected) Surface else GrayLight, RoundedCornerShape(999.dp))
-            .pressableScale(pressedScale = 0.96f, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 7.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            fontSize = 13.sp,
-            color = if (selected) TextPrimary else TextSecondary,
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
-
-@Composable
 private fun AppDevCodeSurface(
     html: String,
     error: String?,
@@ -2870,7 +2824,7 @@ private fun AppDevCodeSurface(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF111214))
+            .background(Color.White)
             .padding(horizontal = 12.dp, vertical = 10.dp)
     ) {
         if (codeText.isBlank()) {
@@ -2878,7 +2832,7 @@ private fun AppDevCodeSurface(
                 text = error?.ifBlank { null }
                     ?: if (isRunning) "Generating code..." else "No code available.",
                 fontSize = 14.sp,
-                color = Color.White.copy(alpha = 0.72f)
+                color = TextSecondary
             )
         } else {
             Row(
@@ -2892,7 +2846,7 @@ private fun AppDevCodeSurface(
                     fontSize = 12.sp,
                     lineHeight = 19.sp,
                     fontFamily = FontFamily.Monospace,
-                    color = Color.White.copy(alpha = 0.42f),
+                    color = TextSecondary.copy(alpha = 0.72f),
                     softWrap = false
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -2901,7 +2855,7 @@ private fun AppDevCodeSurface(
                     fontSize = 12.sp,
                     lineHeight = 19.sp,
                     fontFamily = FontFamily.Monospace,
-                    color = Color.White.copy(alpha = 0.92f),
+                    color = TextPrimary,
                     softWrap = false
                 )
             }

@@ -6,25 +6,31 @@ import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -195,7 +201,7 @@ private fun MarkdownBlock(
         is Heading -> MarkdownHeading(node, textStyle, linkColor)
         is BulletList -> MarkdownBulletList(node, textStyle, linkColor)
         is OrderedList -> MarkdownOrderedList(node, textStyle, linkColor)
-        is FencedCodeBlock -> MarkdownCodeBlock(node.literal, textStyle)
+        is FencedCodeBlock -> MarkdownCodeBlock(node.literal, textStyle, node.info)
         is IndentedCodeBlock -> MarkdownCodeBlock(node.literal, textStyle)
         is BlockQuote -> MarkdownBlockQuote(node, textStyle, linkColor)
         is ThematicBreak -> Divider(color = GrayLight, thickness = 1.dp)
@@ -219,7 +225,7 @@ private fun MarkdownParagraph(
     val inline = buildInlineAnnotatedString(paragraph, linkColor)
 
     if (!isOnlyImages && inline.text.isNotBlank()) {
-        Text(text = inline, style = textStyle)
+        AnnotatedMarkdownText(text = inline, style = textStyle)
     }
 
     if (images.isNotEmpty()) {
@@ -252,6 +258,31 @@ private fun MarkdownParagraph(
     }
 }
 
+@Composable
+private fun AnnotatedMarkdownText(
+    text: AnnotatedString,
+    style: TextStyle
+) {
+    val uriHandler = LocalUriHandler.current
+    val hasLinks = remember(text) {
+        text.getStringAnnotations(tag = "URL", start = 0, end = text.length).isNotEmpty()
+    }
+    if (!hasLinks) {
+        Text(text = text, style = style)
+        return
+    }
+    ClickableText(
+        text = text,
+        style = style,
+        onClick = { offset ->
+            text.getStringAnnotations(tag = "URL", start = offset, end = offset)
+                .firstOrNull()
+                ?.item
+                ?.let { url -> runCatching { uriHandler.openUri(url) } }
+        }
+    )
+}
+
 private fun decodeBitmapFromDataUrl(dataUrl: String): Bitmap? {
     val url = dataUrl.trim()
     if (!url.startsWith("data:image", ignoreCase = true)) return null
@@ -279,7 +310,7 @@ private fun MarkdownHeading(
         4 -> 17.sp
         else -> 16.sp
     }
-    Text(
+    AnnotatedMarkdownText(
         text = buildInlineAnnotatedString(heading, linkColor),
         style = textStyle.copy(fontSize = size, fontWeight = FontWeight.SemiBold)
     )
@@ -288,22 +319,51 @@ private fun MarkdownHeading(
 @Composable
 private fun MarkdownCodeBlock(
     code: String,
-    textStyle: TextStyle
+    textStyle: TextStyle,
+    language: String? = null
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .border(width = 1.dp, color = GrayLight, shape = RoundedCornerShape(12.dp))
             .background(GrayLighter, RoundedCornerShape(12.dp))
-            .padding(12.dp)
+            .clip(RoundedCornerShape(12.dp))
     ) {
-        Text(
-            text = code.trimEnd(),
-            style = textStyle.copy(
-                fontFamily = FontFamily.Monospace,
-                fontSize = 14.sp,
-                lineHeight = 20.sp
+        val lang = language?.trim().orEmpty()
+        if (lang.isNotBlank()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.White.copy(alpha = 0.45f))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = lang.lowercase(),
+                    style = textStyle.copy(
+                        fontSize = 11.sp,
+                        color = TextSecondary,
+                        fontWeight = FontWeight.Medium
+                    )
+                )
+            }
+            Divider(color = GrayLight, thickness = 0.5.dp)
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(12.dp)
+        ) {
+            Text(
+                text = code.trimEnd(),
+                style = textStyle.copy(
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp
+                )
             )
-        )
+        }
     }
 }
 
@@ -316,12 +376,13 @@ private fun MarkdownBlockQuote(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .height(IntrinsicSize.Min)
             .padding(vertical = 2.dp)
     ) {
         Spacer(
             modifier = Modifier
                 .width(3.dp)
-                .height(16.dp)
+                .fillMaxHeight()
                 .background(GrayLight, RoundedCornerShape(2.dp))
         )
         Spacer(modifier = Modifier.width(10.dp))
@@ -341,8 +402,15 @@ private fun MarkdownBulletList(
         var item = list.firstChild
         while (item != null) {
             if (item is ListItem) {
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    Text(text = "\u2022", style = textStyle.copy(color = TextSecondary))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        text = "\u2022",
+                        style = textStyle.copy(color = TextSecondary),
+                        modifier = Modifier.padding(top = 1.dp)
+                    )
                     Spacer(modifier = Modifier.width(8.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         renderChildren(item, textStyle, linkColor, spacing = 6.dp)
@@ -365,8 +433,15 @@ private fun MarkdownOrderedList(
         var item = list.firstChild
         while (item != null) {
             if (item is ListItem) {
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    Text(text = "$index.", style = textStyle.copy(color = TextSecondary))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        text = "$index.",
+                        style = textStyle.copy(color = TextSecondary),
+                        modifier = Modifier.padding(top = 1.dp)
+                    )
                     Spacer(modifier = Modifier.width(8.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         renderChildren(item, textStyle, linkColor, spacing = 6.dp)
