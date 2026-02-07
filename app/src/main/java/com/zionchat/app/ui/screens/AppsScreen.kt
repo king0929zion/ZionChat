@@ -1,5 +1,7 @@
 package com.zionchat.app.ui.screens
 
+import android.graphics.Color as AndroidColor
+import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -7,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -48,8 +51,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -249,15 +257,11 @@ private fun SavedAppRow(
             modifier = Modifier
                 .size(44.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF1C1C1E), CircleShape),
+                .background(Color.White, CircleShape)
+                .border(width = 1.dp, color = Color(0xFFE7E7EC), shape = CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = AppIcons.Apps,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(22.dp)
-            )
+            AppDevRingGlyph(modifier = Modifier.size(24.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -286,10 +290,41 @@ private fun SavedAppRow(
 }
 
 @Composable
+private fun AppDevRingGlyph(
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier) {
+        val strokeWidth = size.minDimension * 0.24f
+        val arcDiameter = size.minDimension - strokeWidth
+        val topLeft = Offset(
+            x = (size.width - arcDiameter) / 2f,
+            y = (size.height - arcDiameter) / 2f
+        )
+        drawArc(
+            color = Color.Black,
+            startAngle = -90f,
+            sweepAngle = 312f,
+            useCenter = false,
+            topLeft = topLeft,
+            size = Size(arcDiameter, arcDiameter),
+            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+        )
+    }
+}
+
+@Composable
 private fun SavedAppPreviewDialog(
     app: SavedApp,
     onDismiss: () -> Unit
 ) {
+    var chromeColor by remember(app.id) { mutableStateOf(Background) }
+    val baseUrl = remember(app.id) { "https://saved-app.zionchat.local/app/${app.id}/" }
+    val contentSignature = remember(app.id, app.html) { "${app.id}:${app.html.hashCode()}" }
+    val controlsBackground =
+        if (chromeColor.luminance() < 0.45f) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.08f)
+    val controlsTint =
+        if (chromeColor.luminance() < 0.45f) Color.White else TextPrimary
+
     BackHandler(onBack = onDismiss)
     Dialog(
         onDismissRequest = onDismiss,
@@ -298,32 +333,32 @@ private fun SavedAppPreviewDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Background)
+                .background(chromeColor)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.statusBars)
                     .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(horizontal = 10.dp)
-                    .padding(top = 8.dp, bottom = 6.dp)
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(SurfaceColor, CircleShape)
+                            .background(controlsBackground, CircleShape)
                             .pressableScale(pressedScale = 0.95f, onClick = onDismiss),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = AppIcons.Back,
                             contentDescription = null,
-                            tint = TextPrimary,
+                            tint = controlsTint,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -331,7 +366,7 @@ private fun SavedAppPreviewDialog(
                         text = app.name,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary,
+                        color = controlsTint,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
@@ -340,41 +375,82 @@ private fun SavedAppPreviewDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Surface(
+                AndroidView(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    shape = RoundedCornerShape(20.dp),
-                    color = SurfaceColor
-                ) {
-                    AndroidView(
-                        modifier = Modifier.fillMaxSize(),
-                        factory = { context ->
-                            WebView(context).apply {
-                                settings.javaScriptEnabled = true
-                                settings.domStorageEnabled = true
-                                settings.allowFileAccess = false
-                                settings.allowContentAccess = false
-                                webViewClient = WebViewClient()
-                                webChromeClient = WebChromeClient()
-                            }
-                        },
-                        update = { webView ->
+                    factory = { context ->
+                        WebView(context).apply {
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.databaseEnabled = true
+                            settings.allowFileAccess = false
+                            settings.allowContentAccess = false
+                            setBackgroundColor(AndroidColor.TRANSPARENT)
+                            CookieManager.getInstance().setAcceptCookie(true)
+                            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                            webViewClient =
+                                object : WebViewClient() {
+                                    override fun onPageFinished(view: WebView?, url: String?) {
+                                        super.onPageFinished(view, url)
+                                        view?.evaluateJavascript(
+                                            "(function(){try{var b=document.body||document.documentElement;if(!b)return '';var c=window.getComputedStyle(b).backgroundColor||'';if(!c||c==='transparent'||c==='rgba(0, 0, 0, 0)'){var r=document.documentElement?window.getComputedStyle(document.documentElement).backgroundColor:'';if(r)c=r;}return c||'';}catch(e){return '';}})();"
+                                        ) { jsResult ->
+                                            parseCssColorFromJs(jsResult)?.let { parsed ->
+                                                chromeColor = parsed
+                                            }
+                                        }
+                                    }
+                                }
+                            webChromeClient = WebChromeClient()
+                        }
+                    },
+                    update = { webView ->
+                        if (webView.tag != contentSignature) {
+                            webView.tag = contentSignature
                             webView.loadDataWithBaseURL(
-                                null,
+                                baseUrl,
                                 app.html,
                                 "text/html",
                                 "utf-8",
                                 null
                             )
                         }
-                    )
-                }
+                    }
+                )
             }
         }
     }
+}
+
+private fun parseCssColorFromJs(jsValue: String?): Color? {
+    val raw =
+        jsValue
+            ?.trim()
+            ?.trim('"')
+            ?.replace("\\\"", "\"")
+            ?.replace("\\\\", "\\")
+            ?.trim()
+            .orEmpty()
+    if (raw.isBlank()) return null
+    if (raw.equals("transparent", ignoreCase = true)) return null
+    if (raw.equals("rgba(0, 0, 0, 0)", ignoreCase = true)) return null
+
+    if (raw.startsWith("#")) {
+        return runCatching { Color(AndroidColor.parseColor(raw)) }.getOrNull()
+    }
+
+    val rgba =
+        Regex("""rgba?\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})(?:\s*,\s*([0-9]*\.?[0-9]+)\s*)?\)""")
+            .find(raw)
+            ?.groupValues
+            ?: return null
+    val r = rgba[1].toIntOrNull()?.coerceIn(0, 255) ?: return null
+    val g = rgba[2].toIntOrNull()?.coerceIn(0, 255) ?: return null
+    val b = rgba[3].toIntOrNull()?.coerceIn(0, 255) ?: return null
+    val a =
+        rgba.getOrNull(4)?.takeIf { it.isNotBlank() }?.toFloatOrNull()?.coerceIn(0f, 1f) ?: 1f
+    return Color(red = r / 255f, green = g / 255f, blue = b / 255f, alpha = a)
 }
 
 @Composable

@@ -260,6 +260,7 @@ fun ChatScreen(navController: NavController) {
     var isStreaming by remember { mutableStateOf(false) }
     var streamingMessageId by remember { mutableStateOf<String?>(null) }
     var streamingConversationId by remember { mutableStateOf<String?>(null) }
+    var streamingThinkingActive by remember { mutableStateOf(false) }
     var streamingJob by remember { mutableStateOf<Job?>(null) }
     var stopRequestedByUser by remember { mutableStateOf(false) }
 
@@ -541,6 +542,7 @@ fun ChatScreen(navController: NavController) {
             isStreaming = true
             streamingMessageId = assistantMessage.id
             streamingConversationId = safeConversationId
+            streamingThinkingActive = false
             scrollToBottomToken++
 
             fun updateAssistantPending(update: (Message) -> Message) {
@@ -564,7 +566,7 @@ fun ChatScreen(navController: NavController) {
 
             fun appendAssistantTag(tag: MessageTag) {
                 assistantTags = assistantTags + tag
-                if (tag.kind == "mcp") {
+                if (tag.kind == "mcp" || tag.kind == "app_dev") {
                     mcpTagAnchors += McpTagAnchor(tag.id, latestAssistantContent.length)
                 }
                 val contentWithMarkers = insertMcpTagMarkers(latestAssistantContent, mcpTagAnchors)
@@ -741,6 +743,7 @@ fun ChatScreen(navController: NavController) {
                         var remainder = ""
                         val keepTail = 12
                         var lastUiUpdateMs = 0L
+                        var lastThinkingSignalAtMs = 0L
 
                         fun captureStreamedCallPayload(payload: String) {
                             val cleaned = payload.trim()
@@ -918,10 +921,24 @@ fun ChatScreen(navController: NavController) {
                             reasoningEffort = selectedModel.reasoningEffort,
                             conversationId = safeConversationId
                         ).takeWhile { delta ->
-                            delta.reasoning?.takeIf { it.isNotBlank() }?.let { appendThinkingWithInlineCallExtraction(it) }
-                            delta.content?.let { appendWithThinkExtraction(it) }
-
                             val now = System.currentTimeMillis()
+                            var sawThinkingSignal = false
+                            delta.reasoning?.takeIf { it.isNotBlank() }?.let {
+                                appendThinkingWithInlineCallExtraction(it)
+                                sawThinkingSignal = true
+                            }
+                            delta.content?.let { appendWithThinkExtraction(it) }
+                            if (inThink) {
+                                sawThinkingSignal = true
+                            }
+                            if (sawThinkingSignal) {
+                                lastThinkingSignalAtMs = now
+                            }
+                            val thinkingActiveNow = (inThink || (now - lastThinkingSignalAtMs) <= 650L)
+                            if (streamingThinkingActive != thinkingActiveNow) {
+                                streamingThinkingActive = thinkingActiveNow
+                            }
+
                             val shouldUpdate =
                                 now - lastUiUpdateMs >= 33L || (roundVisibleRaw.length + roundThinkingRaw.length) % 120 == 0
                             if (shouldUpdate) {
@@ -1529,6 +1546,7 @@ fun ChatScreen(navController: NavController) {
                 isStreaming = false
                 streamingMessageId = null
                 streamingConversationId = null
+                streamingThinkingActive = false
                 streamingJob = null
                 stopRequestedByUser = false
                 selectedTool = null // 清除选中的工具
@@ -1606,6 +1624,10 @@ fun ChatScreen(navController: NavController) {
                             isStreaming = isStreaming
                                 && streamingConversationId == effectiveConversationId
                                 && message.id == streamingMessageId,
+                            isThinkingActive = isStreaming
+                                && streamingConversationId == effectiveConversationId
+                                && message.id == streamingMessageId
+                                && streamingThinkingActive,
                             showToolbar = showToolbar,
                             onShowReasoning = { reasoning ->
                                 hideKeyboardIfNeeded(force = true)
@@ -1640,7 +1662,6 @@ fun ChatScreen(navController: NavController) {
                             userBubbleColor = accentPalette.bubbleColor,
                             userBubbleSecondaryColor = accentPalette.bubbleColorSecondary,
                             userBubbleTextColor = accentPalette.bubbleTextColor,
-                            thinkingPulseColor = accentPalette.thinkingPulseColor,
                             onEdit = { /* TODO */ },
                             onDelete = { convoId, messageId ->
                                 scope.launch { repository.deleteMessage(convoId, messageId) }
@@ -1990,13 +2011,13 @@ fun MessageItem(
     message: Message,
     conversationId: String?,
     isStreaming: Boolean = false,
+    isThinkingActive: Boolean = false,
     showToolbar: Boolean = true,
     onShowReasoning: (String) -> Unit,
     onShowTag: (messageId: String, tagId: String) -> Unit,
     userBubbleColor: Color = UserMessageBubble,
     userBubbleSecondaryColor: Color? = null,
     userBubbleTextColor: Color = TextPrimary,
-    thinkingPulseColor: Color = TextPrimary,
     onEdit: () -> Unit,
     onDelete: (conversationId: String, messageId: String) -> Unit
 ) {
@@ -2066,11 +2087,11 @@ fun MessageItem(
             val reasoningText = message.reasoning?.trim().orEmpty()
             if (reasoningText.isNotBlank()) {
                 val thinkingTint =
-                    if (isStreaming) {
+                    if (isThinkingActive) {
                         val thinkingTransition = rememberInfiniteTransition(label = "thinking_label_pulse")
                         thinkingTransition.animateColor(
-                            initialValue = ThinkingLabelColor,
-                            targetValue = thinkingPulseColor,
+                            initialValue = Color(0xFF1C1C1E),
+                            targetValue = Color(0xFFCFCFD4),
                             animationSpec =
                                 infiniteRepeatable(
                                     animation = tween(720, easing = FastOutSlowInEasing),
@@ -2079,7 +2100,7 @@ fun MessageItem(
                             label = "thinking_label_color"
                         ).value
                     } else {
-                        ThinkingLabelColor
+                        Color(0xFF1C1C1E)
                     }
                 Row(
                     modifier = Modifier
@@ -2312,13 +2333,14 @@ private fun AppDevToolTagCard(
     ) {
         Box(
             modifier = Modifier
-                .size(46.dp)
+                .size(50.dp)
+                .align(Alignment.CenterVertically)
                 .clip(CircleShape)
                 .background(Color.White, CircleShape)
                 .border(width = 1.dp, color = Color(0xFFE7E7EC), shape = CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            AppDevRingGlyph(modifier = Modifier.size(24.dp))
+            AppDevRingGlyph(modifier = Modifier.size(28.dp))
         }
 
         Column(
@@ -2357,6 +2379,7 @@ private fun AppDevToolTagCard(
         }
 
         Row(
+            modifier = Modifier.align(Alignment.CenterVertically),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -3957,6 +3980,48 @@ private fun isBuiltInAppDeveloperCall(call: PlannedMcpToolCall): Boolean {
     )
 }
 
+private fun isHanChar(ch: Char): Boolean {
+    return Character.UnicodeScript.of(ch.code) == Character.UnicodeScript.HAN
+}
+
+private fun normalizeAppDisplayName(raw: String): String {
+    val trimmed = raw.trim()
+    if (trimmed.isBlank()) return "App"
+
+    val hasHan = trimmed.any(::isHanChar)
+    val hasLatin = trimmed.any { it in 'A'..'Z' || it in 'a'..'z' }
+    if (!hasHan || !hasLatin) {
+        return trimmed.take(80)
+    }
+
+    val separators = listOf("/", "|", "｜", " - ", " — ", " – ", "·")
+    separators.forEach { sep ->
+        val parts = trimmed.split(sep).map { it.trim() }.filter { it.isNotBlank() }
+        if (parts.size < 2) return@forEach
+        val pureHan = parts.firstOrNull { p -> p.any(::isHanChar) && p.none { it in 'A'..'Z' || it in 'a'..'z' } }
+        val pureLatin = parts.firstOrNull { p -> p.any { it in 'A'..'Z' || it in 'a'..'z' } && p.none(::isHanChar) }
+        val chosen = pureHan ?: pureLatin ?: parts.first()
+        return chosen.take(80)
+    }
+
+    val hanCount = trimmed.count(::isHanChar)
+    val latinCount = trimmed.count { it in 'A'..'Z' || it in 'a'..'z' }
+    val keepHan = hanCount >= latinCount
+    val filtered =
+        buildString {
+            trimmed.forEach { ch ->
+                val keep =
+                    if (keepHan) {
+                        isHanChar(ch) || ch.isDigit() || ch.isWhitespace() || ch in setOf('-', '_')
+                    } else {
+                        (ch in 'A'..'Z') || (ch in 'a'..'z') || ch.isDigit() || ch.isWhitespace() || ch in setOf('-', '_')
+                    }
+                if (keep) append(ch)
+            }
+        }.trim()
+    return filtered.ifBlank { trimmed }.take(80)
+}
+
 private fun parseAppDevToolSpec(arguments: Map<String, Any?>): AppDevToolSpec? {
     fun anyString(vararg keys: String): String {
         return keys.asSequence()
@@ -3987,7 +4052,7 @@ private fun parseAppDevToolSpec(arguments: Map<String, Any?>): AppDevToolSpec? {
         }.distinct().take(12)
     }
 
-    val name = anyString("name", "title", "appName", "app_name")
+    val name = normalizeAppDisplayName(anyString("name", "title", "appName", "app_name"))
     val description = anyString("description", "desc", "summary")
     val style = anyString("style", "theme", "visualStyle", "design")
     val features =
@@ -4003,7 +4068,7 @@ private fun parseAppDevToolSpec(arguments: Map<String, Any?>): AppDevToolSpec? {
 
     if (name.isBlank() || description.isBlank() || style.isBlank() || features.isEmpty()) return null
     return AppDevToolSpec(
-        name = name.take(80),
+        name = normalizeAppDisplayName(name).take(80),
         description = description.take(260),
         style = style.take(120),
         features = features.take(10)
@@ -4041,7 +4106,7 @@ private fun parseAppDevTagPayload(
     val compactDescription = compactAppDescription(descriptionRaw, subtitleRaw)
     val compactSubtitle = compactAppDescription(subtitleRaw, compactDescription)
     return AppDevTagPayload(
-        name = name,
+        name = normalizeAppDisplayName(name),
         subtitle = compactSubtitle,
         description = compactDescription,
         style = style,
@@ -4104,6 +4169,7 @@ private suspend fun generateHtmlAppFromSpec(
             appendLine("- Mobile + desktop responsive.")
             appendLine("- Keep visuals polished and coherent with the specified style.")
             appendLine("- Keep user-facing descriptions short and practical.")
+            appendLine("- Use the app name in a single language only (Chinese or English, not both).")
         }
 
     var emittedProgress = 10
@@ -4596,7 +4662,7 @@ private fun buildAppDeveloperToolInstruction(
         appendLine("<tool_call>{\"serverId\":\"builtin_app_developer\",\"toolName\":\"app_developer\",\"arguments\":{...}}</tool_call>")
         appendLine()
         appendLine("Required arguments:")
-        appendLine("- name: app name")
+        appendLine("- name: app name in ONE language only (Chinese OR English), never bilingual")
         appendLine("- description: concise description (one short sentence, no filler)")
         appendLine("- style: visual style direction")
         appendLine("- features: array of detailed functional requirements")

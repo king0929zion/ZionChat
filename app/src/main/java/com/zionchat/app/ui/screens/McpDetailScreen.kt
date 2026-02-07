@@ -483,7 +483,7 @@ fun McpToolsCard(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = AppIcons.Tool,
+                                imageVector = AppIcons.Globe,
                                 contentDescription = null,
                                 modifier = Modifier.size(24.dp),
                                 tint = TextSecondary
@@ -545,8 +545,23 @@ fun ToolItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(Surface, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = AppIcons.Globe,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = TextSecondary
+                )
+            }
             Text(
                 text = tool.name,
                 fontSize = 16.sp,
