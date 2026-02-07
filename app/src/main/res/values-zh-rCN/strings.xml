@@ -116,4 +116,8 @@
     <string name="chat_tool_create_image">创建图片</string>
     <string name="chat_tool_create_image_subtitle">把想法可视化</string>
     <string name="chat_tool_mcp_subtitle">连接外部工具</string>
+    <string name="chat_tool_app_builder">应用开发</string>
+    <string name="chat_tool_app_builder_subtitle">按规范生成 HTML 应用</string>
+    <string name="app_dev_preview_title">预览</string>
+    <string name="app_dev_preview_unavailable">尚未生成 HTML，暂不可预览。</string>
 </resources>

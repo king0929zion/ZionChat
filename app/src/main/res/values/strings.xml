@@ -116,4 +116,8 @@
     <string name="chat_tool_create_image">Create image</string>
     <string name="chat_tool_create_image_subtitle">Visualize anything</string>
     <string name="chat_tool_mcp_subtitle">Connect external tools</string>
+    <string name="chat_tool_app_builder">App developer</string>
+    <string name="chat_tool_app_builder_subtitle">Build an HTML app from specs</string>
+    <string name="app_dev_preview_title">Preview</string>
+    <string name="app_dev_preview_unavailable">Preview is unavailable until HTML is generated.</string>
 </resources>

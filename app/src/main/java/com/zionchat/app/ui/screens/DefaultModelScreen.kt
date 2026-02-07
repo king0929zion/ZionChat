@@ -48,7 +48,8 @@ private enum class DefaultModelType(
     CHAT(title = "Chat Model", required = true, selectorTitle = "Select Chat Model", emptyLabel = "Not set"),
     VISION(title = "Vision Model", required = false, selectorTitle = "Select Vision Model"),
     IMAGE(title = "Image Generation", required = false, selectorTitle = "Select Image Generation"),
-    TITLE(title = "Title Summary", required = false, selectorTitle = "Select Title Summary")
+    TITLE(title = "Title Summary", required = false, selectorTitle = "Select Title Summary"),
+    APP_BUILDER(title = "App Development", required = false, selectorTitle = "Select App Development")
 }
 
 @Composable
@@ -63,6 +64,7 @@ fun DefaultModelScreen(navController: NavController) {
     val visionModelId by repository.defaultVisionModelIdFlow.collectAsState(initial = null)
     val imageModelId by repository.defaultImageModelIdFlow.collectAsState(initial = null)
     val titleModelId by repository.defaultTitleModelIdFlow.collectAsState(initial = null)
+    val appBuilderModelId by repository.defaultAppBuilderModelIdFlow.collectAsState(initial = null)
 
     var selectorType by remember { mutableStateOf<DefaultModelType?>(null) }
 
@@ -71,7 +73,8 @@ fun DefaultModelScreen(navController: NavController) {
             DefaultModelType.CHAT to chatModelId,
             DefaultModelType.VISION to visionModelId,
             DefaultModelType.IMAGE to imageModelId,
-            DefaultModelType.TITLE to titleModelId
+            DefaultModelType.TITLE to titleModelId,
+            DefaultModelType.APP_BUILDER to appBuilderModelId
         )
     }
 
@@ -138,6 +141,7 @@ fun DefaultModelScreen(navController: NavController) {
                     DefaultModelType.VISION -> repository.setDefaultVisionModelId(modelId)
                     DefaultModelType.IMAGE -> repository.setDefaultImageModelId(modelId)
                     DefaultModelType.TITLE -> repository.setDefaultTitleModelId(modelId)
+                    DefaultModelType.APP_BUILDER -> repository.setDefaultAppBuilderModelId(modelId)
                 }
             }
             selectorType = null
@@ -149,6 +153,7 @@ fun DefaultModelScreen(navController: NavController) {
                 DefaultModelType.VISION -> scope.launch { repository.setDefaultVisionModelId(null) }
                 DefaultModelType.IMAGE -> scope.launch { repository.setDefaultImageModelId(null) }
                 DefaultModelType.TITLE -> scope.launch { repository.setDefaultTitleModelId(null) }
+                DefaultModelType.APP_BUILDER -> scope.launch { repository.setDefaultAppBuilderModelId(null) }
             }
             selectorType = null
         },

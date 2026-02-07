@@ -37,6 +37,7 @@ class AppRepository(context: Context) {
     private val defaultVisionModelIdKey = stringPreferencesKey("default_vision_model_id")
     private val defaultImageModelIdKey = stringPreferencesKey("default_image_model_id")
     private val defaultTitleModelIdKey = stringPreferencesKey("default_title_model_id")
+    private val defaultAppBuilderModelIdKey = stringPreferencesKey("default_app_builder_model_id")
     private val supportedAccentKeys = setOf("default", "blue", "green", "yellow", "pink", "orange", "purple", "black")
 
     private val providerListType = object : TypeToken<List<ProviderConfig>>() {}.type
@@ -301,6 +302,10 @@ class AppRepository(context: Context) {
         prefs[defaultTitleModelIdKey]
     }
 
+    val defaultAppBuilderModelIdFlow: Flow<String?> = prefsFlow.map { prefs ->
+        prefs[defaultAppBuilderModelIdKey]
+    }
+
     suspend fun setCurrentConversationId(conversationId: String?) {
         dataStore.edit { prefs ->
             if (conversationId.isNullOrBlank()) {
@@ -401,6 +406,12 @@ class AppRepository(context: Context) {
         }
     }
 
+    suspend fun setDefaultAppBuilderModelId(modelId: String?) {
+        dataStore.edit { prefs ->
+            if (modelId.isNullOrBlank()) prefs.remove(defaultAppBuilderModelIdKey) else prefs[defaultAppBuilderModelIdKey] = modelId
+        }
+    }
+
     suspend fun migratePersonalNicknameIfNeeded() {
         dataStore.edit { prefs ->
             val migrated = prefs[personalNicknameMigratedKey] ?: false
@@ -468,6 +479,7 @@ class AppRepository(context: Context) {
             maybeClearDefaultModel(defaultVisionModelIdKey)
             maybeClearDefaultModel(defaultImageModelIdKey)
             maybeClearDefaultModel(defaultTitleModelIdKey)
+            maybeClearDefaultModel(defaultAppBuilderModelIdKey)
         }
     }
 

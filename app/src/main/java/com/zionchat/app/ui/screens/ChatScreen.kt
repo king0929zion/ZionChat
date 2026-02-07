@@ -5,6 +5,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Base64
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -59,6 +62,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import androidx.navigation.NavController
@@ -159,6 +163,7 @@ fun ChatScreen(navController: NavController) {
     val customInstructions by repository.customInstructionsFlow.collectAsState(initial = "")
     val defaultChatModelId by repository.defaultChatModelIdFlow.collectAsState(initial = null)
     val defaultImageModelId by repository.defaultImageModelIdFlow.collectAsState(initial = null)
+    val defaultAppBuilderModelId by repository.defaultAppBuilderModelIdFlow.collectAsState(initial = null)
     val appAccentColor by repository.appAccentColorFlow.collectAsState(initial = "default")
     val accentPalette = remember(appAccentColor) { accentPaletteForKey(appAccentColor) }
 
@@ -572,6 +577,8 @@ fun ChatScreen(navController: NavController) {
                 } else {
                     // 普通聊天流程
                     val explicitMcp = selectedTool == "mcp"
+                    val explicitAppBuilder = selectedTool == "app_builder"
+                    val canUseAppBuilder = explicitAppBuilder || shouldEnableAppBuilderForPrompt(trimmed)
                     val webContextMessage =
                         if (selectedTool == "web") {
                             val webContext = chatApiClient.webSearch(trimmed).getOrDefault("")
@@ -614,6 +621,7 @@ fun ChatScreen(navController: NavController) {
                         }
                     val availableMcpServers = serversWithTools.filter { it.tools.isNotEmpty() }
                     val canUseMcp = availableMcpServers.isNotEmpty()
+                    val canUseAnyTool = canUseMcp || canUseAppBuilder
 
                     if (explicitMcp && !canUseMcp) {
                         val msg = "No MCP tools available. Sync tools in MCP Tools first."
@@ -627,8 +635,19 @@ fun ChatScreen(navController: NavController) {
 
                     val prettyGson = GsonBuilder().setPrettyPrinting().create()
                     val serversById = availableMcpServers.associateBy { it.id }
-                    val maxRounds = if (canUseMcp) (if (explicitMcp) 6 else 4) else 1
-                    val maxCallsPerRound = if (explicitMcp) 4 else 3
+                    val maxRounds =
+                        when {
+                            !canUseAnyTool -> 1
+                            explicitMcp -> 6
+                            explicitAppBuilder -> 4
+                            else -> 4
+                        }
+                    val maxCallsPerRound =
+                        when {
+                            explicitMcp -> 4
+                            explicitAppBuilder -> 2
+                            else -> 3
+                        }
                     val modelId = extractRemoteModelId(selectedModel.id)
 
                     val baseMessages = mutableListOf<Message>().apply {
@@ -672,8 +691,20 @@ fun ChatScreen(navController: NavController) {
                             } else {
                                 null
                             }
+                        val appBuilderInstruction =
+                            if (canUseAppBuilder) {
+                                buildAppDeveloperToolInstruction(
+                                    roundIndex = roundIndex,
+                                    maxCallsPerRound = maxCallsPerRound
+                                )
+                            } else {
+                                null
+                            }
 
                         val requestMessages = buildList {
+                            if (!appBuilderInstruction.isNullOrBlank()) {
+                                add(Message(role = "system", content = appBuilderInstruction))
+                            }
                             if (!mcpInstruction.isNullOrBlank()) {
                                 add(Message(role = "system", content = mcpInstruction))
                             }
@@ -981,7 +1012,7 @@ fun ChatScreen(navController: NavController) {
                             baseMessages.add(Message(role = "assistant", content = roundVisible))
                         }
 
-                        if (!canUseMcp) {
+                        if (!canUseAnyTool) {
                             break
                         }
                         if (parsedCalls.isEmpty()) {
@@ -992,9 +1023,9 @@ fun ChatScreen(navController: NavController) {
                                         content = buildMcpRoundResultContext(
                                             roundIndex = roundIndex,
                                             summary =
-                                                "- Failed to parse executable <mcp_call> payload from the previous reply.\n" +
+                                                "- Failed to parse executable tool_call payload from the previous reply.\n" +
                                                     "- Keep the visible reply, then emit a valid JSON payload inside " +
-                                                    "<mcp_call>...</mcp_call>."
+                                                    "<tool_call>...</tool_call>."
                                         )
                                     )
                                 )
@@ -1009,6 +1040,167 @@ fun ChatScreen(navController: NavController) {
 
                         parsedCalls.forEach { call ->
                             processedCallCount += 1
+                            val args =
+                                call.arguments
+                                    .mapNotNull { (k, v) ->
+                                        val key = k.trim()
+                                        if (key.isBlank()) return@mapNotNull null
+                                        val value = v ?: return@mapNotNull null
+                                        key to value
+                                    }
+                                    .toMap()
+                            val argsJson = prettyGson.toJson(args)
+
+                            if (isBuiltInAppDeveloperCall(call)) {
+                                val rawName =
+                                    (args["name"] as? String)?.trim()
+                                        ?.takeIf { it.isNotBlank() }
+                                        ?: "App development"
+                                val parsedSpec = parseAppDevToolSpec(args)
+                                val pendingPayload =
+                                    AppDevTagPayload(
+                                        name = rawName,
+                                        subtitle = "Developing app",
+                                        description = parsedSpec?.description.orEmpty(),
+                                        style = parsedSpec?.style.orEmpty(),
+                                        features = parsedSpec?.features.orEmpty(),
+                                        progress = 45,
+                                        status = "running",
+                                        html = "",
+                                        error = null
+                                    )
+                                val pendingTag =
+                                    MessageTag(
+                                        kind = "app_dev",
+                                        title = rawName,
+                                        content = encodeAppDevTagPayload(pendingPayload),
+                                        status = "running"
+                                    )
+                                appendAssistantTag(pendingTag)
+
+                                if (!canUseAppBuilder) {
+                                    val payload =
+                                        pendingPayload.copy(
+                                            progress = 0,
+                                            status = "error",
+                                            error = "App builder is disabled for this request."
+                                        )
+                                    updateAssistantTag(pendingTag.id) {
+                                        it.copy(content = encodeAppDevTagPayload(payload), status = "error")
+                                    }
+                                    roundSummary.append("- app_developer: disabled\n")
+                                    return@forEach
+                                }
+
+                                if (parsedSpec == null) {
+                                    val payload =
+                                        pendingPayload.copy(
+                                            progress = 0,
+                                            status = "error",
+                                            error =
+                                                "Missing required fields. Provide name, description, style, and features."
+                                        )
+                                    updateAssistantTag(pendingTag.id) {
+                                        it.copy(content = encodeAppDevTagPayload(payload), status = "error")
+                                    }
+                                    roundSummary.append("- app_developer: invalid arguments\n")
+                                    return@forEach
+                                }
+
+                                val preferredAppModelKey =
+                                    defaultAppBuilderModelId?.trim()?.takeIf { it.isNotBlank() }
+                                val appModel =
+                                    preferredAppModelKey?.let { key ->
+                                        allModels.firstOrNull { it.id == key }
+                                            ?: allModels.firstOrNull { extractRemoteModelId(it.id) == key }
+                                    } ?: selectedModel
+                                val appProviderRaw =
+                                    appModel.providerId?.let { pid -> providerList.firstOrNull { it.id == pid } }
+                                        ?: providerList.firstOrNull()
+
+                                if (appProviderRaw == null || appProviderRaw.apiUrl.isBlank() || appProviderRaw.apiKey.isBlank()) {
+                                    val payload =
+                                        pendingPayload.copy(
+                                            progress = 0,
+                                            status = "error",
+                                            error = "App model provider is not configured."
+                                        )
+                                    updateAssistantTag(pendingTag.id) {
+                                        it.copy(content = encodeAppDevTagPayload(payload), status = "error")
+                                    }
+                                    roundSummary.append("- app_developer: provider unavailable\n")
+                                    return@forEach
+                                }
+
+                                val appProvider = runCatching { providerAuthManager.ensureValidProvider(appProviderRaw) }.getOrElse { error ->
+                                    val payload =
+                                        pendingPayload.copy(
+                                            progress = 0,
+                                            status = "error",
+                                            error = error.message?.trim().orEmpty().ifBlank { "Provider auth failed." }
+                                        )
+                                    updateAssistantTag(pendingTag.id) {
+                                        it.copy(content = encodeAppDevTagPayload(payload), status = "error")
+                                    }
+                                    roundSummary.append("- app_developer: auth failed\n")
+                                    return@forEach
+                                }
+
+                                val startedAt = System.currentTimeMillis()
+                                val htmlResult =
+                                    runCatching {
+                                        generateHtmlAppFromSpec(
+                                            chatApiClient = chatApiClient,
+                                            provider = appProvider,
+                                            modelId = extractRemoteModelId(appModel.id),
+                                            extraHeaders = appModel.headers,
+                                            spec = parsedSpec
+                                        )
+                                    }
+                                val elapsedMs = System.currentTimeMillis() - startedAt
+                                htmlResult.fold(
+                                    onSuccess = { html ->
+                                        val payload =
+                                            pendingPayload.copy(
+                                                name = parsedSpec.name,
+                                                subtitle = parsedSpec.description.take(64).ifBlank { "HTML app ready" },
+                                                description = parsedSpec.description,
+                                                style = parsedSpec.style,
+                                                features = parsedSpec.features,
+                                                progress = 100,
+                                                status = "success",
+                                                html = html,
+                                                error = null
+                                            )
+                                        updateAssistantTag(pendingTag.id) {
+                                            it.copy(
+                                                title = parsedSpec.name,
+                                                content = encodeAppDevTagPayload(payload),
+                                                status = "success"
+                                            )
+                                        }
+                                        roundSummary.append("- app_developer: generated ")
+                                        roundSummary.append(parsedSpec.name.take(80))
+                                        roundSummary.append(" in ")
+                                        roundSummary.append(formatElapsedDuration(elapsedMs))
+                                        roundSummary.append('\n')
+                                    },
+                                    onFailure = { error ->
+                                        val payload =
+                                            pendingPayload.copy(
+                                                progress = 0,
+                                                status = "error",
+                                                error = error.message?.trim().orEmpty().ifBlank { "App generation failed." }
+                                            )
+                                        updateAssistantTag(pendingTag.id) {
+                                            it.copy(content = encodeAppDevTagPayload(payload), status = "error")
+                                        }
+                                        roundSummary.append("- app_developer: failed\n")
+                                    }
+                                )
+                                return@forEach
+                            }
+
                             fun resolveServer(): McpConfig? {
                                 val serverId = call.serverId.trim()
                                 if (serverId.isNotBlank()) {
@@ -1024,16 +1216,6 @@ fun ChatScreen(navController: NavController) {
                             }
 
                             val server = resolveServer()
-                            val args =
-                                call.arguments
-                                    .mapNotNull { (k, v) ->
-                                        val key = k.trim()
-                                        if (key.isBlank()) return@mapNotNull null
-                                        val value = v ?: return@mapNotNull null
-                                        key to value
-                                    }
-                                    .toMap()
-                            val argsJson = prettyGson.toJson(args)
                             val tagTitle = call.toolName.trim().ifBlank { "Tool" }
                             val pendingTag =
                                 MessageTag(
@@ -1661,6 +1843,8 @@ fun ChatScreen(navController: NavController) {
                         ) {
                             if (tag.kind == "mcp") {
                                 McpTagDetailCard(tag = tag)
+                            } else if (tag.kind == "app_dev") {
+                                AppDevTagDetailCard(tag = tag)
                             } else {
                                 MarkdownText(
                                     markdown = tag.content,
@@ -1910,6 +2094,14 @@ private fun MessageTagRow(
     messageId: String,
     onShowTag: (messageId: String, tagId: String) -> Unit
 ) {
+    if (tag.kind == "app_dev") {
+        AppDevToolTagCard(
+            tag = tag,
+            onClick = { onShowTag(messageId, tag.id) }
+        )
+        return
+    }
+
     val tagRunning = isTagRunning(tag)
     val toolName = remember(tag.title) {
         tag.title.trim().takeIf { it.isNotBlank() && !it.equals("tool", ignoreCase = true) }
@@ -1968,6 +2160,111 @@ private fun MessageTagRow(
 }
 
 @Composable
+private fun AppDevToolTagCard(
+    tag: MessageTag,
+    onClick: () -> Unit
+) {
+    val payload = remember(tag.content, tag.title, tag.status) {
+        parseAppDevTagPayload(
+            content = tag.content,
+            fallbackName = tag.title.ifBlank { "App development" },
+            fallbackStatus = tag.status
+        )
+    }
+    val progressFraction = (payload.progress.coerceIn(0, 100) / 100f)
+    val cardBackground by animateColorAsState(
+        targetValue = if (isTagRunning(tag)) Color(0xFFF9F9FB) else Color.White,
+        animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
+        label = "app_dev_card_bg"
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(cardBackground, RoundedCornerShape(20.dp))
+            .pressableScale(pressedScale = 0.98f, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF1C1C1E), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = AppIcons.Apps,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(28.dp)
+            )
+        }
+
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = payload.name,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Normal,
+                color = Color(0xFF1C1C1E)
+            )
+            Text(
+                text = payload.subtitle,
+                fontSize = 14.sp,
+                color = Color(0xFF8E8E93)
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.72f)
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Color(0xFFE5E5EA), RoundedCornerShape(3.dp))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(progressFraction)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(Color(0xFF1C1C1E), RoundedCornerShape(3.dp))
+                )
+            }
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "${payload.progress.coerceIn(0, 100)}%",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF8E8E93)
+            )
+            if (isTagRunning(tag)) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    strokeWidth = 1.8.dp,
+                    color = Color(0xFF8E8E93)
+                )
+            } else {
+                Icon(
+                    imageVector = AppIcons.ChevronRight,
+                    contentDescription = null,
+                    tint = Color(0xFFC7C7CC),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun McpTagDetailCard(tag: MessageTag) {
     val detail = remember(tag.content) { parseMcpTagDetail(tag.content) }
     val isRunning = isTagRunning(tag)
@@ -2005,6 +2302,71 @@ private fun McpTagDetailCard(tag: MessageTag) {
                     fontSize = 12.sp,
                     color = ThinkingLabelColor,
                     fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppDevTagDetailCard(tag: MessageTag) {
+    val payload = remember(tag.content, tag.title, tag.status) {
+        parseAppDevTagPayload(
+            content = tag.content,
+            fallbackName = tag.title.ifBlank { "App development" },
+            fallbackStatus = tag.status
+        )
+    }
+    val html = payload.html.trim()
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        AppDevToolTagCard(tag = tag, onClick = { })
+
+        Text(
+            text = stringResource(R.string.app_dev_preview_title),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = TextPrimary
+        )
+
+        if (html.isBlank()) {
+            Text(
+                text = payload.error?.ifBlank { null }
+                    ?: stringResource(R.string.app_dev_preview_unavailable),
+                fontSize = 13.sp,
+                color = TextSecondary
+            )
+        } else {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(360.dp),
+                shape = RoundedCornerShape(14.dp),
+                color = Color.White
+            ) {
+                AndroidView(
+                    factory = { context ->
+                        WebView(context).apply {
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.allowFileAccess = false
+                            settings.allowContentAccess = false
+                            webViewClient = WebViewClient()
+                            webChromeClient = WebChromeClient()
+                        }
+                    },
+                    update = { webView ->
+                        webView.loadDataWithBaseURL(
+                            null,
+                            html,
+                            "text/html",
+                            "utf-8",
+                            null
+                        )
+                    }
                 )
             }
         }
@@ -2623,6 +2985,12 @@ fun ToolMenuPanel(
                         subtitle = stringResource(R.string.chat_tool_mcp_subtitle),
                         onClick = { onToolSelect("mcp") }
                     )
+                    ToolListItem(
+                        icon = { Icon(AppIcons.Apps, null, Modifier.size(24.dp), TextPrimary) },
+                        title = stringResource(R.string.chat_tool_app_builder),
+                        subtitle = stringResource(R.string.chat_tool_app_builder_subtitle),
+                        onClick = { onToolSelect("app_builder") }
+                    )
                 }
             }
         }
@@ -2822,6 +3190,7 @@ private fun BottomInputArea(
         "web" -> "Search"
         "image" -> "Image"
         "mcp" -> stringResource(R.string.settings_item_mcp_tools)
+        "app_builder" -> stringResource(R.string.chat_tool_app_builder)
         else -> selectedTool?.replaceFirstChar { it.uppercase() }.orEmpty()
     }
     val toolIconRes: Int? = when (selectedTool) {
@@ -2833,6 +3202,7 @@ private fun BottomInputArea(
         "web" -> AppIcons.Globe
         "image" -> AppIcons.CreateImage
         "mcp" -> AppIcons.MCPTools
+        "app_builder" -> AppIcons.Apps
         else -> AppIcons.Globe
     }
     val bottomPadding = bottomInputBottomPadding(imeVisible)
@@ -3244,11 +3614,213 @@ private fun parseJsonStringArray(text: String): List<String> {
     }
 }
 
+private data class AppDevToolSpec(
+    val name: String,
+    val description: String,
+    val style: String,
+    val features: List<String>
+)
+
+private data class AppDevTagPayload(
+    val name: String,
+    val subtitle: String,
+    val description: String,
+    val style: String,
+    val features: List<String>,
+    val progress: Int,
+    val status: String,
+    val html: String,
+    val error: String? = null
+)
+
 private data class PlannedMcpToolCall(
     val serverId: String,
     val toolName: String,
     val arguments: Map<String, Any?>
 )
+
+private fun shouldEnableAppBuilderForPrompt(userPrompt: String): Boolean {
+    val text = userPrompt.trim().lowercase()
+    if (text.isBlank()) return false
+    val patterns = listOf(
+        Regex("(?i)\\b(create|build|develop|make)\\b.{0,24}\\b(app|website|web app|html app|landing page)\\b"),
+        Regex("(?i)\\b(html app|web app|single page app|landing page)\\b"),
+        Regex("创建.{0,10}(应用|app|网页|网站|页面)"),
+        Regex("开发.{0,10}(应用|app|网页|网站|页面)"),
+        Regex("做(一个|个)?.{0,8}(应用|app|网页|网站|页面)")
+    )
+    return patterns.any { it.containsMatchIn(text) }
+}
+
+private fun isBuiltInAppDeveloperCall(call: PlannedMcpToolCall): Boolean {
+    val server = call.serverId.trim().lowercase()
+    val tool = call.toolName.trim().lowercase()
+    return tool in setOf(
+        "app_developer",
+        "app_builder",
+        "build_html_app",
+        "develop_html_app"
+    ) || server in setOf(
+        "builtin_app_developer",
+        "app_builder",
+        "internal_app_developer"
+    )
+}
+
+private fun parseAppDevToolSpec(arguments: Map<String, Any?>): AppDevToolSpec? {
+    fun anyString(vararg keys: String): String {
+        return keys.asSequence()
+            .mapNotNull { key ->
+                val value = arguments.entries.firstOrNull { it.key.equals(key, ignoreCase = true) }?.value ?: return@mapNotNull null
+                when (value) {
+                    is String -> value.trim().takeIf { it.isNotBlank() }
+                    else -> value?.toString()?.trim()?.takeIf { it.isNotBlank() }
+                }
+            }
+            .firstOrNull()
+            .orEmpty()
+    }
+
+    fun anyStringList(vararg keys: String): List<String> {
+        val rawValue =
+            keys.asSequence()
+                .mapNotNull { key -> arguments.entries.firstOrNull { it.key.equals(key, ignoreCase = true) }?.value }
+                .firstOrNull()
+                ?: return emptyList()
+        return when (rawValue) {
+            is List<*> -> rawValue.mapNotNull { it?.toString()?.trim()?.takeIf { t -> t.isNotBlank() } }
+            is String -> rawValue
+                .split('\n', ',', ';', '|')
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+            else -> emptyList()
+        }.distinct().take(12)
+    }
+
+    val name = anyString("name", "title", "appName", "app_name")
+    val description = anyString("description", "desc", "summary")
+    val style = anyString("style", "theme", "visualStyle", "design")
+    val features =
+        anyStringList("features", "requirements", "specs", "functionalities")
+            .ifEmpty {
+                anyString("details", "detail", "scope", "requirement")
+                    .takeIf { it.isNotBlank() }
+                    ?.split('\n', ',', ';', '|')
+                    ?.map { it.trim() }
+                    ?.filter { it.isNotBlank() }
+                    .orEmpty()
+            }
+
+    if (name.isBlank() || description.isBlank() || style.isBlank() || features.isEmpty()) return null
+    return AppDevToolSpec(
+        name = name.take(80),
+        description = description.take(260),
+        style = style.take(120),
+        features = features.take(10)
+    )
+}
+
+private fun encodeAppDevTagPayload(payload: AppDevTagPayload): String {
+    return GsonBuilder().disableHtmlEscaping().create().toJson(payload)
+}
+
+private fun parseAppDevTagPayload(
+    content: String,
+    fallbackName: String,
+    fallbackStatus: String?
+): AppDevTagPayload {
+    val json = runCatching { JsonParser.parseString(content).asJsonObject }.getOrNull()
+    val name =
+        json?.get("name")?.takeIf { it.isJsonPrimitive }?.asString?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: fallbackName
+    val subtitle =
+        json?.get("subtitle")?.takeIf { it.isJsonPrimitive }?.asString?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: "Developing app"
+    val description = json?.get("description")?.takeIf { it.isJsonPrimitive }?.asString?.trim().orEmpty()
+    val style = json?.get("style")?.takeIf { it.isJsonPrimitive }?.asString?.trim().orEmpty()
+    val features =
+        json?.getAsJsonArray("features")
+            ?.mapNotNull { runCatching { it.asString.trim() }.getOrNull()?.takeIf { t -> t.isNotBlank() } }
+            .orEmpty()
+    val progress = json?.get("progress")?.takeIf { it.isJsonPrimitive }?.asInt ?: if (fallbackStatus == "success") 100 else 0
+    val status = json?.get("status")?.takeIf { it.isJsonPrimitive }?.asString?.trim().orEmpty().ifBlank { fallbackStatus.orEmpty() }
+    val html = json?.get("html")?.takeIf { it.isJsonPrimitive }?.asString.orEmpty()
+    val error = json?.get("error")?.takeIf { it.isJsonPrimitive }?.asString?.trim()?.takeIf { it.isNotBlank() }
+    return AppDevTagPayload(
+        name = name,
+        subtitle = subtitle,
+        description = description,
+        style = style,
+        features = features,
+        progress = progress.coerceIn(0, 100),
+        status = status,
+        html = html,
+        error = error
+    )
+}
+
+private suspend fun generateHtmlAppFromSpec(
+    chatApiClient: ChatApiClient,
+    provider: ProviderConfig,
+    modelId: String,
+    extraHeaders: List<HttpHeader>,
+    spec: AppDevToolSpec
+): String {
+    val systemPrompt =
+        buildString {
+            append("You are an app development assistant. ")
+            append("Return only a complete HTML document. ")
+            append("Use clean semantic markup, responsive layout, and production-ready inline CSS/JS. ")
+            append("Do not add markdown fences.")
+        }
+
+    val userPrompt =
+        buildString {
+            appendLine("Build one HTML app with these specs:")
+            append("Name: ")
+            appendLine(spec.name)
+            append("Description: ")
+            appendLine(spec.description)
+            append("Style: ")
+            appendLine(spec.style)
+            appendLine("Features:")
+            spec.features.forEachIndexed { index, feature ->
+                append(index + 1)
+                append(". ")
+                appendLine(feature)
+            }
+            appendLine()
+            appendLine("Requirements:")
+            appendLine("- Include all requested features.")
+            appendLine("- Mobile + desktop responsive.")
+            appendLine("- Keep visuals polished and coherent with the specified style.")
+        }
+
+    val raw =
+        collectStreamContent(
+            chatApiClient = chatApiClient,
+            provider = provider,
+            modelId = modelId,
+            messages = listOf(
+                Message(role = "system", content = systemPrompt),
+                Message(role = "user", content = userPrompt)
+            ),
+            extraHeaders = extraHeaders
+        )
+    return normalizeGeneratedHtml(raw)
+}
+
+private fun normalizeGeneratedHtml(raw: String): String {
+    val cleaned = stripMarkdownCodeFences(raw).trim()
+    if (cleaned.isBlank()) error("Generated HTML is empty.")
+    val lower = cleaned.lowercase()
+    return when {
+        lower.startsWith("<!doctype html") || lower.contains("<html") -> cleaned
+        else -> "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\" />\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n<title>Generated App</title>\n</head>\n<body>\n$cleaned\n</body>\n</html>"
+    }
+}
 
 private fun buildMcpCallSignature(call: PlannedMcpToolCall): String {
     val normalizedServer = call.serverId.trim().lowercase()
@@ -3606,6 +4178,29 @@ private fun extractInlineMcpCallBlocks(content: String): InlineMcpCallExtraction
             .trim()
 
     return InlineMcpCallExtraction(visibleText = visible, blocks = blocks)
+}
+
+private fun buildAppDeveloperToolInstruction(
+    roundIndex: Int,
+    maxCallsPerRound: Int
+): String {
+    return buildString {
+        appendLine("Built-in tool available: app_developer.")
+        appendLine("Current round: $roundIndex")
+        appendLine("Use this tool ONLY when the user explicitly asks to create/build/develop an app or HTML page.")
+        appendLine("Do not call this tool for generic Q&A.")
+        appendLine("First write a normal visible reply, then append tool call tags if needed.")
+        appendLine("At most $maxCallsPerRound tool calls in this round.")
+        appendLine()
+        appendLine("Tool call format:")
+        appendLine("<tool_call>{\"serverId\":\"builtin_app_developer\",\"toolName\":\"app_developer\",\"arguments\":{...}}</tool_call>")
+        appendLine()
+        appendLine("Required arguments:")
+        appendLine("- name: app name")
+        appendLine("- description: short product description")
+        appendLine("- style: visual style direction")
+        appendLine("- features: array of detailed functional requirements")
+    }.trim()
 }
 
 private fun buildMcpToolCallInstruction(
