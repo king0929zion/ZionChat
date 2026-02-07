@@ -287,7 +287,7 @@ fun McpInfoCard(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = AppIcons.MCPTools,
+                    imageVector = AppIcons.Globe,
                     contentDescription = null,
                     modifier = Modifier.size(32.dp),
                     tint = TextPrimary

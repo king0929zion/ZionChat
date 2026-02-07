@@ -3,6 +3,7 @@ package com.zionchat.app.ui.screens
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -88,20 +89,7 @@ private enum class AppIconStyle {
 fun AppsScreen(navController: NavController) {
     val repository = LocalAppRepository.current
     val savedApps by repository.savedAppsFlow.collectAsState(initial = emptyList())
-    val categories = remember { listOf("Featured", "Lifestyle", "Productivity") }
-    var selectedCategory by remember { mutableStateOf(categories.first()) }
     var selectedSavedApp by remember { mutableStateOf<SavedApp?>(null) }
-    val featuredApps = remember {
-        listOf(
-            AppItemUi("Airtable", "Add structured data to ChatGPT", AppIconStyle.Airtable),
-            AppItemUi("Apple Music", "Build playlists and find music", AppIconStyle.AppleMusic),
-            AppItemUi("Booking.com", "Find hotels, homes and more", AppIconStyle.Booking),
-            AppItemUi("Canva", "Search, create, edit designs", AppIconStyle.Canva),
-            AppItemUi("Figma", "Make diagrams, slides, assets", AppIconStyle.Figma),
-            AppItemUi("Lovable", "Build apps and websites", AppIconStyle.Lovable, selected = true),
-            AppItemUi("OpenTable", "Find restaurant reservations", AppIconStyle.OpenTable)
-        )
-    }
 
     Scaffold(
         containerColor = Background,
@@ -119,36 +107,6 @@ fun AppsScreen(navController: NavController) {
                 .padding(padding)
         ) {
             Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 14.dp)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                categories.forEach { category ->
-                    val isActive = category == selectedCategory
-                    Box(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(if (isActive) Color(0xFFEDEDF2) else Color.Transparent, CircleShape)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) { selectedCategory = category }
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = category,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = TextPrimary
-                        )
-                    }
-                }
-            }
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -187,20 +145,6 @@ fun AppsScreen(navController: NavController) {
                             onClick = { selectedSavedApp = app }
                         )
                     }
-                }
-
-                item(key = "featured_title") {
-                    Text(
-                        text = stringResource(R.string.apps_featured),
-                        fontSize = 13.sp,
-                        fontFamily = SourceSans3,
-                        color = TextSecondary,
-                        modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 4.dp)
-                    )
-                }
-
-                items(items = featuredApps, key = { it.name }) { item ->
-                    AppItemRow(item = item, onClick = { })
                 }
             }
         }
@@ -344,6 +288,7 @@ private fun SavedAppPreviewDialog(
     app: SavedApp,
     onDismiss: () -> Unit
 ) {
+    BackHandler(onBack = onDismiss)
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -355,10 +300,10 @@ private fun SavedAppPreviewDialog(
         ) {
             Column(
                 modifier = Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(horizontal = 16.dp)
-                    .padding(top = 8.dp, bottom = 12.dp)
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.navigationBars))
+                    .padding(horizontal = 10.dp)
+                    .padding(top = 8.dp, bottom = 6.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

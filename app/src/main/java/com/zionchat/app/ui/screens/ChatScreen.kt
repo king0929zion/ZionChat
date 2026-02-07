@@ -8,6 +8,7 @@ import android.util.Base64
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -86,7 +87,6 @@ import com.zionchat.app.data.McpClient
 import com.zionchat.app.data.McpConfig
 import com.zionchat.app.data.McpToolCall
 import com.zionchat.app.data.ProviderConfig
-import com.zionchat.app.data.SavedApp
 import com.zionchat.app.data.extractRemoteModelId
 import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.AppSheetDragHandle
@@ -151,6 +151,14 @@ fun ChatScreen(navController: NavController) {
     var appWorkspaceMessageId by remember { mutableStateOf<String?>(null) }
     var appWorkspaceTagId by remember { mutableStateOf<String?>(null) }
 
+    BackHandler(enabled = !appWorkspaceTagId.isNullOrBlank()) {
+        appWorkspaceMessageId = null
+        appWorkspaceTagId = null
+    }
+    BackHandler(enabled = showToolMenu) {
+        showToolMenu = false
+    }
+
     val photoPickerLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             if (uri != null) {
@@ -166,7 +174,6 @@ fun ChatScreen(navController: NavController) {
         }
 
     val conversations by repository.conversationsFlow.collectAsState(initial = emptyList())
-    val savedApps by repository.savedAppsFlow.collectAsState(initial = emptyList())
     val currentConversationId by repository.currentConversationIdFlow.collectAsState(initial = null)
     val nickname by repository.nicknameFlow.collectAsState(initial = "")
     val avatarUri by repository.avatarUriFlow.collectAsState(initial = "")
@@ -1970,50 +1977,6 @@ fun ChatScreen(navController: NavController) {
                                 )
                             )
                         }
-                    },
-                    findSavedApp = {
-                        val tagId = appWorkspaceTagId?.trim().orEmpty()
-                        if (tagId.isBlank()) null else savedApps.firstOrNull { it.sourceTagId == tagId }
-                    },
-                    onApplyUpdate = { currentHtml, requestText, onProgress ->
-                        val allModels = repository.modelsFlow.first()
-                        if (allModels.isEmpty()) {
-                            error("No models available.")
-                        }
-                        val preferredAppModelKey =
-                            repository.defaultAppBuilderModelIdFlow.first()?.trim()?.takeIf { it.isNotBlank() }
-                        val fallbackChatModelKey =
-                            repository.defaultChatModelIdFlow.first()?.trim()?.takeIf { it.isNotBlank() }
-                        val appModel =
-                            preferredAppModelKey?.let { key ->
-                                allModels.firstOrNull { it.id == key }
-                                    ?: allModels.firstOrNull { extractRemoteModelId(it.id) == key }
-                            }
-                                ?: fallbackChatModelKey?.let { key ->
-                                    allModels.firstOrNull { it.id == key }
-                                        ?: allModels.firstOrNull { extractRemoteModelId(it.id) == key }
-                                }
-                                ?: allModels.firstOrNull()
-                                ?: error("No model available for app updates.")
-
-                        val providers = repository.providersFlow.first()
-                        val providerRaw =
-                            appModel.providerId?.let { pid -> providers.firstOrNull { it.id == pid } }
-                                ?: providers.firstOrNull()
-                                ?: error("No provider configured.")
-                        if (providerRaw.apiUrl.isBlank() || providerRaw.apiKey.isBlank()) {
-                            error("Provider is not configured.")
-                        }
-                        val provider = providerAuthManager.ensureValidProvider(providerRaw)
-                        reviseHtmlAppFromPrompt(
-                            chatApiClient = chatApiClient,
-                            provider = provider,
-                            modelId = extractRemoteModelId(appModel.id),
-                            extraHeaders = appModel.headers,
-                            currentHtml = currentHtml,
-                            requestText = requestText,
-                            onProgress = onProgress
-                        )
                     }
                 )
             }
@@ -2552,14 +2515,9 @@ private fun AppDevWorkspaceScreen(
     tag: MessageTag,
     onDismiss: () -> Unit,
     onUpdate: (AppDevTagPayload) -> Unit,
-    onSave: (AppDevTagPayload) -> Unit,
-    findSavedApp: () -> SavedApp?,
-    onApplyUpdate: suspend (currentHtml: String, requestText: String, onProgress: (Int) -> Unit) -> String
+    onSave: (AppDevTagPayload) -> Unit
 ) {
-    val scope = rememberCoroutineScope()
-    val navBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val savedApp = findSavedApp()
-    val updateFailedText = stringResource(R.string.app_dev_update_failed)
+    BackHandler(onBack = onDismiss)
     var payload by remember(tag.id, tag.content, tag.status) {
         mutableStateOf(
             parseAppDevTagPayload(
@@ -2568,67 +2526,6 @@ private fun AppDevWorkspaceScreen(
                 fallbackStatus = tag.status
             )
         )
-    }
-    var requestText by remember(tag.id) { mutableStateOf("") }
-    var applying by remember { mutableStateOf(false) }
-    var errorText by remember { mutableStateOf<String?>(null) }
-    fun submitUpdateRequest() {
-        if (requestText.isBlank() || applying) return
-        val prompt = requestText.trim()
-        requestText = ""
-        applying = true
-        errorText = null
-        scope.launch {
-            var streamedProgress = 10
-            val runningPayload = payload.copy(status = "running", progress = streamedProgress, error = null)
-            payload = runningPayload
-            onUpdate(runningPayload)
-            runCatching {
-                onApplyUpdate(payload.html, prompt) { progress ->
-                    val normalized = progress.coerceIn(streamedProgress, 95)
-                    if (normalized <= streamedProgress) return@onApplyUpdate
-                    streamedProgress = normalized
-                    val streamingPayload =
-                        payload.copy(
-                            status = "running",
-                            progress = normalized,
-                            error = null
-                        )
-                    payload = streamingPayload
-                    onUpdate(streamingPayload)
-                }
-            }.fold(
-                onSuccess = { html ->
-                    val successPayload =
-                        payload.copy(
-                            subtitle = compactAppDescription(prompt, payload.subtitle),
-                            description = compactAppDescription(prompt, payload.description),
-                            html = normalizeGeneratedHtml(html),
-                            status = "success",
-                            progress = 100,
-                            error = null
-                        )
-                    payload = successPayload
-                    onUpdate(successPayload)
-                },
-                onFailure = { error ->
-                    val message =
-                        error.message?.trim()
-                            .orEmpty()
-                            .ifBlank { updateFailedText }
-                    errorText = message
-                    val failedPayload =
-                        payload.copy(
-                            status = "error",
-                            progress = 0,
-                            error = message
-                        )
-                    payload = failedPayload
-                    onUpdate(failedPayload)
-                }
-            )
-            applying = false
-        }
     }
 
     Box(
@@ -2640,9 +2537,9 @@ private fun AppDevWorkspaceScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.statusBars)
+                .windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.navigationBars))
                 .padding(horizontal = 16.dp)
-                .padding(top = 8.dp, bottom = 8.dp)
+                .padding(top = 8.dp, bottom = 6.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -2662,6 +2559,20 @@ private fun AppDevWorkspaceScreen(
                         contentDescription = null,
                         tint = TextPrimary,
                         modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = payload.name,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -2697,33 +2608,7 @@ private fun AppDevWorkspaceScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Text(
-                text = payload.name,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = compactAppDescription(payload.description, payload.subtitle),
-                fontSize = 13.sp,
-                color = TextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            if (savedApp != null) {
-                Text(
-                    text = stringResource(R.string.app_dev_saved_tip),
-                    fontSize = 12.sp,
-                    color = TextSecondary.copy(alpha = 0.8f),
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Surface(
                 modifier = Modifier
@@ -2768,92 +2653,6 @@ private fun AppDevWorkspaceScreen(
                             )
                         }
                     )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            if (!errorText.isNullOrBlank()) {
-                Text(
-                    text = errorText.orEmpty(),
-                    fontSize = 12.sp,
-                    color = Color(0xFFFF3B30),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = navBottomPadding),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Surface(
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(26.dp),
-                    color = Surface
-                ) {
-                    BasicTextField(
-                        value = requestText,
-                        onValueChange = { requestText = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        textStyle = TextStyle(
-                            fontSize = 16.sp,
-                            color = TextPrimary
-                        ),
-                        singleLine = true,
-                        cursorBrush = SolidColor(TextPrimary),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        keyboardActions = KeyboardActions(
-                            onSend = { submitUpdateRequest() }
-                        ),
-                        decorationBox = { innerTextField ->
-                            Box(modifier = Modifier.fillMaxWidth()) {
-                                if (requestText.isBlank()) {
-                                    Text(
-                                        text = stringResource(R.string.app_dev_input_placeholder),
-                                        fontSize = 16.sp,
-                                        color = TextSecondary
-                                    )
-                                }
-                                innerTextField()
-                            }
-                        }
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF1C1C1E), CircleShape)
-                        .pressableScale(
-                            enabled = !applying && requestText.isNotBlank(),
-                            pressedScale = 0.95f
-                        ) {
-                            submitUpdateRequest()
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (applying) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                            color = Color.White
-                        )
-                    } else {
-                        Icon(
-                            imageVector = AppIcons.Send,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
                 }
             }
         }
