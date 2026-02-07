@@ -38,6 +38,11 @@ import okhttp3.OkHttpClient
 import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
+    companion object {
+        @Volatile
+        private var lastLocaleApplyKey: String? = null
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -79,6 +84,7 @@ class MainActivity : AppCompatActivity() {
                         LaunchedEffect(appLanguage) {
                             runCatching {
                                 val normalizedLanguage = appLanguage.trim().lowercase()
+                                if (lastLocaleApplyKey == normalizedLanguage) return@runCatching
                                 val locales =
                                     when (normalizedLanguage) {
                                         "en" -> LocaleListCompat.forLanguageTags("en")
@@ -94,7 +100,10 @@ class MainActivity : AppCompatActivity() {
                                         else -> !currentLocales.isEmpty
                                     }
                                 if (shouldApply) {
+                                    lastLocaleApplyKey = normalizedLanguage
                                     AppCompatDelegate.setApplicationLocales(locales)
+                                } else {
+                                    lastLocaleApplyKey = normalizedLanguage
                                 }
                             }
                         }
