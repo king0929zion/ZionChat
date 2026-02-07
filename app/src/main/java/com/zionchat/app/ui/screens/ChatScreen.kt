@@ -1271,6 +1271,7 @@ fun ChatScreen(navController: NavController) {
                                                 extraHeaders = appModel.headers,
                                                 currentHtml = targetSavedApp?.html.orEmpty(),
                                                 requestText = parsedSpec.editRequest.orEmpty(),
+                                                spec = parsedSpec,
                                                 onProgress = ::updateAppDevProgress,
                                                 onDraftHtml = ::updateAppDevDraft
                                             )
@@ -4488,6 +4489,194 @@ private fun summarizeSavedAppsForInstruction(savedApps: List<SavedApp>, limit: I
     }.trimEnd()
 }
 
+private fun shouldUseIos18UiSkill(
+    style: String,
+    description: String,
+    features: List<String>,
+    requestText: String = ""
+): Boolean {
+    val signal =
+        buildString {
+            append(style)
+            append('\n')
+            append(description)
+            append('\n')
+            append(features.joinToString(" "))
+            append('\n')
+            append(requestText)
+        }.lowercase()
+    if (signal.isBlank()) return false
+
+    val markers =
+        listOf(
+            "ios",
+            "ios18",
+            "ios 18",
+            "iphone",
+            "ipad",
+            "cupertino",
+            "apple",
+            "human interface",
+            "sf pro",
+            "inset grouped",
+            "tab bar",
+            "large title"
+        )
+    return markers.any { marker -> signal.contains(marker) }
+}
+
+private fun buildGeneralHtmlSkillPack(): String {
+    return buildString {
+        appendLine("---")
+        appendLine("name: html5-product-engineer")
+        appendLine("description: Builds production-ready HTML5 apps with complete UI, state, and behavior.")
+        appendLine("---")
+        appendLine()
+        appendLine("Instructions:")
+        appendLine("1. Return ONLY one complete HTML document.")
+        appendLine("2. Include semantic HTML, scoped CSS variables, and functional JavaScript.")
+        appendLine("3. No placeholders, no fake handlers, no TODO blocks.")
+        appendLine("4. Mobile-first, responsive, and keyboard-accessible.")
+        appendLine("5. Keep copy concise and practical; avoid filler.")
+        appendLine("6. Keep animations subtle and performant (transform/opacity first).")
+        appendLine("7. Do not use markdown code fences.")
+    }.trim()
+}
+
+private fun buildIos18UiSkillPack(): String {
+    return buildString {
+        appendLine("---")
+        appendLine("name: ios-18-ui-engineer")
+        appendLine("description: Generates iOS 18 HIG-aligned HTML5 UI with strict tokens and component behavior.")
+        appendLine("---")
+        appendLine()
+        appendLine("Instructions:")
+        appendLine("1. Use iOS 18 visual language with solid material surfaces (no glassmorphism).")
+        appendLine("2. Enforce 8pt grid and continuous corner hierarchy.")
+        appendLine("3. Use SF-like typography scale and native-feeling spacing.")
+        appendLine("4. Build functional Nav Bar, content, and Tab Bar behavior when applicable.")
+        appendLine("5. Provide real interactions (tabs/forms/buttons must work).")
+        appendLine()
+        appendLine("Design tokens:")
+        appendLine("- Brand: #007AFF, #34C759, #FF3B30, #FF9500")
+        appendLine("- Neutrals: #000000, #FFFFFF, #8E8E93, #C7C7CC, #E5E5EA, #F2F2F7")
+        appendLine("- Radius: 4/8/12/16/20/28 and capsule 9999")
+        appendLine("- Touch targets: min 44px, primary button 50px")
+        appendLine("- Tab bar height: 49px + safe area")
+        appendLine()
+        appendLine("Prohibited checklist:")
+        appendLine("- No blue-purple gradients or purple shadows.")
+        appendLine("- No backdrop blur / frosted glass effects.")
+        appendLine("- No emoji as UI icons.")
+        appendLine("- No unstyled native controls.")
+        appendLine("- No mock-only interactions.")
+        appendLine()
+        appendLine("Output contract:")
+        appendLine("- Full HTML5 boilerplate with CSS variables and working JavaScript.")
+        appendLine("- Respect safe areas via env(safe-area-inset-*).")
+        appendLine("- Return HTML only, no markdown fences.")
+    }.trim()
+}
+
+private fun buildAppGenerationSystemPrompt(useIos18Skill: Boolean): String {
+    return buildString {
+        append("You are an app development assistant. ")
+        append("Output must be a complete production-ready HTML document only. ")
+        append("Never output markdown fences. ")
+        append("Implement real behavior for all declared interactions. ")
+        append("Keep text concise and useful. ")
+        append("Prefer semantic HTML, clear CSS tokens, and maintainable JS.")
+        appendLine()
+        appendLine()
+        appendLine("Active skill package:")
+        appendLine(if (useIos18Skill) buildIos18UiSkillPack() else buildGeneralHtmlSkillPack())
+    }.trim()
+}
+
+private fun buildAppGenerationUserPrompt(
+    spec: AppDevToolSpec,
+    useIos18Skill: Boolean
+): String {
+    return buildString {
+        appendLine("Build one HTML app with these specs:")
+        append("Name: ")
+        appendLine(spec.name)
+        append("Description: ")
+        appendLine(spec.description)
+        append("Style: ")
+        appendLine(spec.style)
+        appendLine("Features:")
+        spec.features.forEachIndexed { index, feature ->
+            append(index + 1)
+            append(". ")
+            appendLine(feature)
+        }
+        appendLine()
+        appendLine("Hard requirements:")
+        appendLine("- Include all requested features with real, working interactions.")
+        appendLine("- Mobile + desktop responsive.")
+        appendLine("- Keep the app name in one language only (Chinese OR English, not both).")
+        appendLine("- Keep copy short and practical.")
+        appendLine("- Do not use placeholder/mock content unless explicitly requested.")
+        if (useIos18Skill) {
+            appendLine("- Follow iOS 18 visual and component constraints from the active skill package.")
+        }
+    }.trim()
+}
+
+private fun buildAppRevisionSystemPrompt(useIos18Skill: Boolean): String {
+    return buildString {
+        append("You are an app development assistant. ")
+        append("Update the given HTML app per the edit request and return ONLY the full updated HTML document. ")
+        append("Do not output markdown fences. ")
+        append("Preserve existing working behavior and structure unless change is explicitly requested. ")
+        append("Avoid regressions; keep backward compatibility for unaffected parts.")
+        appendLine()
+        appendLine()
+        appendLine("Active skill package:")
+        appendLine(if (useIos18Skill) buildIos18UiSkillPack() else buildGeneralHtmlSkillPack())
+    }.trim()
+}
+
+private fun buildAppRevisionUserPrompt(
+    currentHtml: String,
+    requestText: String,
+    spec: AppDevToolSpec?
+): String {
+    return buildString {
+        appendLine("Update this app based on the request.")
+        append("Request: ")
+        appendLine(requestText.trim())
+        if (spec != null) {
+            if (spec.name.isNotBlank()) {
+                append("Target app name: ")
+                appendLine(spec.name)
+            }
+            if (spec.style.isNotBlank()) {
+                append("Target style: ")
+                appendLine(spec.style)
+            }
+            if (spec.features.isNotEmpty()) {
+                appendLine("Target feature deltas:")
+                spec.features.forEachIndexed { index, item ->
+                    append(index + 1)
+                    append(". ")
+                    appendLine(item)
+                }
+            }
+        }
+        appendLine()
+        appendLine("Revision rules:")
+        appendLine("- Keep unchanged modules intact.")
+        appendLine("- If replacing a component, maintain equivalent UX behavior.")
+        appendLine("- Keep interactions complete (no TODO/placeholder handlers).")
+        appendLine("- Return a full HTML file, not a patch.")
+        appendLine()
+        appendLine("Current HTML:")
+        appendLine(currentHtml.trim())
+    }.trim()
+}
+
 private suspend fun generateHtmlAppFromSpec(
     chatApiClient: ChatApiClient,
     provider: ProviderConfig,
@@ -4497,38 +4686,14 @@ private suspend fun generateHtmlAppFromSpec(
     onProgress: ((Int) -> Unit)? = null,
     onDraftHtml: ((String) -> Unit)? = null
 ): String {
-    val systemPrompt =
-        buildString {
-            append("You are an app development assistant. ")
-            append("Return only a complete HTML document. ")
-            append("Use clean semantic markup, responsive layout, and production-ready inline CSS/JS. ")
-            append("Keep copy concise and direct. Avoid filler text. ")
-            append("Do not add markdown fences.")
-        }
-
-    val userPrompt =
-        buildString {
-            appendLine("Build one HTML app with these specs:")
-            append("Name: ")
-            appendLine(spec.name)
-            append("Description: ")
-            appendLine(spec.description)
-            append("Style: ")
-            appendLine(spec.style)
-            appendLine("Features:")
-            spec.features.forEachIndexed { index, feature ->
-                append(index + 1)
-                append(". ")
-                appendLine(feature)
-            }
-            appendLine()
-            appendLine("Requirements:")
-            appendLine("- Include all requested features.")
-            appendLine("- Mobile + desktop responsive.")
-            appendLine("- Keep visuals polished and coherent with the specified style.")
-            appendLine("- Keep user-facing descriptions short and practical.")
-            appendLine("- Use the app name in a single language only (Chinese or English, not both).")
-        }
+    val useIos18Skill =
+        shouldUseIos18UiSkill(
+            style = spec.style,
+            description = spec.description,
+            features = spec.features
+        )
+    val systemPrompt = buildAppGenerationSystemPrompt(useIos18Skill)
+    val userPrompt = buildAppGenerationUserPrompt(spec = spec, useIos18Skill = useIos18Skill)
 
     var emittedProgress = 10
     var chunkCount = 0
@@ -4581,6 +4746,7 @@ private suspend fun reviseHtmlAppFromPrompt(
     extraHeaders: List<HttpHeader>,
     currentHtml: String,
     requestText: String,
+    spec: AppDevToolSpec? = null,
     onProgress: ((Int) -> Unit)? = null,
     onDraftHtml: ((String) -> Unit)? = null
 ): String {
@@ -4593,23 +4759,15 @@ private suspend fun reviseHtmlAppFromPrompt(
         error("Update request is empty.")
     }
 
-    val systemPrompt =
-        buildString {
-            append("You are an app development assistant. ")
-            append("Update the provided HTML app according to user request. ")
-            append("Return only the full updated HTML document. ")
-            append("Keep copy concise and direct. ")
-            append("Do not add markdown fences.")
-        }
-    val userPrompt =
-        buildString {
-            appendLine("Update this app based on the request.")
-            append("Request: ")
-            appendLine(request)
-            appendLine()
-            appendLine("Current HTML:")
-            appendLine(current)
-        }
+    val useIos18Skill =
+        shouldUseIos18UiSkill(
+            style = spec?.style.orEmpty(),
+            description = spec?.description.orEmpty(),
+            features = spec?.features.orEmpty(),
+            requestText = request
+        )
+    val systemPrompt = buildAppRevisionSystemPrompt(useIos18Skill)
+    val userPrompt = buildAppRevisionUserPrompt(currentHtml = current, requestText = request, spec = spec)
 
     var emittedProgress = 12
     var chunkCount = 0
@@ -5048,6 +5206,7 @@ private fun buildAppDeveloperToolInstruction(
         appendLine("- description: concise description (one short sentence, no filler)")
         appendLine("- style: visual style direction")
         appendLine("- features: array of detailed functional requirements")
+        appendLine("- If style mentions iOS/iPhone/Cupertino/iOS 18, enforce strict iOS 18 HIG constraints.")
         appendLine()
         appendLine("For edit mode, required arguments:")
         appendLine("- mode: \"edit\"")
