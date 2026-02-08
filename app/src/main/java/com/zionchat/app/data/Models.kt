@@ -86,3 +86,13 @@ data class SavedApp(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
+
+data class AppAutomationTask(
+    val id: String = UUID.randomUUID().toString(),
+    val mode: String, // "edit" | "debug_fix"
+    val appId: String,
+    val appName: String,
+    val appHtml: String,
+    val request: String,
+    val createdAt: Long = System.currentTimeMillis()
+)

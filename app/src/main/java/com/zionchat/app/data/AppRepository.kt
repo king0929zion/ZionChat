@@ -9,6 +9,9 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.zionchat.app.data.extractRemoteModelId
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -46,6 +49,8 @@ class AppRepository(context: Context) {
     private val conversationListType = object : TypeToken<List<Conversation>>() {}.type
     private val memoryListType = object : TypeToken<List<MemoryItem>>() {}.type
     private val savedAppListType = object : TypeToken<List<SavedApp>>() {}.type
+    private val pendingAppAutomationTaskMutable = MutableStateFlow<AppAutomationTask?>(null)
+    val pendingAppAutomationTaskFlow: StateFlow<AppAutomationTask?> = pendingAppAutomationTaskMutable.asStateFlow()
 
     private fun safeTrim(value: String?): String = value?.trim().orEmpty()
 
@@ -809,6 +814,23 @@ class AppRepository(context: Context) {
         dataStore.edit { prefs ->
             prefs[savedAppsKey] = gson.toJson(apps)
         }
+    }
+
+    fun enqueueAppAutomationTask(task: AppAutomationTask) {
+        val normalized =
+            task.copy(
+                mode = task.mode.trim().lowercase().ifBlank { "edit" },
+                appId = task.appId.trim(),
+                appName = task.appName.trim(),
+                appHtml = task.appHtml.trim(),
+                request = task.request.trim()
+            )
+        if (normalized.appId.isBlank() || normalized.request.isBlank() || normalized.appHtml.isBlank()) return
+        pendingAppAutomationTaskMutable.value = normalized
+    }
+
+    fun clearPendingAppAutomationTask() {
+        pendingAppAutomationTaskMutable.value = null
     }
 
     // MCP (Model Context Protocol) Storage

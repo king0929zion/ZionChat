@@ -78,6 +78,7 @@ import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.LocalChatApiClient
 import com.zionchat.app.LocalProviderAuthManager
 import com.zionchat.app.data.AppRepository
+import com.zionchat.app.data.AppAutomationTask
 import com.zionchat.app.data.ChatApiClient
 import com.zionchat.app.data.Conversation
 import com.zionchat.app.data.HttpHeader
@@ -182,8 +183,10 @@ fun ChatScreen(navController: NavController) {
     val defaultChatModelId by repository.defaultChatModelIdFlow.collectAsState(initial = null)
     val defaultImageModelId by repository.defaultImageModelIdFlow.collectAsState(initial = null)
     val defaultAppBuilderModelId by repository.defaultAppBuilderModelIdFlow.collectAsState(initial = null)
+    val pendingAppAutomationTask by repository.pendingAppAutomationTaskFlow.collectAsState(initial = null)
     val appAccentColor by repository.appAccentColorFlow.collectAsState(initial = "default")
     val accentPalette = remember(appAccentColor) { accentPaletteForKey(appAccentColor) }
+    var lastAutoDispatchedTaskId by remember { mutableStateOf<String?>(null) }
 
     // Avoid IME restore loops on cold start/resume.
     LaunchedEffect(Unit) {
@@ -1666,6 +1669,20 @@ fun ChatScreen(navController: NavController) {
         }
     }
 
+    LaunchedEffect(pendingAppAutomationTask?.id, isStreaming) {
+        val task = pendingAppAutomationTask ?: return@LaunchedEffect
+        if (task.id == lastAutoDispatchedTaskId) return@LaunchedEffect
+        if (isStreaming) return@LaunchedEffect
+        val automationPrompt = buildPendingAppAutomationPrompt(task)
+        lastAutoDispatchedTaskId = task.id
+        repository.clearPendingAppAutomationTask()
+        if (automationPrompt.isBlank()) return@LaunchedEffect
+        showToolMenu = false
+        selectedTool = "app_builder"
+        messageText = automationPrompt
+        sendMessage()
+    }
+
     val displayName = nickname.takeIf { it.isNotBlank() } ?: "Kendall Williamson"
 
     ModalNavigationDrawer(
@@ -2436,17 +2453,16 @@ private fun AppDevToolTagCard(
             .background(Color.White, RoundedCornerShape(18.dp))
             .pressableScale(pressedScale = 0.98f, onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(50.dp)
-                .padding(top = 2.dp)
+                .size(56.dp)
                 .clip(CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            AppDevRingGlyph(modifier = Modifier.size(28.dp))
+            AppDevRingGlyph(modifier = Modifier.size(34.dp))
         }
 
         Column(
@@ -2485,7 +2501,7 @@ private fun AppDevToolTagCard(
         }
 
         Row(
-            modifier = Modifier.padding(top = 6.dp),
+            modifier = Modifier,
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -5160,12 +5176,61 @@ private fun buildAppDeveloperToolInstruction(
         appendLine("- description: concise description (one short sentence, no filler)")
         appendLine("- style: visual style direction")
         appendLine("- features: array of detailed functional requirements")
+        appendLine("- All declared UI interactions must be real and fully functional (no dead buttons/links).")
         appendLine("- If style mentions iOS/iPhone/Cupertino/iOS 18, enforce strict iOS 18 HIG constraints.")
         appendLine()
         appendLine("For edit mode, required arguments:")
         appendLine("- mode: \"edit\"")
         appendLine("- targetAppId or targetAppName: choose from saved apps context above")
         appendLine("- editRequest: clear and detailed modification request")
+        appendLine("- Keep existing working behavior unless explicitly changed.")
+        appendLine("- Never ship simulated-only functionality.")
+    }.trim()
+}
+
+private fun buildPendingAppAutomationPrompt(task: AppAutomationTask): String {
+    val request = task.request.trim()
+    val html = task.appHtml.trim()
+    if (request.isBlank() || html.isBlank()) return ""
+    val mode = task.mode.trim().lowercase()
+    val appName = normalizeAppDisplayName(task.appName.trim().ifBlank { "App" })
+    val appId = task.appId.trim().ifBlank { "unknown-app-id" }
+    val htmlPayload = html.take(180_000)
+
+    return buildString {
+        if (mode == "debug_fix") {
+            appendLine("Please fix an existing saved HTML app.")
+        } else {
+            appendLine("Please edit an existing saved HTML app.")
+        }
+        appendLine("Do NOT create a new app. Update the target app in-place.")
+        appendLine("Use app_developer tool in edit mode.")
+        appendLine()
+        appendLine("Required tool arguments:")
+        appendLine("- mode: \"edit\"")
+        append("- targetAppId: \"")
+        append(appId)
+        appendLine("\"")
+        append("- targetAppName: \"")
+        append(appName)
+        appendLine("\"")
+        append("- name: one-language app name only (Chinese OR English)")
+        appendLine("- description: one short sentence")
+        appendLine("- style: keep existing style unless request changes style")
+        appendLine("- features: list only real, working functionality")
+        appendLine("- editRequest: include the request below")
+        appendLine()
+        appendLine(if (mode == "debug_fix") "Bug report:" else "Edit request:")
+        appendLine(request)
+        appendLine()
+        appendLine("Hard constraints:")
+        appendLine("- No mock/placeholder/simulated-only interactions.")
+        appendLine("- Every button/link/tab/form control must have real behavior.")
+        appendLine("- Preserve unaffected working modules.")
+        appendLine("- Return one full updated HTML document.")
+        appendLine()
+        appendLine("Current app HTML:")
+        appendLine(htmlPayload)
     }.trim()
 }
 

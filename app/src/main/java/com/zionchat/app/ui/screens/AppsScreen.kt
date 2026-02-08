@@ -1,9 +1,12 @@
 package com.zionchat.app.ui.screens
 
 import android.graphics.Color as AndroidColor
+import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebView
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
@@ -41,13 +44,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,6 +75,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.R
+import com.zionchat.app.data.AppAutomationTask
 import com.zionchat.app.data.SavedApp
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
@@ -163,7 +171,33 @@ fun AppsScreen(navController: NavController) {
     selectedSavedApp?.let { app ->
         SavedAppPreviewDialog(
             app = app,
-            onDismiss = { selectedSavedApp = null }
+            onDismiss = { selectedSavedApp = null },
+            onRequestEdit = { request ->
+                repository.enqueueAppAutomationTask(
+                    AppAutomationTask(
+                        mode = "edit",
+                        appId = app.id,
+                        appName = app.name,
+                        appHtml = app.html,
+                        request = request
+                    )
+                )
+                selectedSavedApp = null
+                navController.navigate("chat")
+            },
+            onRequestAutoFix = { issue ->
+                repository.enqueueAppAutomationTask(
+                    AppAutomationTask(
+                        mode = "debug_fix",
+                        appId = app.id,
+                        appName = app.name,
+                        appHtml = app.html,
+                        request = issue
+                    )
+                )
+                selectedSavedApp = null
+                navController.navigate("chat")
+            }
         )
     }
 }
@@ -255,12 +289,12 @@ private fun SavedAppRow(
     ) {
         Box(
             modifier = Modifier
-                .size(44.dp)
+                .size(52.dp)
                 .clip(CircleShape)
                 .background(Color.White, CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            AppDevRingGlyph(modifier = Modifier.size(24.dp))
+            AppDevRingGlyph(modifier = Modifier.size(30.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -314,15 +348,33 @@ private fun AppDevRingGlyph(
 @Composable
 private fun SavedAppPreviewDialog(
     app: SavedApp,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onRequestEdit: (String) -> Unit,
+    onRequestAutoFix: (String) -> Unit
 ) {
-    var chromeColor by remember(app.id) { mutableStateOf(Background) }
+    var chromeColor by remember(app.id, app.html) {
+        mutableStateOf(inferAppChromeColorFromHtml(app.html) ?: Color.White)
+    }
+    var showEditDialog by remember(app.id) { mutableStateOf(false) }
+    var editRequestText by remember(app.id) { mutableStateOf("") }
+    var debugIssue by remember(app.id) { mutableStateOf<String?>(null) }
+    var issueFingerprints by remember(app.id) { mutableStateOf(setOf<String>()) }
     val baseUrl = remember(app.id) { "https://saved-app.zionchat.local/app/${app.id}/" }
     val contentSignature = remember(app.id, app.html) { "${app.id}:${app.html.hashCode()}" }
     val controlsBackground =
         if (chromeColor.luminance() < 0.45f) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.08f)
     val controlsTint =
         if (chromeColor.luminance() < 0.45f) Color.White else TextPrimary
+    val reportIssue = rememberUpdatedState<(String) -> Unit> { raw ->
+        val normalized = raw.trim().replace(Regex("\\s+"), " ").take(480)
+        if (normalized.isBlank()) return@rememberUpdatedState
+        val key = normalized.lowercase()
+        if (issueFingerprints.contains(key)) return@rememberUpdatedState
+        issueFingerprints = issueFingerprints + key
+        if (debugIssue.isNullOrBlank()) {
+            debugIssue = normalized
+        }
+    }
 
     BackHandler(onBack = onDismiss)
     Dialog(
@@ -334,92 +386,234 @@ private fun SavedAppPreviewDialog(
                 .fillMaxSize()
                 .background(chromeColor)
         ) {
-            Column(
+            AndroidView(
                 modifier = Modifier
                     .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(controlsBackground, CircleShape)
-                            .pressableScale(pressedScale = 0.95f, onClick = onDismiss),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = AppIcons.Back,
-                            contentDescription = null,
-                            tint = controlsTint,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Text(
-                        text = app.name,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = controlsTint,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .padding(horizontal = 12.dp)
-                            .weight(1f)
-                    )
-                }
-
-                AndroidView(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    factory = { context ->
-                        WebView(context).apply {
-                            settings.javaScriptEnabled = true
-                            settings.domStorageEnabled = true
-                            settings.databaseEnabled = true
-                            settings.allowFileAccess = false
-                            settings.allowContentAccess = false
-                            setBackgroundColor(AndroidColor.TRANSPARENT)
-                            CookieManager.getInstance().setAcceptCookie(true)
-                            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-                            webViewClient =
-                                object : WebViewClient() {
-                                    override fun onPageFinished(view: WebView?, url: String?) {
-                                        super.onPageFinished(view, url)
-                                        view?.evaluateJavascript(
-                                            "(function(){try{var b=document.body||document.documentElement;if(!b)return '';var c=window.getComputedStyle(b).backgroundColor||'';if(!c||c==='transparent'||c==='rgba(0, 0, 0, 0)'){var r=document.documentElement?window.getComputedStyle(document.documentElement).backgroundColor:'';if(r)c=r;}return c||'';}catch(e){return '';}})();"
-                                        ) { jsResult ->
-                                            parseCssColorFromJs(jsResult)?.let { parsed ->
-                                                chromeColor = parsed
-                                            }
+                    .windowInsetsPadding(WindowInsets.navigationBars),
+                factory = { context ->
+                    WebView(context).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.databaseEnabled = true
+                        settings.allowFileAccess = false
+                        settings.allowContentAccess = false
+                        setBackgroundColor(AndroidColor.TRANSPARENT)
+                        CookieManager.getInstance().setAcceptCookie(true)
+                        CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                        webViewClient =
+                            object : WebViewClient() {
+                                override fun onPageFinished(view: WebView?, url: String?) {
+                                    super.onPageFinished(view, url)
+                                    view?.evaluateJavascript(
+                                        "(function(){try{var b=document.body||document.documentElement;if(!b)return '';var c=window.getComputedStyle(b).backgroundColor||'';if(!c||c==='transparent'||c==='rgba(0, 0, 0, 0)'){var r=document.documentElement?window.getComputedStyle(document.documentElement).backgroundColor:'';if(r)c=r;}return c||'';}catch(e){return '';}})();"
+                                    ) { jsResult ->
+                                        parseCssColorFromJs(jsResult)?.let { parsed ->
+                                            chromeColor = parsed
                                         }
                                     }
+                                    view?.evaluateJavascript(
+                                        "(function(){try{if(window.__zionDebugHookInstalled){return 'ok';}window.__zionDebugHookInstalled=true;window.addEventListener('error',function(e){try{var msg=(e&&e.message)?String(e.message):'Unknown runtime error';var src=(e&&e.filename)?String(e.filename):'';var ln=(e&&e.lineno)?String(e.lineno):'0';console.error('ZION_APP_RUNTIME_ERROR:'+msg+' @'+src+':'+ln);}catch(_){}});window.addEventListener('unhandledrejection',function(e){try{var reason='';try{reason=String(e.reason);}catch(_){reason='[unknown]';}console.error('ZION_APP_RUNTIME_ERROR:UnhandledPromiseRejection '+reason);}catch(_){}});return 'ok';}catch(err){return 'err';}})();",
+                                        null
+                                    )
                                 }
-                            webChromeClient = WebChromeClient()
-                        }
-                    },
-                    update = { webView ->
-                        if (webView.tag != contentSignature) {
-                            webView.tag = contentSignature
-                            webView.loadDataWithBaseURL(
-                                baseUrl,
-                                app.html,
-                                "text/html",
-                                "utf-8",
-                                null
-                            )
-                        }
+
+                                override fun onReceivedError(
+                                    view: WebView?,
+                                    request: WebResourceRequest?,
+                                    error: WebResourceError?
+                                ) {
+                                    super.onReceivedError(view, request, error)
+                                    if (request?.isForMainFrame != false) {
+                                        val detail =
+                                            buildString {
+                                                append("Load error")
+                                                val desc = error?.description?.toString()?.trim().orEmpty()
+                                                if (desc.isNotBlank()) {
+                                                    append(": ")
+                                                    append(desc)
+                                                }
+                                            }
+                                        reportIssue.value(detail)
+                                    }
+                                }
+
+                                @Suppress("DEPRECATION")
+                                override fun onReceivedError(
+                                    view: WebView?,
+                                    errorCode: Int,
+                                    description: String?,
+                                    failingUrl: String?
+                                ) {
+                                    super.onReceivedError(view, errorCode, description, failingUrl)
+                                    val detail = "Load error: ${description?.trim().orEmpty().ifBlank { "Unknown" }}"
+                                    reportIssue.value(detail)
+                                }
+                            }
+                        webChromeClient =
+                            object : WebChromeClient() {
+                                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                                    val msg = consoleMessage?.message()?.trim().orEmpty()
+                                    if (msg.isNotBlank()) {
+                                        val level = consoleMessage?.messageLevel()
+                                        val marker = "ZION_APP_RUNTIME_ERROR:"
+                                        when {
+                                            msg.contains(marker, ignoreCase = true) ->
+                                                reportIssue.value(msg.substringAfter(marker).trim())
+                                            level == ConsoleMessage.MessageLevel.ERROR ->
+                                                reportIssue.value("Console error: $msg")
+                                        }
+                                    }
+                                    return super.onConsoleMessage(consoleMessage)
+                                }
+                            }
                     }
-                )
+                },
+                update = { webView ->
+                    if (webView.tag != contentSignature) {
+                        webView.tag = contentSignature
+                        webView.loadDataWithBaseURL(
+                            baseUrl,
+                            app.html,
+                            "text/html",
+                            "utf-8",
+                            null
+                        )
+                    }
+                }
+            )
+
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(controlsBackground, CircleShape)
+                        .pressableScale(pressedScale = 0.95f, onClick = onDismiss),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Back,
+                        contentDescription = null,
+                        tint = controlsTint,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(controlsBackground, CircleShape)
+                        .pressableScale(pressedScale = 0.95f, onClick = { showEditDialog = true }),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Edit,
+                        contentDescription = null,
+                        tint = controlsTint,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
     }
+
+    if (showEditDialog) {
+        AlertDialog(
+            onDismissRequest = { showEditDialog = false },
+            title = { Text(text = "Edit app with AI") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Describe the changes you want for ${app.name}.",
+                        fontSize = 13.sp,
+                        color = TextSecondary
+                    )
+                    OutlinedTextField(
+                        value = editRequestText,
+                        onValueChange = { editRequestText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                        maxLines = 6,
+                        singleLine = false
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val request = editRequestText.trim()
+                        if (request.isBlank()) return@TextButton
+                        showEditDialog = false
+                        editRequestText = ""
+                        onRequestEdit(request)
+                    }
+                ) {
+                    Text("Send")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    debugIssue?.let { issue ->
+        AlertDialog(
+            onDismissRequest = { debugIssue = null },
+            title = { Text("App error detected") },
+            text = {
+                Text(
+                    text = "Detected a runtime issue:\n$issue\n\nRun one-click AI fix?",
+                    fontSize = 13.sp,
+                    color = TextSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        debugIssue = null
+                        onRequestAutoFix(issue)
+                    }
+                ) {
+                    Text("Fix now")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { debugIssue = null }) {
+                    Text("Later")
+                }
+            }
+        )
+    }
+}
+
+private fun inferAppChromeColorFromHtml(html: String): Color? {
+    val source = html.trim()
+    if (source.isBlank()) return null
+    val patterns =
+        listOf(
+            Regex("<meta\\s+name\\s*=\\s*[\"']theme-color[\"']\\s+content\\s*=\\s*[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE),
+            Regex("background-color\\s*:\\s*([^;\"'>]+)", RegexOption.IGNORE_CASE),
+            Regex("background\\s*:\\s*(#[0-9a-fA-F]{3,8}|rgba?\\([^\\)]*\\))", RegexOption.IGNORE_CASE)
+        )
+    for (pattern in patterns) {
+        val match = pattern.find(source) ?: continue
+        val value = match.groupValues.getOrNull(1)?.trim().orEmpty()
+        if (value.isBlank()) continue
+        val parsed = parseCssColorFromJs("\"$value\"")
+        if (parsed != null) return parsed
+    }
+    return null
 }
 
 private fun parseCssColorFromJs(jsValue: String?): Color? {
