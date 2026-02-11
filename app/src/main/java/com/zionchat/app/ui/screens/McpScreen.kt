@@ -158,7 +158,7 @@ fun McpEmptyState() {
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = AppIcons.Globe,
+                imageVector = AppIcons.MCPTools,
                 contentDescription = null,
                 modifier = Modifier.size(28.dp),
                 tint = TextSecondary
@@ -267,7 +267,7 @@ fun McpListItem(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = AppIcons.Globe,
+                    imageVector = AppIcons.MCPTools,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                     tint = TextSecondary

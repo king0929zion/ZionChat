@@ -178,7 +178,7 @@ private fun McpToolItem(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = AppIcons.Globe,
+                imageVector = AppIcons.MCPTools,
                 contentDescription = null,
                 tint = TextSecondary,
                 modifier = Modifier.size(16.dp)
