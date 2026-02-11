@@ -143,4 +143,6 @@
     <string name="about_download">Download</string>
     <string name="about_download_failed">Failed to start download</string>
     <string name="about_qq_join_failed">Failed to open QQ, please join manually: 1079727831</string>
+    <string name="about_check_update">Check for Updates</string>
+    <string name="about_github_open_failed">Failed to open GitHub</string>
 </resources>

@@ -3,7 +3,6 @@ package com.zionchat.app.ui.screens
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,11 +22,13 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import coil3.compose.AsyncImage
 import com.zionchat.app.BuildConfig
 import com.zionchat.app.R
 import com.zionchat.app.ui.components.PageTopBar
@@ -74,11 +75,10 @@ fun AboutScreen(navController: NavController) {
                             .background(Surface),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = AppIcons.ChatGPTLogo,
+                        AsyncImage(
+                            model = R.drawable.ic_app_logo,
                             contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            tint = TextPrimary
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                     
@@ -103,18 +103,17 @@ fun AboutScreen(navController: NavController) {
                 // About Items
                 AboutGroup(title = stringResource(R.string.about_group_info)) {
                     AboutItem(
-                        icon = { Icon(AppIcons.Globe, null, Modifier.size(22.dp), tint = Color.Unspecified) },
+                        icon = { Icon(AppIcons.Globe, null, Modifier.size(22.dp), tint = TextPrimary) },
                         label = stringResource(R.string.about_official_website),
                         value = stringResource(R.string.about_coming_soon),
                         showChevron = false,
                         onClick = { }
                     )
                     AboutItem(
-                        icon = { Icon(AppIcons.GitHub, null, Modifier.size(22.dp), tint = Color.Unspecified) },
-                        label = stringResource(R.string.about_github),
+                        icon = { Icon(AppIcons.Refresh, null, Modifier.size(22.dp), tint = TextPrimary) },
+                        label = stringResource(R.string.about_check_update),
                         value = if (isCheckingUpdate) stringResource(R.string.about_checking) else null,
                         showChevron = !isCheckingUpdate,
-                        showDivider = false,
                         onClick = {
                             if (!isCheckingUpdate) {
                                 scope.launch {
@@ -135,6 +134,13 @@ fun AboutScreen(navController: NavController) {
                                 }
                             }
                         }
+                    )
+                    AboutItem(
+                        icon = { Icon(AppIcons.GitHub, null, Modifier.size(22.dp), tint = TextPrimary) },
+                        label = stringResource(R.string.about_github),
+                        showChevron = true,
+                        showDivider = false,
+                        onClick = { openGitHub(context) }
                     )
                 }
 
@@ -393,6 +399,16 @@ private fun isNewerVersion(newVersion: String, currentVersion: String): Boolean 
     }
 }
 
+private fun openGitHub(context: Context) {
+    try {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/king0929zion/ZionChat"))
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        Toast.makeText(context, R.string.about_github_open_failed, Toast.LENGTH_SHORT).show()
+    }
+}
+
 private fun downloadApk(context: Context, url: String) {
     try {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -406,13 +422,11 @@ private fun downloadApk(context: Context, url: String) {
 private fun joinQQGroup(context: Context, groupId: String) {
     try {
         val intent = Intent()
-        intent.data = Uri.parse("mqqopensdkapi://bizAgent/qm/qr?url=http%3A%2F%2Fqm.qq.com%2Fcgi-bin%2Fqm%2Fqr%3Ffrom%3Dapp%26p%3Dandroid%26k%3D$groupId")
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        intent.data = Uri.parse("mqqopensdkapi://bizAgent/qm/qr?url=http%3A%2F%2Fqm.qq.com%2Fcgi-bin%2Fqm%2Fqr%3Ffrom%3Dapp%26p%3Dandroid%26k%3D${groupId}")
         context.startActivity(intent)
     } catch (e: Exception) {
         try {
-            val fallbackIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://qm.qq.com/q/$groupId"))
-            fallbackIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val fallbackIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://qm.qq.com/q/${groupId}"))
             context.startActivity(fallbackIntent)
         } catch (e2: Exception) {
             Toast.makeText(context, R.string.about_qq_join_failed, Toast.LENGTH_SHORT).show()
