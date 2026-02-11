@@ -287,7 +287,7 @@ fun McpInfoCard(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = AppIcons.MCPTools,
+                    imageVector = AppIcons.Globe,
                     contentDescription = null,
                     modifier = Modifier.size(32.dp),
                     tint = TextPrimary
@@ -483,7 +483,7 @@ fun McpToolsCard(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = AppIcons.MCPTools,
+                                imageVector = AppIcons.Globe,
                                 contentDescription = null,
                                 modifier = Modifier.size(24.dp),
                                 tint = TextSecondary
@@ -556,7 +556,7 @@ fun ToolItem(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = AppIcons.MCPTools,
+                    imageVector = AppIcons.Globe,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
                     tint = TextSecondary
