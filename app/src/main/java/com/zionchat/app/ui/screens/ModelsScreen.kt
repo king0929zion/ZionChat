@@ -177,117 +177,119 @@ fun ModelsScreen(navController: NavController, providerId: String? = null) {
         onRefresh = { fetchedSignature = null }
     )
 
-    Column(modifier = Modifier.fillMaxSize().background(Background)) {
-        PageTopBar(
-            title = "Models",
-            onBack = { navController.popBackStack() },
-            trailing = {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Surface, CircleShape)
-                        .pressableScale(pressedScale = 0.95f) { showAddModal = true },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = AppIcons.Plus,
-                        contentDescription = "Add Model",
-                        tint = TextPrimary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
-        )
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .pullRefresh(pullRefreshState)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 12.dp, bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                if (activeProvider == null) {
-                    Text(
-                        text = "No provider configured.",
-                        fontSize = 13.sp,
-                        color = TextSecondary
-                    )
-                } else {
-                    if (isFetchingRemote || remoteError != null) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Text(
-                                text = when {
-                                    isFetchingRemote -> "Loading models from provider..."
-                                    remoteError != null -> remoteError.orEmpty()
-                                    else -> ""
-                                },
-                                fontSize = 13.sp,
-                                color = if (remoteError != null) Color(0xFFFF3B30) else TextSecondary,
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (remoteError != null) {
-                                Text(
-                                    text = "Retry",
-                                    fontSize = 13.sp,
-                                    fontFamily = SourceSans3,
-                                    color = TextPrimary,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .clickable(
-                                            interactionSource = remember { MutableInteractionSource() },
-                                            indication = null
-                                        ) { fetchedSignature = null }
-                                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    sortedModels.forEach { model ->
-                        ModelItem(
-                            model = model,
-                            onToggle = {
-                                scope.launch { repository.upsertModel(model.copy(enabled = !model.enabled)) }
-                            },
-                            onClick = {
-                                navController.navigate("model_config?id=${model.id}")
-                            }
+    Box(modifier = Modifier.fillMaxSize().background(Background)) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            PageTopBar(
+                title = "Models",
+                onBack = { navController.popBackStack() },
+                trailing = {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Surface, CircleShape)
+                            .pressableScale(pressedScale = 0.95f) { showAddModal = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Plus,
+                            contentDescription = "Add Model",
+                            tint = TextPrimary,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
-
-                    Spacer(modifier = Modifier.height(4.dp))
                 }
-            }
+            )
 
-            PullRefreshIndicator(
-                refreshing = isFetchingRemote,
-                state = pullRefreshState,
+            Box(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 4.dp),
-                contentColor = TextPrimary,
-                backgroundColor = Surface
-            )
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .pullRefresh(pullRefreshState)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 12.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (activeProvider == null) {
+                        Text(
+                            text = "No provider configured.",
+                            fontSize = 13.sp,
+                            color = TextSecondary
+                        )
+                    } else {
+                        if (isFetchingRemote || remoteError != null) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    text = when {
+                                        isFetchingRemote -> "Loading models from provider..."
+                                        remoteError != null -> remoteError.orEmpty()
+                                        else -> ""
+                                    },
+                                    fontSize = 13.sp,
+                                    color = if (remoteError != null) Color(0xFFFF3B30) else TextSecondary,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (remoteError != null) {
+                                    Text(
+                                        text = "Retry",
+                                        fontSize = 13.sp,
+                                        fontFamily = SourceSans3,
+                                        color = TextPrimary,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .clickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = null
+                                            ) { fetchedSignature = null }
+                                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
 
-            BottomFadeScrim(
-                color = Background,
-                height = 44.dp,
-                modifier = Modifier.align(Alignment.BottomCenter)
-            )
+                        sortedModels.forEach { model ->
+                            ModelItem(
+                                model = model,
+                                onToggle = {
+                                    scope.launch { repository.upsertModel(model.copy(enabled = !model.enabled)) }
+                                },
+                                onClick = {
+                                    navController.navigate("model_config?id=${model.id}")
+                                }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                }
+
+                PullRefreshIndicator(
+                    refreshing = isFetchingRemote,
+                    state = pullRefreshState,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 4.dp),
+                    contentColor = TextPrimary,
+                    backgroundColor = Surface
+                )
+
+                BottomFadeScrim(
+                    color = Background,
+                    height = 44.dp,
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
+            }
         }
 
         AddModelModal(
@@ -396,7 +398,6 @@ private fun AddModelModal(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
             ) {
                 M3Surface(
                     modifier = Modifier
