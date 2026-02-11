@@ -2054,7 +2054,7 @@ object AppIcons {
         viewportHeight = 960f
     ).apply {
         path(
-            fill = SolidColor(Color(0xFF1C1C1E)),
+            fill = SolidColor(Color(0xFFD9D9D9)),
             stroke = null,
             pathFillType = PathFillType.NonZero
         ) {
@@ -2117,7 +2117,14 @@ object AppIcons {
         viewportHeight = 24f
     ).apply {
         path(
-            fill = SolidColor(Color(0xFF1C1C1E)),
+            fill = SolidColor(Color.Transparent),
+            stroke = null,
+            pathFillType = PathFillType.NonZero
+        ) {
+            addPathNodes("M0 0h24v24H0z")
+        }
+        path(
+            fill = SolidColor(Color(0xFF000000)),
             stroke = null,
             pathFillType = PathFillType.NonZero
         ) {

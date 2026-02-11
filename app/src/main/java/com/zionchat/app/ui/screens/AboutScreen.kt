@@ -110,7 +110,7 @@ fun AboutScreen(navController: NavController) {
                         onClick = { }
                     )
                     AboutItem(
-                        icon = { Icon(AppIcons.Info, null, Modifier.size(22.dp), tint = TextPrimary) },
+                        icon = { Icon(AppIcons.Info, null, Modifier.size(22.dp), tint = Color.Unspecified) },
                         label = stringResource(R.string.about_check_update),
                         value = if (isCheckingUpdate) stringResource(R.string.about_checking) else null,
                         showChevron = !isCheckingUpdate,
