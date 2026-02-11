@@ -7,6 +7,8 @@ import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -107,27 +109,39 @@ class MainActivity : AppCompatActivity() {
                             startDestination = "chat",
                             enterTransition = {
                                 slideInHorizontally(
-                                    initialOffsetX = { fullWidth -> (fullWidth * 0.28f).roundToInt() },
-                                    animationSpec = tween(durationMillis = 340, easing = FastOutSlowInEasing)
-                                ) + fadeIn(animationSpec = tween(durationMillis = 240))
+                                    initialOffsetX = { fullWidth -> fullWidth },
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMedium
+                                    )
+                                ) + fadeIn(animationSpec = tween(200))
                             },
                             exitTransition = {
                                 slideOutHorizontally(
-                                    targetOffsetX = { fullWidth -> (-fullWidth * 0.1f).roundToInt() },
-                                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
-                                ) + fadeOut(animationSpec = tween(durationMillis = 200))
+                                    targetOffsetX = { fullWidth -> -(fullWidth * 0.15f).toInt() },
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioNoBouncy,
+                                        stiffness = Spring.StiffnessMedium
+                                    )
+                                ) + fadeOut(animationSpec = tween(180))
                             },
                             popEnterTransition = {
                                 slideInHorizontally(
-                                    initialOffsetX = { fullWidth -> (-fullWidth * 0.18f).roundToInt() },
-                                    animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing)
-                                ) + fadeIn(animationSpec = tween(durationMillis = 220))
+                                    initialOffsetX = { fullWidth -> -(fullWidth * 0.25f).toInt() },
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioLowBouncy,
+                                        stiffness = Spring.StiffnessMedium
+                                    )
+                                ) + fadeIn(animationSpec = tween(200))
                             },
                             popExitTransition = {
                                 slideOutHorizontally(
-                                    targetOffsetX = { fullWidth -> (fullWidth * 0.32f).roundToInt() },
-                                    animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing)
-                                ) + fadeOut(animationSpec = tween(durationMillis = 220))
+                                    targetOffsetX = { fullWidth -> fullWidth },
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioNoBouncy,
+                                        stiffness = Spring.StiffnessMedium
+                                    )
+                                ) + fadeOut(animationSpec = tween(180))
                             }
                         ) {
                             composable("chat") { ChatScreen(navController) }
