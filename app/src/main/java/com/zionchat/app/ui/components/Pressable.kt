@@ -84,7 +84,7 @@ fun Modifier.pressableCard(
     )
     
     // 阴影动画
-    val shadowElevation by animateFloatAsState(
+    val elevation by animateFloatAsState(
         targetValue = if (enabled && isPressed) pressedElevation else 8f,
         animationSpec = tween(durationMillis = 150),
         label = "cardElevation"
@@ -94,7 +94,7 @@ fun Modifier.pressableCard(
         .graphicsLayer {
             scaleX = scale
             scaleY = scale
-            shadowElevation = shadowElevation
+            shadowElevation = elevation
         }
         .clickable(
             interactionSource = interactionSource,
