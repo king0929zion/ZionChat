@@ -5,7 +5,6 @@ import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.*
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -785,20 +784,10 @@ fun SettingsItem(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    // 使用 spring 动画实现更丝滑的按压效果
+    // 点击时的缩放动画
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.985f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessHigh
-        ),
+        targetValue = if (isPressed) 0.98f else 1f,
         label = "scale"
-    )
-    
-    val backgroundColor by animateColorAsState(
-        targetValue = if (isPressed) Color(0xFFF5F5F7) else Surface,
-        animationSpec = tween(durationMillis = 100),
-        label = "background"
     )
 
     Column(
@@ -817,7 +806,7 @@ fun SettingsItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(backgroundColor)
+                .background(if (isPressed) Color(0xFFE5E5EA) else Surface)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
