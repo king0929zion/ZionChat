@@ -919,9 +919,43 @@ object AppIcons {
             stroke = null,
             pathFillType = PathFillType.NonZero
         ) {
-            addPathNodes(
-                "M9.25,6C10.078,6 10.75,6.672 10.75,7.5V13.25H16.75C17.578,13.25 18.25,13.922 18.25,14.75V20.5C18.25,21.328 17.578,22 16.75,22H3.5C2.672,22 2,21.328 2,20.5V7.5C2,6.672 2.672,6 3.5,6H9.25ZM3.5,20.5H9.25V14.75H3.5V20.5ZM10.75,20.5H16.75V14.75H10.75V20.5ZM3.5,13.25H9.25V7.5H3.5V13.25ZM20.5,2C21.328,2 22,2.672 22,3.5V9.25C22,10.027 21.41,10.665 20.653,10.742L20.5,10.75H14.75L14.597,10.742C13.891,10.67 13.33,10.109 13.258,9.403L13.25,9.25V3.5C13.25,2.672 13.922,2 14.75,2H20.5ZM14.75,9.25H20.5V3.5H14.75V9.25Z"
-            )
+            // 左下大矩形 (3.5,6) to (9.25,13.25) to (9.25,20.5)
+            moveTo(9.25f, 6f)
+            curveTo(10.078f, 6f, 10.75f, 6.672f, 10.75f, 7.5f)
+            verticalLineTo(13.25f)
+            horizontalLineTo(16.75f)
+            curveTo(17.578f, 13.25f, 18.25f, 13.922f, 18.25f, 14.75f)
+            verticalLineTo(20.5f)
+            curveTo(18.25f, 21.328f, 17.578f, 22f, 16.75f, 22f)
+            horizontalLineTo(3.5f)
+            curveTo(2.672f, 22f, 2f, 21.328f, 2f, 20.5f)
+            verticalLineTo(7.5f)
+            curveTo(2f, 6.672f, 2.672f, 6f, 3.5f, 6f)
+            horizontalLineTo(9.25f)
+            close()
+            
+            // 内部空白分隔线 - 左下矩形内部水平分隔
+            moveTo(3.5f, 13.25f)
+            horizontalLineTo(9.25f)
+            
+            // 内部空白分隔线 - 右下矩形内部水平分隔  
+            moveTo(10.75f, 14.75f)
+            horizontalLineTo(16.75f)
+            
+            // 右上小矩形 (14.75,2) to (20.5,9.25)
+            moveTo(20.5f, 2f)
+            curveTo(21.328f, 2f, 22f, 2.672f, 22f, 3.5f)
+            verticalLineTo(9.25f)
+            curveTo(22f, 10.027f, 21.41f, 10.665f, 20.653f, 10.742f)
+            lineTo(20.5f, 10.75f)
+            horizontalLineTo(14.75f)
+            lineTo(14.597f, 10.742f)
+            curveTo(13.891f, 10.67f, 13.33f, 10.109f, 13.258f, 9.403f)
+            lineTo(13.25f, 9.25f)
+            verticalLineTo(3.5f)
+            curveTo(13.25f, 2.672f, 13.922f, 2f, 14.75f, 2f)
+            horizontalLineTo(20.5f)
+            close()
         }
     }.build()
 
