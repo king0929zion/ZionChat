@@ -3523,7 +3523,7 @@ fun ToolMenuPanel(
                         onClick = { onToolSelect("image") }
                     )
                     ToolListItem(
-                        icon = { Icon(AppIcons.AppDeveloper, null, Modifier.size(24.dp), TextPrimary) },
+                        icon = { Icon(AppIcons.MCPTools, null, Modifier.size(24.dp), TextPrimary) },
                         title = stringResource(R.string.settings_item_mcp_tools),
                         subtitle = stringResource(R.string.chat_tool_mcp_subtitle),
                         onClick = { onToolSelect("mcp") }
@@ -3744,7 +3744,7 @@ private fun BottomInputArea(
         "files" -> null
         "web" -> AppIcons.Globe
         "image" -> AppIcons.CreateImage
-        "mcp" -> AppIcons.AppDeveloper
+        "mcp" -> AppIcons.MCPTools
         "app_builder" -> AppIcons.AppDeveloper
         else -> AppIcons.Globe
     }
