@@ -17,10 +17,13 @@ import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,6 +57,7 @@ fun ModelServicesScreen(navController: NavController) {
 
     val configuredProviders by repository.providersFlow.collectAsState(initial = emptyList())
     val oauthPresetIds = remember { setOf("codex", "iflow") }
+    var openedProviderId by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = Modifier
@@ -97,6 +101,17 @@ fun ModelServicesScreen(navController: NavController) {
                 SwipeableConfiguredProviderItem(
                     provider = provider,
                     iconAsset = resolveProviderIconAsset(provider),
+                    isOpened = openedProviderId == provider.id,
+                    onOpenChanged = { isOpen ->
+                        openedProviderId =
+                            if (isOpen) {
+                                provider.id
+                            } else if (openedProviderId == provider.id) {
+                                null
+                            } else {
+                                openedProviderId
+                            }
+                    },
                     onClick = {
                         val oauthProvider = provider.oauthProvider?.trim()?.lowercase().orEmpty()
                         if (oauthProvider.isNotBlank()) {
@@ -105,7 +120,10 @@ fun ModelServicesScreen(navController: NavController) {
                             navController.navigate("add_provider?preset=&providerId=${provider.id}")
                         }
                     },
-                    onDelete = { scope.launch { repository.deleteProviderAndModels(provider.id) } }
+                    onDelete = {
+                        openedProviderId = null
+                        scope.launch { repository.deleteProviderAndModels(provider.id) }
+                    }
                 )
             }
 
@@ -175,14 +193,29 @@ private fun ProviderItem(
 private fun SwipeableConfiguredProviderItem(
     provider: ProviderConfig,
     iconAsset: String?,
+    isOpened: Boolean,
+    onOpenChanged: (Boolean) -> Unit,
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
     val itemScope = rememberCoroutineScope()
     val actionWidth = 72.dp
     val actionWidthPx = with(LocalDensity.current) { actionWidth.toPx() }
-    val swipeableState = rememberSwipeableState(initialValue = 0)
+    val swipeableState = rememberSwipeableState(
+        initialValue = if (isOpened) 1 else 0,
+        confirmStateChange = { targetValue ->
+            onOpenChanged(targetValue != 0)
+            true
+        }
+    )
     val anchors = remember(actionWidthPx) { mapOf(0f to 0, -actionWidthPx to 1) }
+
+    LaunchedEffect(isOpened) {
+        val target = if (isOpened) 1 else 0
+        if (swipeableState.currentValue != target) {
+            swipeableState.animateTo(target)
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -206,6 +239,7 @@ private fun SwipeableConfiguredProviderItem(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
                     ) {
+                        onOpenChanged(false)
                         onDelete()
                         itemScope.launch { swipeableState.animateTo(0) }
                     },

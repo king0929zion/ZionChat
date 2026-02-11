@@ -52,6 +52,7 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import com.zionchat.app.data.extractRemoteModelId
@@ -92,6 +93,7 @@ fun SettingsScreen(navController: NavController) {
     // 菜单锚点位置
     var appearanceAnchorY by remember { mutableFloatStateOf(0f) }
     var accentColorAnchorY by remember { mutableFloatStateOf(0f) }
+    var accentColorAnchorHeight by remember { mutableFloatStateOf(0f) }
 
     val defaultChatModelName = remember(models, defaultChatModelId) {
         val id = defaultChatModelId?.trim().orEmpty()
@@ -111,11 +113,8 @@ fun SettingsScreen(navController: NavController) {
     val accentColorLabel =
         when (appAccentColor.trim().lowercase()) {
             "blue" -> stringResource(R.string.accent_color_blue)
-            "green" -> stringResource(R.string.accent_color_green)
-            "yellow" -> stringResource(R.string.accent_color_yellow)
             "pink" -> stringResource(R.string.accent_color_pink)
             "orange" -> stringResource(R.string.accent_color_orange)
-            "purple" -> stringResource(R.string.accent_color_purple)
             "black" -> stringResource(R.string.accent_color_black)
             else -> stringResource(R.string.accent_color_default)
         }
@@ -188,6 +187,7 @@ fun SettingsScreen(navController: NavController) {
                     }
                     Box(modifier = Modifier.onGloballyPositioned { coordinates ->
                         accentColorAnchorY = coordinates.positionInWindow().y
+                        accentColorAnchorHeight = coordinates.size.height.toFloat()
                     }) {
                         SettingsItem(
                             icon = { Icon(AppIcons.Accent, null, Modifier.size(22.dp), tint = Color.Unspecified) },
@@ -305,6 +305,7 @@ fun SettingsScreen(navController: NavController) {
         visible = showAccentColorMenu,
         selected = appAccentColor,
         anchorY = accentColorAnchorY,
+        anchorHeight = accentColorAnchorHeight,
         backdrop = screenBackdrop,
         onDismiss = { showAccentColorMenu = false },
         onSelect = { key ->
@@ -881,11 +882,8 @@ private data class AccentOption(
 private val accentColorOptions = listOf(
     AccentOption("default", R.string.accent_color_default, Color(0xFF9CA3AF)),
     AccentOption("blue", R.string.accent_color_blue, Color(0xFF3B82F6)),
-    AccentOption("green", R.string.accent_color_green, Color(0xFF22C55E)),
-    AccentOption("yellow", R.string.accent_color_yellow, Color(0xFFEAB308)),
     AccentOption("pink", R.string.accent_color_pink, Color(0xFFEC4899)),
     AccentOption("orange", R.string.accent_color_orange, Color(0xFFF97316)),
-    AccentOption("purple", R.string.accent_color_purple, Color(0xFFA855F7)),
     AccentOption("black", R.string.accent_color_black, Color(0xFF111214))
 )
 
@@ -1029,10 +1027,36 @@ fun AccentColorMenu(
     visible: Boolean,
     selected: String,
     anchorY: Float,
+    anchorHeight: Float,
     backdrop: Backdrop,
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit
 ) {
+    val density = LocalDensity.current
+    val screenHeightPx = with(density) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+    val topOffsetPx = with(density) { 20.dp.toPx() }
+    val screenMarginPx = with(density) { 8.dp.toPx() }
+    val optionHeightPx = with(density) { 40.dp.toPx() }
+    val optionSpacingPx = with(density) { 2.dp.toPx() }
+    val contentPaddingPx = with(density) { 12.dp.toPx() }
+    val optionCount = accentColorOptions.size
+    val menuHeightPx =
+        contentPaddingPx +
+            optionCount * optionHeightPx +
+            ((optionCount - 1).coerceAtLeast(0) * optionSpacingPx)
+    val spaceBelowPx = screenHeightPx - (anchorY + anchorHeight)
+    val spaceAbovePx = anchorY
+    val openUpward = spaceBelowPx < menuHeightPx && spaceAbovePx > spaceBelowPx
+    val targetTranslationY =
+        (if (openUpward) {
+            anchorY - menuHeightPx + anchorHeight
+        } else {
+            anchorY - topOffsetPx
+        }).coerceIn(
+            screenMarginPx,
+            (screenHeightPx - menuHeightPx - screenMarginPx).coerceAtLeast(screenMarginPx)
+        )
+
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(animationSpec = tween(100)),
@@ -1067,7 +1091,7 @@ fun AccentColorMenu(
                     .align(Alignment.TopStart)
                     .padding(start = 80.dp)
                     .graphicsLayer {
-                        translationY = anchorY - 20
+                        translationY = targetTranslationY
                     }
             ) {
                 val shape = RoundedCornerShape(16.dp)
