@@ -110,7 +110,7 @@ fun AboutScreen(navController: NavController) {
                         onClick = { }
                     )
                     AboutItem(
-                        icon = { Icon(AppIcons.Refresh, null, Modifier.size(22.dp), tint = TextPrimary) },
+                        icon = { Icon(AppIcons.Info, null, Modifier.size(22.dp), tint = TextPrimary) },
                         label = stringResource(R.string.about_check_update),
                         value = if (isCheckingUpdate) stringResource(R.string.about_checking) else null,
                         showChevron = !isCheckingUpdate,
@@ -420,16 +420,34 @@ private fun downloadApk(context: Context, url: String) {
 }
 
 private fun joinQQGroup(context: Context, groupId: String) {
-    try {
-        val intent = Intent()
-        intent.data = Uri.parse("mqqopensdkapi://bizAgent/qm/qr?url=http%3A%2F%2Fqm.qq.com%2Fcgi-bin%2Fqm%2Fqr%3Ffrom%3Dapp%26p%3Dandroid%26k%3D${groupId}")
-        context.startActivity(intent)
-    } catch (e: Exception) {
+    // 尝试多种 QQ 加群方案
+    val schemes = listOf(
+        // QQ 手机版原生协议 - 直接打开群资料页
+        "mqqapi://card/show_pslcard?src_type=internal&version=1&uin=$groupId&card_type=group&source=qrcode",
+        // QQ 国际版
+        "mqqwpa://im/chat?chat_type=group&uin=$groupId&version=1&src_type=web",
+        // QQ 轻聊版
+        "mqq://card/show_pslcard?uin=$groupId&card_type=group",
+        // QQ 加群网页版
+        "https://qm.qq.com/cgi-bin/qm/qr?k=$groupId&jump_from=webapi",
+        // 备用网页链接
+        "https://qm.qq.com/q/$groupId"
+    )
+    
+    for (scheme in schemes) {
         try {
-            val fallbackIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://qm.qq.com/q/${groupId}"))
-            context.startActivity(fallbackIntent)
-        } catch (e2: Exception) {
-            Toast.makeText(context, R.string.about_qq_join_failed, Toast.LENGTH_SHORT).show()
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(scheme))
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            return
+        } catch (e: Exception) {
+            continue
         }
     }
+    
+    // 所有方案都失败，复制群号到剪贴板并提示
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+    val clip = android.content.ClipData.newPlainText("QQ Group", groupId)
+    clipboard.setPrimaryClip(clip)
+    Toast.makeText(context, "QQ Group ID copied: $groupId", Toast.LENGTH_LONG).show()
 }
