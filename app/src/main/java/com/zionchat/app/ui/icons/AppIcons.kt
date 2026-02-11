@@ -2044,4 +2044,103 @@ object AppIcons {
             verticalLineTo(21f)
         }
     }.build()
+
+    // Info 信息图标
+    val Info = ImageVector.Builder(
+        name = "info",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(
+            fill = SolidColor(Color(0xFF1C1C1E)),
+            stroke = null,
+            pathFillType = PathFillType.NonZero
+        ) {
+            moveTo(12f, 2f)
+            curveTo(6.48f, 2f, 2f, 6.48f, 2f, 12f)
+            curveTo(2f, 17.52f, 6.48f, 22f, 12f, 22f)
+            curveTo(17.52f, 22f, 22f, 17.52f, 22f, 12f)
+            curveTo(22f, 6.48f, 17.52f, 2f, 12f, 2f)
+            close()
+            moveTo(12f, 17f)
+            curveTo(11.45f, 17f, 11f, 16.55f, 11f, 16f)
+            verticalLineTo(12f)
+            curveTo(11f, 11.45f, 11.45f, 11f, 12f, 11f)
+            curveTo(12.55f, 11f, 13f, 11.45f, 13f, 12f)
+            verticalLineTo(16f)
+            curveTo(13f, 16.55f, 12.55f, 17f, 12f, 17f)
+            close()
+            moveTo(11f, 7f)
+            horizontalLineTo(13f)
+            verticalLineTo(9f)
+            horizontalLineTo(11f)
+            verticalLineTo(7f)
+            close()
+        }
+    }.build()
+
+    // GitHub 图标
+    val GitHub = ImageVector.Builder(
+        name = "github",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(
+            fill = SolidColor(Color(0xFF1C1C1E)),
+            stroke = null,
+            pathFillType = PathFillType.NonZero
+        ) {
+            moveTo(12f, 2f)
+            curveTo(6.477f, 2f, 2f, 6.477f, 2f, 12f)
+            curveTo(2f, 16.419f, 4.865f, 20.167f, 8.84f, 21.49f)
+            curveTo(9.34f, 21.581f, 9.52f, 21.272f, 9.52f, 21.007f)
+            curveTo(9.52f, 20.769f, 9.511f, 20.087f, 9.507f, 19.333f)
+            curveTo(6.727f, 19.913f, 6.14f, 17.967f, 6.14f, 17.967f)
+            curveTo(5.686f, 16.82f, 4.97f, 16.513f, 4.97f, 16.513f)
+            curveTo(4.004f, 15.893f, 5.042f, 15.907f, 5.042f, 15.907f)
+            curveTo(6.113f, 15.98f, 6.725f, 16.993f, 6.725f, 16.993f)
+            curveTo(7.67f, 18.6f, 9.212f, 18.133f, 9.54f, 17.88f)
+            curveTo(9.587f, 17.293f, 9.81f, 16.887f, 10.057f, 16.647f)
+            curveTo(7.87f, 16.405f, 5.575f, 15.593f, 5.575f, 11.964f)
+            curveTo(5.575f, 10.905f, 5.954f, 10.041f, 6.745f, 9.36f)
+            curveTo(6.603f, 9.007f, 6.163f, 7.849f, 6.807f, 6.378f)
+            curveTo(6.807f, 6.378f, 7.697f, 6.109f, 9.483f, 7.397f)
+            curveTo(10.258f, 7.175f, 11.088f, 7.064f, 11.912f, 7.06f)
+            curveTo(12.736f, 7.064f, 13.566f, 7.175f, 14.343f, 7.397f)
+            curveTo(16.127f, 6.11f, 17.015f, 6.378f, 17.015f, 6.378f)
+            curveTo(17.661f, 7.849f, 17.221f, 9.007f, 17.079f, 9.36f)
+            curveTo(17.871f, 10.041f, 18.247f, 10.905f, 18.247f, 11.964f)
+            curveTo(18.247f, 15.603f, 15.948f, 16.4f, 13.755f, 16.637f)
+            curveTo(14.067f, 16.934f, 14.347f, 17.518f, 14.347f, 18.413f)
+            curveTo(14.347f, 19.71f, 14.335f, 20.758f, 14.335f, 21.093f)
+            curveTo(14.335f, 21.354f, 14.513f, 21.665f, 15.021f, 21.567f)
+            curveTo(18.991f, 20.141f, 21.863f, 16.395f, 21.999f, 12f)
+            curveTo(21.999f, 12f, 22f, 12f, 22f, 12f)
+            curveTo(22f, 6.477f, 17.523f, 2f, 12f, 2f)
+            close()
+        }
+    }.build()
+
+    // QQ 图标
+    val QQ = ImageVector.Builder(
+        name = "qq",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 1024f,
+        viewportHeight = 1024f
+    ).apply {
+        path(
+            fill = SolidColor(Color(0xFF1C1C1E)),
+            stroke = null,
+            pathFillType = PathFillType.NonZero
+        ) {
+            addPathNodes(
+                "M512,64C264.6,64 64,264.6 64,512s200.6,448 448,448 448,-200.6 448,-448S759.4,64 512,64zM651.2,558.1c39.2,0 71,31.8 71,71s-31.8,71 -71,71 -71,-31.8 -71,-71 31.8,-71 71,-71zM372.8,558.1c39.2,0 71,31.8 71,71s-31.8,71 -71,71 -71,-31.8 -71,-71 31.8,-71 71,-71zM512,832c-100.4,0 -187.6,-56.8 -231.2,-140 24.8,2.4 49.6,3.6 74.4,3.6 10.8,0 21.6,-0.4 32.4,-1.2 40.8,52.4 104.4,86 176.4,86s135.6,-33.6 176.4,-86c10.8,0.8 21.6,1.2 32.4,1.2 24.8,0 49.6,-1.2 74.4,-3.6 -43.6,83.2 -130.8,140 -231.2,140zM734.4,468.8c-8.4,-35.6 -30.8,-63.2 -57.6,-77.6 12.8,-41.6 20,-86.4 20,-133.6 0,-158.8 -107.2,-287.6 -239.6,-287.6 -132.4,0 -239.6,128.8 -239.6,287.6 0,47.2 7.2,92 20,133.6 -26.8,14.4 -49.2,42 -57.6,77.6 -4,16.8 -5.6,34.4 -4.4,52.4 1.6,24.8 9.2,49.2 21.6,70.4 6,10 18.8,13.2 28.8,7.2 10,-6 13.2,-18.8 7.2,-28.8 -8.4,-14 -13.6,-30 -15.2,-46.4 -0.8,-12.8 0.4,-25.2 3.6,-37.2 6.8,-28.8 26.4,-51.2 50,-58.8 8.4,-2.8 15.2,-9.6 17.6,-18.4 11.6,-38.4 18,-79.2 18,-121.6 0,-126.4 82.4,-228.8 183.6,-228.8 101.2,0 183.6,102.4 183.6,228.8 0,42.4 6.4,83.2 18,121.6 2.4,8.8 9.2,15.6 17.6,18.4 23.6,7.6 43.2,30 50,58.8 3.2,12 4.4,24.4 3.6,37.2 -1.6,16.4 -6.8,32.4 -15.2,46.4 -6,10 -2.8,22.8 7.2,28.8 10,6 22.8,2.8 28.8,-7.2 12.4,-21.2 20,-45.6 21.6,-70.4 1.2,-18 0.4,-35.6 -3.6,-52.4z"
+            )
+        }
+    }.build()
 }

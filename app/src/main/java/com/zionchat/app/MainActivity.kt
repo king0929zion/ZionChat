@@ -182,6 +182,7 @@ class MainActivity : AppCompatActivity() {
                                 val mcpId = backStackEntry.arguments?.getString("mcpId") ?: ""
                                 McpDetailScreen(navController, mcpId)
                             }
+                            composable("about") { AboutScreen(navController) }
                         }
                     }
                 }
