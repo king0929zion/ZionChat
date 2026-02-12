@@ -2311,8 +2311,12 @@ fun MessageItem(
                 )
             }
 
-            if (!isStreaming && showToolbar) {
-                // Message action buttons (assistant only)
+            // Message action buttons (assistant only) - use AnimatedVisibility for smooth transition
+            androidx.compose.animation.AnimatedVisibility(
+                visible = !isStreaming && showToolbar,
+                enter = fadeIn(animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing)),
+                exit = fadeOut(animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing))
+            ) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                     modifier = Modifier.padding(top = 8.dp)
