@@ -11,12 +11,12 @@ import com.zionchat.app.data.Message
 /**
  * Represents a pending message that hasn't been persisted to DataStore yet
  */
-internal data class PendingMessage(val conversationId: String, val message: Message)
+data class PendingMessage(val conversationId: String, val message: Message)
 
 /**
  * Represents a pending image attachment in the input area
  */
-internal data class PendingImageAttachment(val uri: Uri? = null, val bitmap: Bitmap? = null)
+data class PendingImageAttachment(val uri: Uri? = null, val bitmap: Bitmap? = null)
 
 /**
  * Tool specification for app developer functionality
