@@ -29,6 +29,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.OkHttpClient
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import com.zionchat.app.data.mcp.transport.SseClientTransport
 import com.zionchat.app.data.mcp.transport.StreamableHttpClientTransport
@@ -61,6 +62,14 @@ class McpClient {
             }
             install(SSE)
         }
+
+    // Cache transport and client per MCP server to avoid recreating connections
+    private val transportCache = ConcurrentHashMap<String, TransportHolder>()
+
+    private data class TransportHolder(
+        val transport: AbstractTransport,
+        val client: Client
+    )
 
     suspend fun fetchTools(config: McpConfig): Result<List<McpTool>> {
         return withContext(Dispatchers.IO) {
@@ -117,6 +126,29 @@ class McpClient {
     }
 
     private suspend fun <T> withConnectedClient(config: McpConfig, block: suspend (Client) -> T): T {
+        val cacheKey = "${config.id}@${config.url}@${config.protocol}"
+
+        // Try to get cached transport
+        val holder = transportCache[cacheKey]
+        if (holder != null) {
+            return try {
+                block(holder.client)
+            } catch (e: Exception) {
+                // If there's an error, remove the cached transport and create a new one
+                transportCache.remove(cacheKey)
+                runCatching { holder.transport.close() }
+                createAndUseNewConnection(config, cacheKey, block)
+            }
+        }
+
+        return createAndUseNewConnection(config, cacheKey, block)
+    }
+
+    private suspend fun <T> createAndUseNewConnection(
+        config: McpConfig,
+        cacheKey: String,
+        block: suspend (Client) -> T
+    ): T {
         val transport = buildTransport(config)
         val client =
             Client(
@@ -127,11 +159,39 @@ class McpClient {
             )
 
         client.connect(transport)
+
+        // Cache the transport
+        transportCache[cacheKey] = TransportHolder(transport, client)
+
         return try {
             block(client)
-        } finally {
+        } catch (e: Exception) {
+            // On error, remove from cache
+            transportCache.remove(cacheKey)
             runCatching { transport.close() }
+            throw e
         }
+    }
+
+    /**
+     * Closes and removes the cached connection for a specific MCP server.
+     * Call this when you want to explicitly disconnect.
+     */
+    fun closeConnection(config: McpConfig) {
+        val cacheKey = "${config.id}@${config.url}@${config.protocol}"
+        transportCache.remove(cacheKey)?.let { holder ->
+            runCatching { holder.transport.close() }
+        }
+    }
+
+    /**
+     * Closes all cached connections.
+     */
+    fun closeAllConnections() {
+        transportCache.values.forEach { holder ->
+            runCatching { holder.transport.close() }
+        }
+        transportCache.clear()
     }
 
     private fun buildTransport(config: McpConfig): AbstractTransport {

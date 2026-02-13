@@ -83,6 +83,7 @@ import com.zionchat.app.data.ChatApiClient
 import com.zionchat.app.data.Conversation
 import com.zionchat.app.data.HttpHeader
 import com.zionchat.app.data.Message
+import com.zionchat.app.data.MessageAttachment
 import com.zionchat.app.data.MessageTag
 import com.zionchat.app.data.McpClient
 import com.zionchat.app.data.McpConfig
@@ -416,21 +417,20 @@ fun ChatScreen(navController: NavController) {
                 }
                 encodedImages.add(url)
             }
-
-            val imageMarkdown = encodedImages.joinToString("\n\n") { url -> "![]($url)" }.trim()
-            val userContent =
-                buildString {
-                    val text = trimmed.trim()
-                    if (text.isNotBlank()) append(text)
-                    if (imageMarkdown.isNotBlank()) {
-                        if (isNotEmpty()) append("\n\n")
-                        append(imageMarkdown)
-                    }
-                }.trim()
-            val hasVisionInput =
-                userContent.contains("data:image", ignoreCase = true) ||
-                    Regex("!\\[[^\\]]*\\]\\(([^)]+)\\)").containsMatchIn(userContent)
-            val userMessage = Message(role = "user", content = userContent)
+            
+            // Build attachments list instead of encoding into content
+            val messageAttachments = encodedImages.map { url ->
+                MessageAttachment(url = url)
+            }
+            
+            // Only include text content, attachments will be displayed separately
+            val userContent = trimmed.trim()
+            val hasVisionInput = encodedImages.isNotEmpty()
+            val userMessage = Message(
+                role = "user",
+                content = userContent,
+                attachments = messageAttachments.takeIf { it.isNotEmpty() }
+            )
             pendingMessages = pendingMessages + PendingMessage(safeConversationId, userMessage)
             messageText = ""
             imageAttachments = emptyList()
@@ -2135,6 +2135,74 @@ fun ChatScreen(navController: NavController) {
     }
 }
 
+/**
+ * Dynamic grid layout for message attachments
+ * - 1-3 images: single row
+ * - 4 images: 2x2 grid
+ * - 9 images: 3x3 grid
+ * - Other counts: adaptive grid
+ */
+@Composable
+private fun AttachmentGrid(
+    attachments: List<MessageAttachment>,
+    modifier: Modifier = Modifier
+) {
+    val count = attachments.size
+    val columns = when {
+        count <= 3 -> count
+        count == 4 -> 2
+        count <= 6 -> 3
+        count <= 9 -> 3
+        else -> 4
+    }
+    val rows = (count + columns - 1) / columns
+
+    // Calculate image size based on count
+    val imageSize = when {
+        count == 1 -> 200.dp
+        count <= 3 -> 120.dp
+        count <= 4 -> 100.dp
+        count <= 6 -> 90.dp
+        else -> 80.dp
+    }
+
+    val spacing = 6.dp
+
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(spacing)
+    ) {
+        for (row in 0 until rows) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(spacing)
+            ) {
+                for (col in 0 until columns) {
+                    val index = row * columns + col
+                    if (index < count) {
+                        val attachment = attachments[index]
+                        Box(
+                            modifier = Modifier
+                                .size(imageSize)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(GrayLighter)
+                        ) {
+                            AsyncImage(
+                                model = attachment.url,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    } else {
+                        // Empty placeholder to maintain grid structure
+                        Spacer(modifier = Modifier.size(imageSize))
+                    }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageItem(
@@ -2157,48 +2225,63 @@ fun MessageItem(
     val isUser = message.role == "user"
     if (isUser) {
         val bubbleShape = RoundedCornerShape(18.dp)
+        val attachments = message.attachments.orEmpty()
+
         // User message (right aligned)
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
+            horizontalAlignment = Alignment.End
         ) {
-            Box(
-                modifier = Modifier
-                    .padding(start = 60.dp)
-                    .then(
-                        if (userBubbleSecondaryColor != null) {
-                            Modifier
-                                .background(
-                                    brush = Brush.verticalGradient(
-                                        colors = listOf(userBubbleColor, userBubbleSecondaryColor)
-                                    ),
-                                    shape = bubbleShape
-                                )
-                                .border(
-                                    width = 1.dp,
-                                    color = Color.White.copy(alpha = 0.08f),
-                                    shape = bubbleShape
-                                )
-                        } else {
-                            Modifier.background(userBubbleColor, bubbleShape)
-                        }
-                    )
-                    .combinedClickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { },
-                        onLongClick = { showMenu = true }
-                    )
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
-            ) {
-                MarkdownText(
-                    markdown = message.content,
-                    textStyle = TextStyle(
-                        fontSize = 16.sp,
-                        lineHeight = 24.sp,
-                        color = userBubbleTextColor
-                    )
+            // Show attachments above the bubble
+            if (attachments.isNotEmpty()) {
+                AttachmentGrid(
+                    attachments = attachments,
+                    modifier = Modifier.padding(bottom = 8.dp, end = 60.dp)
                 )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(start = 60.dp)
+                        .then(
+                            if (userBubbleSecondaryColor != null) {
+                                Modifier
+                                    .background(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(userBubbleColor, userBubbleSecondaryColor)
+                                        ),
+                                        shape = bubbleShape
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = Color.White.copy(alpha = 0.08f),
+                                        shape = bubbleShape
+                                    )
+                            } else {
+                                Modifier.background(userBubbleColor, bubbleShape)
+                            }
+                        )
+                        .combinedClickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { },
+                            onLongClick = { showMenu = true }
+                        )
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                ) {
+                    MarkdownText(
+                        markdown = message.content,
+                        textStyle = TextStyle(
+                            fontSize = 16.sp,
+                            lineHeight = 24.sp,
+                            color = userBubbleTextColor
+                        )
+                    )
+                }
             }
         }
     } else {

@@ -59,7 +59,15 @@ data class Message(
     val content: String,
     val reasoning: String? = null,
     val tags: List<MessageTag>? = null,
+    val attachments: List<MessageAttachment>? = null,
     val timestamp: Long = System.currentTimeMillis()
+)
+
+data class MessageAttachment(
+    val id: String = UUID.randomUUID().toString(),
+    val type: String = "image",
+    val url: String,  // base64 data URL or remote URL
+    val thumbnailUrl: String? = null
 )
 
 data class MessageTag(
