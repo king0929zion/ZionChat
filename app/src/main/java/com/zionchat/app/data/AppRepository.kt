@@ -140,13 +140,30 @@ class AppRepository(context: Context) {
 
         val tags = message.tags.orEmpty().mapNotNull(::sanitizeTag).takeIf { it.isNotEmpty() }
         val reasoning = message.reasoning?.takeIf { it.isNotBlank() }
+        val attachments = message.attachments.orEmpty().mapNotNull(::sanitizeAttachment).takeIf { it.isNotEmpty() }
         return Message(
             id = id,
             role = role,
             content = content,
             reasoning = reasoning,
             tags = tags,
+            attachments = attachments,
             timestamp = timestamp
+        )
+    }
+
+    private fun sanitizeAttachment(attachment: MessageAttachment?): MessageAttachment? {
+        if (attachment == null) return null
+        val url = safeTrim(attachment.url)
+        if (url.isBlank()) return null
+        val id = safeTrim(attachment.id).ifBlank { UUID.randomUUID().toString() }
+        val type = safeTrim(attachment.type).ifBlank { "image" }
+        val thumbnailUrl = attachment.thumbnailUrl?.takeIf { it.isNotBlank() }
+        return MessageAttachment(
+            id = id,
+            type = type,
+            url = url,
+            thumbnailUrl = thumbnailUrl
         )
     }
 
