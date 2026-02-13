@@ -11,8 +11,8 @@ android {
         applicationId "com.zionchat.app"
         minSdk 24
         targetSdk 36
-        versionCode 163
-        versionName "0.18.130"
+        versionCode 164
+        versionName "0.18.131"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

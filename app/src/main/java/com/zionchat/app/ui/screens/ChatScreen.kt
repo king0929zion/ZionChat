@@ -325,7 +325,9 @@ fun ChatScreen(navController: NavController) {
 
     // 发送消息时强制滚动到底部
     LaunchedEffect(scrollToBottomToken) {
-        if (latestLocalMessagesSize > 0) {
+        if (scrollToBottomToken > 0 && latestLocalMessagesSize > 0) {
+            // Small delay to ensure localMessages is updated
+            delay(50)
             listState.animateScrollToItem(latestLocalMessagesSize - 1, scrollOffset = Int.MAX_VALUE)
         }
     }
