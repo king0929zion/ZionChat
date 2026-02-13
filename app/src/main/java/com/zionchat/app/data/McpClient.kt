@@ -177,7 +177,7 @@ class McpClient {
      * Closes and removes the cached connection for a specific MCP server.
      * Call this when you want to explicitly disconnect.
      */
-    fun closeConnection(config: McpConfig) {
+    suspend fun closeConnection(config: McpConfig) {
         val cacheKey = "${config.id}@${config.url}@${config.protocol}"
         transportCache.remove(cacheKey)?.let { holder ->
             runCatching { holder.transport.close() }
@@ -187,7 +187,7 @@ class McpClient {
     /**
      * Closes all cached connections.
      */
-    fun closeAllConnections() {
+    suspend fun closeAllConnections() {
         transportCache.values.forEach { holder ->
             runCatching { holder.transport.close() }
         }
