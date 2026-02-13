@@ -714,7 +714,7 @@ class ChatApiClient {
                             "user" -> "user"
                             else -> null
                         } ?: return@mapNotNull null
-                    mapOf("role" to role, "parts" to toGeminiParts(message.content))
+                    mapOf("role" to role, "parts" to toGeminiParts(message.content, message.attachments))
                 }
 
         val requestPayload =
@@ -827,7 +827,7 @@ class ChatApiClient {
                             "user" -> "user"
                             else -> null
                         } ?: return@mapNotNull null
-                    mapOf("role" to role, "parts" to toGeminiParts(message.content))
+                    mapOf("role" to role, "parts" to toGeminiParts(message.content, message.attachments))
                 }
 
         val requestPayload = mutableMapOf<String, Any>("contents" to contents)
@@ -1178,7 +1178,7 @@ class ChatApiClient {
         return text to urls
     }
 
-    private fun toGeminiParts(content: String): List<Map<String, Any>> {
+    private fun toGeminiParts(content: String, attachments: List<MessageAttachment>? = null): List<Map<String, Any>> {
         val (text, images) = extractMarkdownImages(content)
         val parts = mutableListOf<Map<String, Any>>()
 
@@ -1186,6 +1186,19 @@ class ChatApiClient {
             parts.add(mapOf("text" to text))
         }
 
+        // Add attachments (base64 data URLs or remote URLs)
+        attachments?.forEach { attachment ->
+            val url = attachment.url
+            val inline = parseInlineDataPart(url)
+            if (inline != null) {
+                parts.add(inline)
+            } else {
+                // Best-effort fallback: keep the URL in text form.
+                parts.add(mapOf("text" to url))
+            }
+        }
+
+        // Also process any markdown images in content
         images.forEach { url ->
             val inline = parseInlineDataPart(url)
             if (inline != null) {
