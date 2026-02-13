@@ -2145,7 +2145,8 @@ fun ChatScreen(navController: NavController) {
 @Composable
 private fun AttachmentGrid(
     attachments: List<MessageAttachment>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    alignEnd: Boolean = false
 ) {
     val count = attachments.size
     val columns = when {
@@ -2174,28 +2175,24 @@ private fun AttachmentGrid(
     ) {
         for (row in 0 until rows) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(spacing)
+                horizontalArrangement = if (alignEnd) Arrangement.spacedBy(spacing, Alignment.End) else Arrangement.spacedBy(spacing)
             ) {
-                for (col in 0 until columns) {
-                    val index = row * columns + col
-                    if (index < count) {
-                        val attachment = attachments[index]
-                        Box(
-                            modifier = Modifier
-                                .size(imageSize)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(GrayLighter)
-                        ) {
-                            AsyncImage(
-                                model = attachment.url,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-                    } else {
-                        // Empty placeholder to maintain grid structure
-                        Spacer(modifier = Modifier.size(imageSize))
+                val startIndex = row * columns
+                val endIndex = minOf(startIndex + columns, count)
+                for (index in startIndex until endIndex) {
+                    val attachment = attachments[index]
+                    Box(
+                        modifier = Modifier
+                            .size(imageSize)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(GrayLighter)
+                    ) {
+                        AsyncImage(
+                            model = attachment.url,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
                     }
                 }
             }
@@ -2236,7 +2233,8 @@ fun MessageItem(
             if (attachments.isNotEmpty()) {
                 AttachmentGrid(
                     attachments = attachments,
-                    modifier = Modifier.padding(bottom = 8.dp, end = 60.dp)
+                    modifier = Modifier.padding(bottom = 8.dp, end = 60.dp),
+                    alignEnd = true
                 )
             }
 
