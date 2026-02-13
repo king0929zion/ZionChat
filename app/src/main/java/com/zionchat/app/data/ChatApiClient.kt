@@ -567,14 +567,26 @@ class ChatApiClient {
                     if (role == "assistant") {
                         listOf(mapOf("type" to "output_text", "text" to message.content))
                     } else {
-                        val (text, images) = extractMarkdownImages(message.content)
                         val parts = mutableListOf<Map<String, Any>>()
+
+                        // Handle text content (extract images from markdown first for backward compatibility)
+                        val (text, markdownImages) = extractMarkdownImages(message.content)
                         if (text.isNotBlank()) {
                             parts.add(mapOf("type" to "input_text", "text" to text))
                         }
-                        images.forEach { url ->
+
+                        // Add images from markdown content
+                        markdownImages.forEach { url ->
                             parts.add(mapOf("type" to "input_image", "image_url" to url))
                         }
+
+                        // Add images from message attachments (new way)
+                        message.attachments?.forEach { attachment ->
+                            if (attachment.type == "image" && attachment.url.isNotBlank()) {
+                                parts.add(mapOf("type" to "input_image", "image_url" to attachment.url))
+                            }
+                        }
+
                         if (parts.isEmpty()) {
                             parts.add(mapOf("type" to "input_text", "text" to ""))
                         }
@@ -1124,15 +1136,21 @@ class ChatApiClient {
             if (role != "user") {
                 mapOf("role" to role, "content" to message.content)
             } else {
-                val (text, images) = extractMarkdownImages(message.content)
-                if (images.isEmpty()) {
+                // First get images from attachments (new approach)
+                val attachmentImages = message.attachments?.mapNotNull { it.url }.orEmpty()
+                // Also extract from markdown content (backward compatibility)
+                val (text, markdownImages) = extractMarkdownImages(message.content)
+                // Combine both sources of images
+                val allImages = (attachmentImages + markdownImages).distinct()
+
+                if (allImages.isEmpty()) {
                     mapOf("role" to role, "content" to message.content)
                 } else {
                     val parts = mutableListOf<Map<String, Any>>()
                     if (text.isNotBlank()) {
                         parts.add(mapOf("type" to "text", "text" to text))
                     }
-                    images.forEach { url ->
+                    allImages.forEach { url ->
                         parts.add(mapOf("type" to "image_url", "image_url" to mapOf("url" to url)))
                     }
                     mapOf("role" to role, "content" to parts)
