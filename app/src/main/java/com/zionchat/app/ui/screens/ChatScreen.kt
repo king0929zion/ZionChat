@@ -326,11 +326,15 @@ fun ChatScreen(navController: NavController) {
     // 发送消息时滚动到用户消息位置（显示在屏幕顶部）
     LaunchedEffect(scrollToBottomToken) {
         if (scrollToBottomToken > 0 && latestLocalMessagesSize > 0) {
-            // Small delay to ensure localMessages is updated
-            delay(50)
-            // Scroll to the user message (second to last) and show it at top
-            val userMessageIndex = (latestLocalMessagesSize - 2).coerceAtLeast(0)
-            listState.scrollToItem(userMessageIndex, scrollOffset = 0)
+            // Delay to ensure localMessages is updated
+            delay(100)
+            // Scroll to show user message at top of screen
+            // If there's AI message (streaming), scroll to user message (second to last)
+            // Otherwise scroll to last message (user message)
+            val targetIndex = if (latestLocalMessagesSize >= 2) latestLocalMessagesSize - 2 else latestLocalMessagesSize - 1
+            if (targetIndex >= 0) {
+                listState.scrollToItem(targetIndex, scrollOffset = 0)
+            }
         }
     }
 
@@ -342,10 +346,11 @@ fun ChatScreen(navController: NavController) {
             if (convoId.isNotBlank() && convoId == streamingConversationId && latestShouldAutoScroll) {
                 val lastIndex = latestLocalMessagesSize - 1
                 if (lastIndex >= 0) {
-                    listState.scrollToItem(lastIndex, scrollOffset = 0)
+                    // Scroll to show AI message at bottom
+                    listState.scrollToItem(lastIndex, scrollOffset = Int.MAX_VALUE)
                 }
             }
-            delay(120)
+            delay(150)
         }
     }
 
@@ -2173,31 +2178,35 @@ private fun AttachmentGrid(
 
     val spacing = 6.dp
 
-    Column(
+    // Use Box with Alignment.End for right alignment
+    Box(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(spacing),
-        horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start
+        contentAlignment = if (alignEnd) Alignment.CenterEnd else Alignment.CenterStart
     ) {
-        for (row in 0 until rows) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(spacing)
-            ) {
-                val startIndex = row * columns
-                val endIndex = minOf(startIndex + columns, count)
-                for (index in startIndex until endIndex) {
-                    val attachment = attachments[index]
-                    Box(
-                        modifier = Modifier
-                            .size(imageSize)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(GrayLighter)
-                    ) {
-                        AsyncImage(
-                            model = attachment.url,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
+        Column(
+            verticalArrangement = Arrangement.spacedBy(spacing)
+        ) {
+            for (row in 0 until rows) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(spacing)
+                ) {
+                    val startIndex = row * columns
+                    val endIndex = minOf(startIndex + columns, count)
+                    for (index in startIndex until endIndex) {
+                        val attachment = attachments[index]
+                        Box(
+                            modifier = Modifier
+                                .size(imageSize)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(GrayLighter)
+                        ) {
+                            AsyncImage(
+                                model = attachment.url,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
                     }
                 }
             }
