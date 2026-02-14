@@ -328,7 +328,7 @@ fun ChatScreen(navController: NavController) {
         if (scrollToBottomToken > 0 && latestLocalMessagesSize > 0) {
             // Small delay to ensure localMessages is updated
             delay(50)
-            listState.animateScrollToItem(latestLocalMessagesSize - 1, scrollOffset = Int.MAX_VALUE)
+            listState.scrollToItem(latestLocalMessagesSize - 1, scrollOffset = Int.MAX_VALUE)
         }
     }
 
@@ -2173,11 +2173,12 @@ private fun AttachmentGrid(
 
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(spacing)
+        verticalArrangement = Arrangement.spacedBy(spacing),
+        horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start
     ) {
         for (row in 0 until rows) {
             Row(
-                horizontalArrangement = if (alignEnd) Arrangement.spacedBy(spacing, Alignment.End) else Arrangement.spacedBy(spacing)
+                horizontalArrangement = Arrangement.spacedBy(spacing)
             ) {
                 val startIndex = row * columns
                 val endIndex = minOf(startIndex + columns, count)
