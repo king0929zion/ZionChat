@@ -323,16 +323,18 @@ fun ChatScreen(navController: NavController) {
         }
     }
 
-    // 发送消息时强制滚动到底部
+    // 发送消息时滚动到用户消息位置（显示在屏幕顶部）
     LaunchedEffect(scrollToBottomToken) {
         if (scrollToBottomToken > 0 && latestLocalMessagesSize > 0) {
             // Small delay to ensure localMessages is updated
             delay(50)
-            listState.scrollToItem(latestLocalMessagesSize - 1, scrollOffset = Int.MAX_VALUE)
+            // Scroll to the user message (second to last) and show it at top
+            val userMessageIndex = (latestLocalMessagesSize - 2).coerceAtLeast(0)
+            listState.scrollToItem(userMessageIndex, scrollOffset = 0)
         }
     }
 
-    // 流式过程中节流保持到底部（仅当用户未手动上滑）
+    // 流式过程中保持显示最新内容
     LaunchedEffect(isStreaming, streamingMessageId, streamingConversationId) {
         if (!isStreaming) return@LaunchedEffect
         while (isStreaming) {
@@ -340,7 +342,7 @@ fun ChatScreen(navController: NavController) {
             if (convoId.isNotBlank() && convoId == streamingConversationId && latestShouldAutoScroll) {
                 val lastIndex = latestLocalMessagesSize - 1
                 if (lastIndex >= 0) {
-                    listState.scrollToItem(lastIndex, scrollOffset = Int.MAX_VALUE)
+                    listState.scrollToItem(lastIndex, scrollOffset = 0)
                 }
             }
             delay(120)
@@ -2172,7 +2174,7 @@ private fun AttachmentGrid(
     val spacing = 6.dp
 
     Column(
-        modifier = modifier,
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(spacing),
         horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start
     ) {
