@@ -2167,16 +2167,15 @@ private fun AttachmentGrid(
 
     val spacing = 6.dp
 
-    // Column with proper alignment
+    // Column with proper alignment - must fill max width for alignment to work
     Column(
-        modifier = modifier,
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(spacing),
         horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start
     ) {
         for (row in 0 until rows) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = if (alignEnd) Arrangement.End else Arrangement.Start
+                horizontalArrangement = Arrangement.spacedBy(spacing)
             ) {
                 val startIndex = row * columns
                 val endIndex = minOf(startIndex + columns, count)
@@ -2184,7 +2183,6 @@ private fun AttachmentGrid(
                     val attachment = attachments[index]
                     Box(
                         modifier = Modifier
-                            .padding(if (index > startIndex) PaddingValues(start = spacing) else PaddingValues(0.dp))
                             .size(imageSize)
                             .clip(RoundedCornerShape(12.dp))
                             .background(GrayLighter)
