@@ -2167,11 +2167,10 @@ private fun AttachmentGrid(
 
     val spacing = 6.dp
 
-    // Column with proper alignment - must fill max width for alignment to work
+    // Column wrap content - alignment controlled by parent
     Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(spacing),
-        horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(spacing)
     ) {
         for (row in 0 until rows) {
             Row(
