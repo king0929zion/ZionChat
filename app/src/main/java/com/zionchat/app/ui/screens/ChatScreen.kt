@@ -308,33 +308,24 @@ fun ChatScreen(navController: NavController) {
     var lastAutoScrolledConversationId by remember { mutableStateOf<String?>(null) }
     var scrollToBottomToken by remember { mutableIntStateOf(0) }
 
-    // 进入新会话时直接定位到底部；新消息仅在“接近底部”时自动滚动，避免跳动
-    LaunchedEffect(effectiveConversationId, localMessages.size) {
+    // 进入新会话时直接定位到底部
+    LaunchedEffect(effectiveConversationId) {
         val convoId = effectiveConversationId?.trim().orEmpty()
         if (convoId.isBlank() || localMessages.isEmpty()) return@LaunchedEffect
 
         if (lastAutoScrolledConversationId != convoId) {
             lastAutoScrolledConversationId = convoId
-            listState.scrollToItem(localMessages.size - 1, scrollOffset = Int.MAX_VALUE)
-            return@LaunchedEffect
-        }
-        if (shouldAutoScroll) {
-            listState.animateScrollToItem(localMessages.size - 1, scrollOffset = Int.MAX_VALUE)
+            if (localMessages.isNotEmpty()) {
+                listState.scrollToItem(localMessages.size - 1, scrollOffset = Int.MAX_VALUE)
+            }
         }
     }
 
     // 发送消息时滚动到用户消息位置（显示在屏幕顶部）
-    LaunchedEffect(scrollToBottomToken) {
-        if (scrollToBottomToken > 0 && latestLocalMessagesSize > 0) {
-            // Delay to ensure localMessages is updated
-            delay(100)
-            // Scroll to show user message at top of screen
-            // If there's AI message (streaming), scroll to user message (second to last)
-            // Otherwise scroll to last message (user message)
-            val targetIndex = if (latestLocalMessagesSize >= 2) latestLocalMessagesSize - 2 else latestLocalMessagesSize - 1
-            if (targetIndex >= 0) {
-                listState.scrollToItem(targetIndex, scrollOffset = 0)
-            }
+    LaunchedEffect(scrollToBottomToken, localMessages.size) {
+        if (scrollToBottomToken > 0 && localMessages.isNotEmpty()) {
+            // 滚动到最后一项，使用 scrollOffset = 0 让它显示在屏幕顶部
+            listState.scrollToItem(localMessages.size - 1, scrollOffset = 0)
         }
     }
 
@@ -346,8 +337,8 @@ fun ChatScreen(navController: NavController) {
             if (convoId.isNotBlank() && convoId == streamingConversationId && latestShouldAutoScroll) {
                 val lastIndex = latestLocalMessagesSize - 1
                 if (lastIndex >= 0) {
-                    // Scroll to show AI message at bottom
-                    listState.scrollToItem(lastIndex, scrollOffset = Int.MAX_VALUE)
+                    // 滚动到最后一项，显示在顶部
+                    listState.scrollToItem(lastIndex, scrollOffset = 0)
                 }
             }
             delay(150)
@@ -2178,35 +2169,31 @@ private fun AttachmentGrid(
 
     val spacing = 6.dp
 
-    // Use Box with Alignment.End for right alignment
-    Box(
-        modifier = modifier.fillMaxWidth(),
-        contentAlignment = if (alignEnd) Alignment.CenterEnd else Alignment.CenterStart
+    // Simple Column for attachments, alignment handled by parent
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(spacing)
     ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(spacing)
-        ) {
-            for (row in 0 until rows) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(spacing)
-                ) {
-                    val startIndex = row * columns
-                    val endIndex = minOf(startIndex + columns, count)
-                    for (index in startIndex until endIndex) {
-                        val attachment = attachments[index]
-                        Box(
-                            modifier = Modifier
-                                .size(imageSize)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(GrayLighter)
-                        ) {
-                            AsyncImage(
-                                model = attachment.url,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
+        for (row in 0 until rows) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(spacing)
+            ) {
+                val startIndex = row * columns
+                val endIndex = minOf(startIndex + columns, count)
+                for (index in startIndex until endIndex) {
+                    val attachment = attachments[index]
+                    Box(
+                        modifier = Modifier
+                            .size(imageSize)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(GrayLighter)
+                    ) {
+                        AsyncImage(
+                            model = attachment.url,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
                     }
                 }
             }
