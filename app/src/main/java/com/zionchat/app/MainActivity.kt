@@ -75,7 +75,8 @@ class MainActivity : AppCompatActivity() {
                         LocalAppRepository provides appContainer.repository,
                         LocalChatApiClient provides appContainer.chatApiClient,
                         LocalOAuthClient provides appContainer.oauthClient,
-                        LocalProviderAuthManager provides appContainer.providerAuthManager
+                        LocalProviderAuthManager provides appContainer.providerAuthManager,
+                        LocalWebHostingService provides appContainer.webHostingService
                     ) {
                         val appLanguage by appContainer.repository.appLanguageFlow.collectAsState(initial = "__pending__")
                         LaunchedEffect(appLanguage) {
@@ -185,6 +186,7 @@ class MainActivity : AppCompatActivity() {
                                 McpDetailScreen(navController, mcpId)
                             }
                             composable("about") { AboutScreen(navController) }
+                            composable("web_hosting") { WebHostingScreen(navController) }
                         }
                     }
                 }

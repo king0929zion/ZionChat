@@ -6,12 +6,15 @@ import com.zionchat.app.data.AppRepository
 import com.zionchat.app.data.ChatApiClient
 import com.zionchat.app.data.OAuthClient
 import com.zionchat.app.data.ProviderAuthManager
+import com.zionchat.app.data.VercelDeployService
+import com.zionchat.app.data.WebHostingService
 
 class AppContainer(context: Context) {
     val repository = AppRepository(context)
     val chatApiClient = ChatApiClient()
     val oauthClient = OAuthClient()
     val providerAuthManager = ProviderAuthManager(repository, oauthClient)
+    val webHostingService: WebHostingService = VercelDeployService()
 }
 
 val LocalAppRepository = staticCompositionLocalOf<AppRepository> {
@@ -28,4 +31,8 @@ val LocalOAuthClient = staticCompositionLocalOf<OAuthClient> {
 
 val LocalProviderAuthManager = staticCompositionLocalOf<ProviderAuthManager> {
     error("LocalProviderAuthManager not provided")
+}
+
+val LocalWebHostingService = staticCompositionLocalOf<WebHostingService> {
+    error("LocalWebHostingService not provided")
 }

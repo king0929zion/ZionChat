@@ -55,6 +55,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,9 +75,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
 import com.zionchat.app.LocalAppRepository
+import com.zionchat.app.LocalWebHostingService
 import com.zionchat.app.R
 import com.zionchat.app.data.AppAutomationTask
 import com.zionchat.app.data.SavedApp
+import com.zionchat.app.data.WebHostingConfig
 import com.zionchat.app.ui.components.pressableScale
 import com.zionchat.app.ui.icons.AppIcons
 import com.zionchat.app.ui.theme.Background
@@ -85,6 +88,7 @@ import com.zionchat.app.ui.theme.TextPrimary
 import com.zionchat.app.ui.theme.TextSecondary
 import com.zionchat.app.ui.theme.Surface as SurfaceColor
 import androidx.compose.ui.res.stringResource
+import kotlinx.coroutines.launch
 
 private data class AppItemUi(
     val name: String,
@@ -106,7 +110,11 @@ private enum class AppIconStyle {
 @Composable
 fun AppsScreen(navController: NavController) {
     val repository = LocalAppRepository.current
+    val webHostingService = LocalWebHostingService.current
+    val scope = rememberCoroutineScope()
     val savedApps by repository.savedAppsFlow.collectAsState(initial = emptyList())
+    val savedAppVersions by repository.savedAppVersionsFlow.collectAsState(initial = emptyList())
+    val webHostingConfig by repository.webHostingConfigFlow.collectAsState(initial = WebHostingConfig())
     var selectedSavedApp by remember { mutableStateOf<SavedApp?>(null) }
 
     Scaffold(
@@ -197,6 +205,44 @@ fun AppsScreen(navController: NavController) {
                 )
                 selectedSavedApp = null
                 navController.navigate("chat")
+            },
+            onRedeploy = { targetApp ->
+                if (!webHostingConfig.autoDeploy || webHostingConfig.token.isBlank()) {
+                    return@SavedAppPreviewDialog
+                }
+                scope.launch {
+                    webHostingService.deployApp(
+                        appId = targetApp.id,
+                        html = targetApp.html,
+                        config = webHostingConfig
+                    ).onSuccess { url ->
+                        val updated =
+                            targetApp.copy(
+                                deployUrl = url.trim(),
+                                updatedAt = System.currentTimeMillis()
+                            )
+                        repository.upsertSavedApp(updated, note = "Manual redeploy")
+                        selectedSavedApp = updated
+                    }
+                }
+            },
+            versionCount = savedAppVersions.count { version -> version.appId == app.id },
+            onRestorePreviousVersion = { targetApp ->
+                scope.launch {
+                    val versions =
+                        repository.listSavedAppVersions(targetApp.id)
+                            .sortedByDescending { it.versionCode }
+                    if (versions.size < 2) return@launch
+                    val previousCode = versions[1].versionCode
+                    val restored =
+                        repository.restoreSavedAppVersion(
+                            appId = targetApp.id,
+                            versionCode = previousCode
+                        )
+                    if (restored != null) {
+                        selectedSavedApp = restored
+                    }
+                }
             }
         )
     }
@@ -306,7 +352,11 @@ private fun SavedAppRow(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = app.description.ifBlank { stringResource(R.string.apps_saved_from_chat) },
+                text = buildString {
+                    append(app.description.ifBlank { stringResource(R.string.apps_saved_from_chat) })
+                    append(" • ")
+                    append(app.versionName.ifBlank { "v${app.versionCode}" })
+                },
                 fontSize = 13.sp,
                 color = TextSecondary,
                 maxLines = 1,
@@ -350,7 +400,10 @@ private fun SavedAppPreviewDialog(
     app: SavedApp,
     onDismiss: () -> Unit,
     onRequestEdit: (String) -> Unit,
-    onRequestAutoFix: (String) -> Unit
+    onRequestAutoFix: (String) -> Unit,
+    onRedeploy: (SavedApp) -> Unit,
+    versionCount: Int,
+    onRestorePreviousVersion: (SavedApp) -> Unit
 ) {
     var chromeColor by remember(app.id, app.html) {
         mutableStateOf(inferAppChromeColorFromHtml(app.html) ?: Color.White)
@@ -360,7 +413,8 @@ private fun SavedAppPreviewDialog(
     var debugIssue by remember(app.id) { mutableStateOf<String?>(null) }
     var issueFingerprints by remember(app.id) { mutableStateOf(setOf<String>()) }
     val baseUrl = remember(app.id) { "https://saved-app.zionchat.local/app/${app.id}/" }
-    val contentSignature = remember(app.id, app.html) { "${app.id}:${app.html.hashCode()}" }
+    val deployUrl = remember(app.deployUrl) { app.deployUrl?.trim()?.takeIf { it.isNotBlank() } }
+    val contentSignature = remember(app.id, app.html, deployUrl) { "${app.id}:${app.html.hashCode()}:${deployUrl.orEmpty()}" }
     val controlsBackground =
         if (chromeColor.luminance() < 0.45f) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.08f)
     val controlsTint =
@@ -471,13 +525,17 @@ private fun SavedAppPreviewDialog(
                 update = { webView ->
                     if (webView.tag != contentSignature) {
                         webView.tag = contentSignature
-                        webView.loadDataWithBaseURL(
-                            baseUrl,
-                            app.html,
-                            "text/html",
-                            "utf-8",
-                            null
-                        )
+                        if (!deployUrl.isNullOrBlank()) {
+                            webView.loadUrl(deployUrl)
+                        } else {
+                            webView.loadDataWithBaseURL(
+                                baseUrl,
+                                app.html,
+                                "text/html",
+                                "utf-8",
+                                null
+                            )
+                        }
                     }
                 }
             )
@@ -506,19 +564,69 @@ private fun SavedAppPreviewDialog(
                         modifier = Modifier.size(18.dp)
                     )
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(controlsBackground, CircleShape)
+                            .pressableScale(pressedScale = 0.95f, onClick = { onRedeploy(app) }),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Refresh,
+                            contentDescription = null,
+                            tint = controlsTint,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(controlsBackground, CircleShape)
+                            .pressableScale(pressedScale = 0.95f, onClick = { showEditDialog = true }),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Edit,
+                            contentDescription = null,
+                            tint = controlsTint,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(top = 54.dp)
+                    .background(controlsBackground, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = "${app.versionName.ifBlank { "v${app.versionCode}" }} • $versionCount versions",
+                    color = controlsTint,
+                    fontSize = 12.sp
+                )
+            }
+
+            if (versionCount > 1) {
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(controlsBackground, CircleShape)
-                        .pressableScale(pressedScale = 0.95f, onClick = { showEditDialog = true }),
-                    contentAlignment = Alignment.Center
+                        .align(Alignment.TopEnd)
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .padding(top = 54.dp, end = 12.dp)
+                        .background(controlsBackground, RoundedCornerShape(12.dp))
+                        .pressableScale(pressedScale = 0.98f, onClick = { onRestorePreviousVersion(app) })
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
-                    Icon(
-                        imageVector = AppIcons.Edit,
-                        contentDescription = null,
-                        tint = controlsTint,
-                        modifier = Modifier.size(18.dp)
+                    Text(
+                        text = "Restore previous",
+                        color = controlsTint,
+                        fontSize = 12.sp
                     )
                 }
             }

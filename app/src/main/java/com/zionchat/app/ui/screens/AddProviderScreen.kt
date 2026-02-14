@@ -55,16 +55,28 @@ fun AddProviderScreen(
     var selectedIconAsset by remember { mutableStateOf("") }
 
     val providers by repository.providersFlow.collectAsState(initial = emptyList())
+    val presetData = remember(preset) { findProviderPreset(preset) }
+    val normalizedPresetId = remember(presetData?.id) { presetData?.id?.trim()?.lowercase()?.takeIf { it.isNotBlank() } }
     val activeProviderId = remember(providerId) { providerId?.takeIf { it.isNotBlank() } }
     val existingProvider = remember(providers, activeProviderId) {
         activeProviderId?.let { id -> providers.firstOrNull { it.id == id } }
     }
-    val editingProviderId = remember(activeProviderId) { activeProviderId ?: UUID.randomUUID().toString() }
+    val matchedPresetProvider = remember(providers, activeProviderId, normalizedPresetId) {
+        if (activeProviderId != null || normalizedPresetId.isNullOrBlank()) {
+            null
+        } else {
+            providers.firstOrNull { provider ->
+                provider.presetId?.trim()?.lowercase() == normalizedPresetId
+            }
+        }
+    }
+    val editingProvider = existingProvider ?: matchedPresetProvider
+    val editingProviderId = remember(activeProviderId, matchedPresetProvider?.id) {
+        activeProviderId ?: matchedPresetProvider?.id ?: UUID.randomUUID().toString()
+    }
 
-    val presetData = remember(preset) { findProviderPreset(preset) }
-
-    LaunchedEffect(existingProvider?.id) {
-        existingProvider?.let {
+    LaunchedEffect(editingProvider?.id) {
+        editingProvider?.let {
             providerName = it.name
             apiKey = it.apiKey
             apiUrl = it.apiUrl
@@ -73,8 +85,8 @@ fun AddProviderScreen(
         }
     }
 
-    LaunchedEffect(presetData?.id, existingProvider?.id) {
-        if (existingProvider != null) return@LaunchedEffect
+    LaunchedEffect(presetData?.id, editingProvider?.id) {
+        if (editingProvider != null) return@LaunchedEffect
         presetData?.let {
             providerName = it.name
             apiUrl = it.apiUrl
@@ -84,8 +96,8 @@ fun AddProviderScreen(
     }
 
     // Auto-save only when editing existing provider, not when creating new
-    LaunchedEffect(editingProviderId, existingProvider?.presetId, presetData?.id) {
-        if (existingProvider == null) return@LaunchedEffect // Don't auto-save for new providers
+    LaunchedEffect(editingProviderId, editingProvider?.presetId, presetData?.id) {
+        if (editingProvider == null) return@LaunchedEffect // Don't auto-save for new providers
 
         snapshotFlow {
             listOf(
@@ -105,8 +117,8 @@ fun AddProviderScreen(
                 repository.upsertProvider(
                     ProviderConfig(
                         id = editingProviderId,
-                        presetId = existingProvider.presetId ?: presetData?.id,
-                        iconAsset = selectedIconAsset.ifBlank { existingProvider.iconAsset ?: presetData?.iconAsset },
+                        presetId = editingProvider.presetId ?: presetData?.id,
+                        iconAsset = selectedIconAsset.ifBlank { editingProvider.iconAsset ?: presetData?.iconAsset },
                         name = providerName,
                         type = selectedType,
                         apiUrl = apiUrl,
@@ -135,7 +147,7 @@ fun AddProviderScreen(
                             scope.launch {
                                 val normalizedIconAsset = selectedIconAsset.trim().takeIf { it.isNotBlank() }
                                 repository.upsertProvider(
-                                    existingProvider?.let { existing ->
+                                    editingProvider?.let { existing ->
                                         existing.copy(
                                             name = providerName.trim(),
                                             type = selectedType.trim(),
@@ -145,7 +157,8 @@ fun AddProviderScreen(
                                             headers = emptyList()
                                         )
                                     } ?: ProviderConfig(
-                                        presetId = preset?.takeIf { it.isNotBlank() },
+                                        id = editingProviderId,
+                                        presetId = presetData?.id ?: preset?.trim()?.takeIf { it.isNotBlank() },
                                         iconAsset = normalizedIconAsset,
                                         name = providerName.trim(),
                                         type = selectedType.trim(),
@@ -317,8 +330,8 @@ fun AddProviderScreen(
                                 repository.upsertProvider(
                                     ProviderConfig(
                                         id = editingProviderId,
-                                        presetId = existingProvider?.presetId ?: presetData?.id,
-                                        iconAsset = selectedIconAsset.ifBlank { existingProvider?.iconAsset ?: presetData?.iconAsset },
+                                        presetId = editingProvider?.presetId ?: presetData?.id,
+                                        iconAsset = selectedIconAsset.ifBlank { editingProvider?.iconAsset ?: presetData?.iconAsset },
                                         name = providerName,
                                         type = selectedType,
                                         apiUrl = apiUrl,

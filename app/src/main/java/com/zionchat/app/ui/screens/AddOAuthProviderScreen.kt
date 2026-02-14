@@ -78,8 +78,18 @@ fun AddOAuthProviderScreen(
     }
     val existingProviderId = remember(providerId) { providerId?.trim()?.takeIf { it.isNotBlank() } }
     val providers by repository.providersFlow.collectAsState(initial = emptyList())
-    val existingProvider = remember(providers, existingProviderId) {
-        existingProviderId?.let { id -> providers.firstOrNull { it.id == id } }
+    val matchedBuiltInProvider = remember(providers, existingProviderId, lockedProviderId) {
+        if (!existingProviderId.isNullOrBlank() || lockedProviderId.isNullOrBlank()) {
+            null
+        } else {
+            providers.firstOrNull { provider ->
+                provider.presetId?.trim()?.equals(lockedProviderId, ignoreCase = true) == true ||
+                    provider.oauthProvider?.trim()?.equals(lockedProviderId, ignoreCase = true) == true
+            }
+        }
+    }
+    val existingProvider = remember(providers, existingProviderId, matchedBuiltInProvider?.id) {
+        existingProviderId?.let { id -> providers.firstOrNull { it.id == id } } ?: matchedBuiltInProvider
     }
 
     var providerName by remember { mutableStateOf("") }
@@ -236,6 +246,27 @@ fun AddOAuthProviderScreen(
                         isWorking = true
                         errorText = null
                         scope.launch {
+                            val reusableProvider =
+                                connectedProvider
+                                    ?: existingProvider
+                                    ?: when (start.provider) {
+                                        OAuthClient.OAuthProvider.Codex -> {
+                                            providers.firstOrNull { provider ->
+                                                provider.presetId?.trim()?.equals("codex", ignoreCase = true) == true ||
+                                                    provider.oauthProvider?.trim()?.equals("codex", ignoreCase = true) == true
+                                            }
+                                        }
+                                        OAuthClient.OAuthProvider.IFlow -> {
+                                            providers.firstOrNull { provider ->
+                                                provider.presetId?.trim()?.equals("iflow", ignoreCase = true) == true ||
+                                                    provider.oauthProvider?.trim()?.equals("iflow", ignoreCase = true) == true
+                                            }
+                                        }
+                                    }
+                            val reusableProviderId =
+                                reusableProvider?.id?.trim()?.takeIf { it.isNotBlank() }
+                                    ?: java.util.UUID.randomUUID().toString()
+
                             val providerResult: Result<ProviderConfig> =
                                 when (start.provider) {
                                     OAuthClient.OAuthProvider.Codex -> {
@@ -245,6 +276,7 @@ fun AddOAuthProviderScreen(
                                             pkceCodeVerifier = start.pkceCodeVerifier.orEmpty()
                                         ).map { token ->
                                             ProviderConfig(
+                                                id = reusableProviderId,
                                                 presetId = "codex",
                                                 iconAsset = "codex.svg",
                                                 name = providerName.trim().ifBlank { "Codex" },
@@ -257,13 +289,15 @@ fun AddOAuthProviderScreen(
                                                 oauthIdToken = token.idToken,
                                                 oauthAccountId = token.accountId,
                                                 oauthEmail = token.email,
-                                                oauthExpiresAtMs = token.expiresAtMs
+                                                oauthExpiresAtMs = token.expiresAtMs,
+                                                headers = reusableProvider?.headers.orEmpty()
                                             )
                                         }
                                     }
                                     OAuthClient.OAuthProvider.IFlow -> {
                                         oauthClient.exchangeIFlow(code = code, redirectUri = start.redirectUri).map { token ->
                                             ProviderConfig(
+                                                id = reusableProviderId,
                                                 presetId = "iflow",
                                                 iconAsset = "iflow.svg",
                                                 name = providerName.trim().ifBlank { "iFlow" },
@@ -274,7 +308,8 @@ fun AddOAuthProviderScreen(
                                                 oauthAccessToken = token.accessToken,
                                                 oauthRefreshToken = token.refreshToken,
                                                 oauthEmail = token.email,
-                                                oauthExpiresAtMs = token.expiresAtMs
+                                                oauthExpiresAtMs = token.expiresAtMs,
+                                                headers = reusableProvider?.headers.orEmpty()
                                             )
                                         }
                                     }

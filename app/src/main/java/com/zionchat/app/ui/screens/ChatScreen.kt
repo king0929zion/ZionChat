@@ -77,6 +77,7 @@ import com.zionchat.app.R
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.LocalChatApiClient
 import com.zionchat.app.LocalProviderAuthManager
+import com.zionchat.app.LocalWebHostingService
 import com.zionchat.app.data.AppRepository
 import com.zionchat.app.data.AppAutomationTask
 import com.zionchat.app.data.ChatApiClient
@@ -133,6 +134,7 @@ fun ChatScreen(navController: NavController) {
     val repository = LocalAppRepository.current
     val chatApiClient = LocalChatApiClient.current
     val providerAuthManager = LocalProviderAuthManager.current
+    val webHostingService = LocalWebHostingService.current
     val mcpClient = remember { McpClient() }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -372,6 +374,28 @@ fun ChatScreen(navController: NavController) {
         lastKeyboardHideRequestAtMs = now
         focusManager.clearFocus(force = true)
         keyboardController?.hide()
+    }
+
+    suspend fun deploySavedAppIfEnabled(app: SavedApp): Pair<SavedApp, String?> {
+        val hostingConfig = repository.getWebHostingConfig()
+        if (!hostingConfig.autoDeploy || hostingConfig.token.isBlank()) {
+            return app to null
+        }
+        return webHostingService.deployApp(
+            appId = app.id,
+            html = app.html,
+            config = hostingConfig
+        ).fold(
+            onSuccess = { deployUrl ->
+                app.copy(deployUrl = deployUrl.trim()) to null
+            },
+            onFailure = { throwable ->
+                val errorText =
+                    throwable.message?.trim()?.takeIf { it.isNotBlank() }
+                        ?: "Deploy failed"
+                app to errorText
+            }
+        )
     }
 
     fun sendMessage() {
@@ -1314,6 +1338,26 @@ fun ChatScreen(navController: NavController) {
                                         } else {
                                             compactAppDescription(parsedSpec.description, "HTML app")
                                         }
+                                    val savedAppId = targetSavedApp?.id ?: java.util.UUID.randomUUID().toString()
+                                    val baseSavedApp =
+                                        SavedApp(
+                                            id = savedAppId,
+                                            sourceTagId = pendingTag.id,
+                                            name = finalName,
+                                            description = finalDescription,
+                                            html = html,
+                                            deployUrl = targetSavedApp?.deployUrl,
+                                            versionCode = targetSavedApp?.versionCode ?: 1,
+                                            versionName = targetSavedApp?.versionName ?: "v1",
+                                            createdAt = targetSavedApp?.createdAt ?: System.currentTimeMillis(),
+                                            updatedAt = System.currentTimeMillis()
+                                        )
+                                    val (deployReadyApp, deployErrorText) = deploySavedAppIfEnabled(baseSavedApp)
+                                    val persistedApp =
+                                        repository.upsertSavedApp(
+                                            deployReadyApp,
+                                            note = if (parsedSpec.mode == "edit") "AI edited app" else "AI generated app"
+                                        ) ?: deployReadyApp
                                     val payload =
                                         pendingPayload.copy(
                                             name = finalName,
@@ -1325,7 +1369,7 @@ fun ChatScreen(navController: NavController) {
                                             status = "success",
                                             html = html,
                                             error = null,
-                                            sourceAppId = targetSavedApp?.id,
+                                            sourceAppId = persistedApp.id,
                                             mode = parsedSpec.mode
                                         )
                                     updateAssistantTag(pendingTag.id) {
@@ -1336,23 +1380,21 @@ fun ChatScreen(navController: NavController) {
                                         )
                                     }
 
-                                    if (parsedSpec.mode == "edit" && targetSavedApp != null) {
-                                        repository.upsertSavedApp(
-                                            targetSavedApp.copy(
-                                                name = finalName,
-                                                description = finalDescription,
-                                                html = html,
-                                                updatedAt = System.currentTimeMillis()
-                                            )
-                                        )
-                                    }
-
                                     roundSummary.append("- app_developer: ")
                                     roundSummary.append(if (parsedSpec.mode == "edit") "updated " else "generated ")
                                     roundSummary.append(finalName.take(80))
                                     roundSummary.append(" in ")
                                     roundSummary.append(formatElapsedDuration(elapsedMs))
                                     roundSummary.append('\n')
+                                    if (!persistedApp.deployUrl.isNullOrBlank()) {
+                                        roundSummary.append("- app_developer: deployed to ")
+                                        roundSummary.append(persistedApp.deployUrl)
+                                        roundSummary.append('\n')
+                                    } else if (!deployErrorText.isNullOrBlank()) {
+                                        roundSummary.append("- app_developer: deploy failed (")
+                                        roundSummary.append(deployErrorText.take(140))
+                                        roundSummary.append(")\n")
+                                    }
                                 } else {
                                     val error = htmlResult.exceptionOrNull()
                                     updateAssistantTag(pendingTag.id) { current ->
@@ -1799,7 +1841,7 @@ fun ChatScreen(navController: NavController) {
             }
 
             // Top fade: start at the bottom of TopNavBar (blue line), fully hidden above (orange line).
-            val topFadeHeight = 36.dp
+            val topFadeHeight = 52.dp
             val topFadeTopPadding = maxOf(
                 statusBarTopPadding,
                 statusBarTopPadding + topBarHeightDp - topFadeHeight
@@ -1820,6 +1862,14 @@ fun ChatScreen(navController: NavController) {
                     .padding(top = topFadeTopPadding)
                     .zIndex(1f)
             )
+            TopFadeScrim(
+                color = ChatBackground.copy(alpha = 0.9f),
+                height = topFadeHeight * 0.62f,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = topFadeTopPadding + 1.dp)
+                    .zIndex(1.1f)
+            )
 
             // Bottom fade mask: starts near the input top and fades to solid background at screen bottom.
             val bottomFadeHeightTarget = remember(imeVisible, bottomSystemPadding, bottomBarHeightDp) {
@@ -1831,7 +1881,7 @@ fun ChatScreen(navController: NavController) {
             }
             val bottomFadeHeight by animateDpAsState(
                 targetValue = bottomFadeHeightTarget,
-                animationSpec = tween(durationMillis = 90, easing = FastOutSlowInEasing),
+                animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
                 label = "bottom_fade_height"
             )
             if (bottomFadeHeight > 0.dp) {
@@ -1845,7 +1895,8 @@ fun ChatScreen(navController: NavController) {
                             Brush.verticalGradient(
                                 colors = listOf(
                                     ChatBackground.copy(alpha = 0f),
-                                    ChatBackground.copy(alpha = 0.62f),
+                                    ChatBackground.copy(alpha = 0.28f),
+                                    ChatBackground.copy(alpha = 0.58f),
                                     ChatBackground
                                 )
                             )
@@ -2116,7 +2167,7 @@ fun ChatScreen(navController: NavController) {
                     onSave = { payload ->
                         val tagId = appWorkspaceTagId?.trim().orEmpty()
                         scope.launch {
-                            repository.upsertSavedApp(
+                            val baseSavedApp =
                                 com.zionchat.app.data.SavedApp(
                                     id = payload.sourceAppId ?: java.util.UUID.randomUUID().toString(),
                                     sourceTagId = tagId.takeIf { it.isNotBlank() },
@@ -2124,6 +2175,10 @@ fun ChatScreen(navController: NavController) {
                                     description = payload.description.ifBlank { payload.subtitle },
                                     html = payload.html
                                 )
+                            val (deployReadyApp, _) = deploySavedAppIfEnabled(baseSavedApp)
+                            repository.upsertSavedApp(
+                                deployReadyApp,
+                                note = "Manual save from workspace"
                             )
                         }
                     }
@@ -2143,8 +2198,7 @@ fun ChatScreen(navController: NavController) {
 @Composable
 private fun AttachmentGrid(
     attachments: List<MessageAttachment>,
-    modifier: Modifier = Modifier,
-    alignEnd: Boolean = false
+    modifier: Modifier = Modifier
 ) {
     val count = attachments.size
     val columns = when {
@@ -2230,11 +2284,16 @@ fun MessageItem(
         ) {
             // Show attachments above the bubble
             if (attachments.isNotEmpty()) {
-                AttachmentGrid(
-                    attachments = attachments,
-                    modifier = Modifier.padding(bottom = 8.dp, end = 60.dp),
-                    alignEnd = true
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    AttachmentGrid(
+                        attachments = attachments,
+                        modifier = Modifier
+                            .padding(start = 60.dp, bottom = 8.dp)
+                    )
+                }
             }
 
             Row(
@@ -2283,10 +2342,18 @@ fun MessageItem(
         }
     } else {
         // Assistant message (left aligned)
+        val assistantContentModifier =
+            if (isStreaming) {
+                Modifier
+            } else {
+                Modifier.animateContentSize(
+                    animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+                )
+            }
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.85f)
-                .animateContentSize(animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing))
+                .then(assistantContentModifier)
                 .combinedClickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,

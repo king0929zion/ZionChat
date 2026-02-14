@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -28,6 +29,7 @@ class AppRepository(context: Context) {
     private val conversationsKey = stringPreferencesKey("conversations_json")
     private val memoriesKey = stringPreferencesKey("memories_json")
     private val savedAppsKey = stringPreferencesKey("saved_apps_json")
+    private val savedAppVersionsKey = stringPreferencesKey("saved_app_versions_json")
     private val currentConversationIdKey = stringPreferencesKey("current_conversation_id")
     private val nicknameKey = stringPreferencesKey("nickname")
     private val personalNicknameKey = stringPreferencesKey("personal_nickname")
@@ -42,6 +44,13 @@ class AppRepository(context: Context) {
     private val defaultImageModelIdKey = stringPreferencesKey("default_image_model_id")
     private val defaultTitleModelIdKey = stringPreferencesKey("default_title_model_id")
     private val defaultAppBuilderModelIdKey = stringPreferencesKey("default_app_builder_model_id")
+    private val webHostingProviderKey = stringPreferencesKey("web_hosting_provider")
+    private val vercelTokenKey = stringPreferencesKey("vercel_token")
+    private val vercelProjectIdKey = stringPreferencesKey("vercel_project_id")
+    private val vercelTeamIdKey = stringPreferencesKey("vercel_team_id")
+    private val vercelCustomDomainKey = stringPreferencesKey("vercel_custom_domain")
+    private val webHostingAutoDeployKey = booleanPreferencesKey("web_hosting_auto_deploy")
+    private val appModuleVersionModelKey = intPreferencesKey("app_module_version_model")
     private val supportedAccentKeys = setOf("default", "blue", "pink", "orange", "black")
 
     private val providerListType = object : TypeToken<List<ProviderConfig>>() {}.type
@@ -49,12 +58,15 @@ class AppRepository(context: Context) {
     private val conversationListType = object : TypeToken<List<Conversation>>() {}.type
     private val memoryListType = object : TypeToken<List<MemoryItem>>() {}.type
     private val savedAppListType = object : TypeToken<List<SavedApp>>() {}.type
+    private val savedAppVersionListType = object : TypeToken<List<SavedAppVersion>>() {}.type
     private val pendingAppAutomationTaskMutable = MutableStateFlow<AppAutomationTask?>(null)
     val pendingAppAutomationTaskFlow: StateFlow<AppAutomationTask?> = pendingAppAutomationTaskMutable.asStateFlow()
 
     private fun safeTrim(value: String?): String = value?.trim().orEmpty()
 
     private fun safeTrimOrNull(value: String?): String? = value?.trim()?.takeIf { it.isNotBlank() }
+
+    private fun buildSavedAppVersionName(versionCode: Int): String = "v${versionCode.coerceAtLeast(1)}"
 
     private fun sanitizeHeaders(headers: List<HttpHeader>?): List<HttpHeader> {
         return headers.orEmpty().mapNotNull { header ->
@@ -204,14 +216,41 @@ class AppRepository(context: Context) {
         val id = safeTrim(app.id).ifBlank { UUID.randomUUID().toString() }
         val createdAt = app.createdAt.takeIf { it > 0 } ?: System.currentTimeMillis()
         val updatedAt = app.updatedAt.takeIf { it > 0 } ?: createdAt
+        val versionCode = app.versionCode.coerceAtLeast(1)
+        val versionName = safeTrim(app.versionName).ifBlank { buildSavedAppVersionName(versionCode) }
         return SavedApp(
             id = id,
             sourceTagId = safeTrimOrNull(app.sourceTagId),
             name = name.take(80),
             description = safeTrim(app.description).take(180),
             html = html,
+            deployUrl = safeTrimOrNull(app.deployUrl),
+            versionCode = versionCode,
+            versionName = versionName.take(24),
             createdAt = createdAt,
             updatedAt = updatedAt
+        )
+    }
+
+    private fun sanitizeSavedAppVersion(item: SavedAppVersion?): SavedAppVersion? {
+        if (item == null) return null
+        val appId = safeTrim(item.appId)
+        val html = item.html.trim()
+        if (appId.isBlank() || html.isBlank()) return null
+
+        val id = safeTrim(item.id).ifBlank { UUID.randomUUID().toString() }
+        val versionCode = item.versionCode.coerceAtLeast(1)
+        val versionName = safeTrim(item.versionName).ifBlank { buildSavedAppVersionName(versionCode) }
+        val createdAt = item.createdAt.takeIf { it > 0 } ?: System.currentTimeMillis()
+        return SavedAppVersion(
+            id = id,
+            appId = appId,
+            versionCode = versionCode,
+            versionName = versionName.take(24),
+            html = html,
+            deployUrl = safeTrimOrNull(item.deployUrl),
+            note = safeTrimOrNull(item.note)?.take(200),
+            createdAt = createdAt
         )
     }
 
@@ -303,6 +342,30 @@ class AppRepository(context: Context) {
             .orEmpty()
             .mapNotNull(::sanitizeSavedApp)
             .sortedByDescending { it.updatedAt }
+    }
+
+    val savedAppVersionsFlow: Flow<List<SavedAppVersion>> = prefsFlow.map { prefs ->
+        val json = prefs[savedAppVersionsKey] ?: "[]"
+        runCatching { gson.fromJson<List<SavedAppVersion>>(json, savedAppVersionListType) }
+            .getOrNull()
+            .orEmpty()
+            .mapNotNull(::sanitizeSavedAppVersion)
+            .sortedByDescending { it.createdAt }
+    }
+
+    val webHostingConfigFlow: Flow<WebHostingConfig> = prefsFlow.map { prefs ->
+        WebHostingConfig(
+            provider = prefs[webHostingProviderKey]?.trim()?.takeIf { it.isNotBlank() } ?: "vercel",
+            token = prefs[vercelTokenKey].orEmpty().trim(),
+            projectId = prefs[vercelProjectIdKey].orEmpty().trim(),
+            teamId = prefs[vercelTeamIdKey].orEmpty().trim(),
+            customDomain = prefs[vercelCustomDomainKey].orEmpty().trim(),
+            autoDeploy = prefs[webHostingAutoDeployKey] ?: true
+        )
+    }
+
+    val appModuleVersionModelFlow: Flow<Int> = prefsFlow.map { prefs ->
+        (prefs[appModuleVersionModelKey] ?: 1).coerceAtLeast(1)
     }
 
     val currentConversationIdFlow: Flow<String?> = prefsFlow.map { prefs ->
@@ -462,6 +525,35 @@ class AppRepository(context: Context) {
     suspend fun setDefaultAppBuilderModelId(modelId: String?) {
         dataStore.edit { prefs ->
             if (modelId.isNullOrBlank()) prefs.remove(defaultAppBuilderModelIdKey) else prefs[defaultAppBuilderModelIdKey] = modelId
+        }
+    }
+
+    suspend fun setWebHostingConfig(config: WebHostingConfig) {
+        dataStore.edit { prefs ->
+            val provider = config.provider.trim().ifBlank { "vercel" }
+            prefs[webHostingProviderKey] = provider
+
+            val token = config.token.trim()
+            if (token.isBlank()) prefs.remove(vercelTokenKey) else prefs[vercelTokenKey] = token
+
+            val projectId = config.projectId.trim()
+            if (projectId.isBlank()) prefs.remove(vercelProjectIdKey) else prefs[vercelProjectIdKey] = projectId
+
+            val teamId = config.teamId.trim()
+            if (teamId.isBlank()) prefs.remove(vercelTeamIdKey) else prefs[vercelTeamIdKey] = teamId
+
+            val customDomain = config.customDomain.trim()
+            if (customDomain.isBlank()) prefs.remove(vercelCustomDomainKey) else prefs[vercelCustomDomainKey] = customDomain
+
+            prefs[webHostingAutoDeployKey] = config.autoDeploy
+        }
+    }
+
+    suspend fun getWebHostingConfig(): WebHostingConfig = webHostingConfigFlow.first()
+
+    suspend fun setAppModuleVersionModel(value: Int) {
+        dataStore.edit { prefs ->
+            prefs[appModuleVersionModelKey] = value.coerceAtLeast(1)
         }
     }
 
@@ -790,9 +882,38 @@ class AppRepository(context: Context) {
         }
     }
 
-    suspend fun upsertSavedApp(app: SavedApp) {
-        val sanitizedIncoming = sanitizeSavedApp(app) ?: return
+    private fun upsertSavedAppVersionEntry(
+        versions: MutableList<SavedAppVersion>,
+        app: SavedApp,
+        note: String?
+    ) {
+        val existingIndex =
+            versions.indexOfFirst { version ->
+                version.appId == app.id && version.versionCode == app.versionCode
+            }
+        val existing = versions.getOrNull(existingIndex)
+        val entry =
+            SavedAppVersion(
+                id = existing?.id ?: UUID.randomUUID().toString(),
+                appId = app.id,
+                versionCode = app.versionCode.coerceAtLeast(1),
+                versionName = app.versionName.ifBlank { buildSavedAppVersionName(app.versionCode) },
+                html = app.html,
+                deployUrl = app.deployUrl,
+                note = note?.trim()?.takeIf { it.isNotBlank() } ?: existing?.note,
+                createdAt = existing?.createdAt ?: System.currentTimeMillis()
+            )
+        if (existingIndex >= 0) {
+            versions[existingIndex] = entry
+        } else {
+            versions.add(0, entry)
+        }
+    }
+
+    suspend fun upsertSavedApp(app: SavedApp, note: String? = null): SavedApp? {
+        val sanitizedIncoming = sanitizeSavedApp(app) ?: return null
         val savedApps = savedAppsFlow.first().toMutableList()
+        val savedVersions = savedAppVersionsFlow.first().toMutableList()
         val matchIndex =
             savedApps.indexOfFirst {
                 it.id == sanitizedIncoming.id ||
@@ -801,17 +922,49 @@ class AppRepository(context: Context) {
                             it.sourceTagId == sanitizedIncoming.sourceTagId
                         )
             }
+        val now = System.currentTimeMillis()
         val merged =
             if (matchIndex >= 0) {
-                savedApps[matchIndex].copy(
-                    sourceTagId = sanitizedIncoming.sourceTagId ?: savedApps[matchIndex].sourceTagId,
-                    name = sanitizedIncoming.name,
-                    description = sanitizedIncoming.description,
-                    html = sanitizedIncoming.html,
-                    updatedAt = System.currentTimeMillis()
-                )
+                val existing = savedApps[matchIndex]
+                val htmlChanged = existing.html != sanitizedIncoming.html
+                val deployUrl = sanitizedIncoming.deployUrl ?: existing.deployUrl
+                val versionCode =
+                    when {
+                        sanitizedIncoming.versionCode > existing.versionCode -> sanitizedIncoming.versionCode
+                        htmlChanged -> existing.versionCode + 1
+                        else -> existing.versionCode
+                    }.coerceAtLeast(1)
+                val versionName =
+                    if (htmlChanged || sanitizedIncoming.versionCode > existing.versionCode) {
+                        sanitizedIncoming.versionName.ifBlank { buildSavedAppVersionName(versionCode) }
+                    } else {
+                        existing.versionName.ifBlank { buildSavedAppVersionName(versionCode) }
+                    }
+                val updated =
+                    existing.copy(
+                        sourceTagId = sanitizedIncoming.sourceTagId ?: existing.sourceTagId,
+                        name = sanitizedIncoming.name,
+                        description = sanitizedIncoming.description,
+                        html = sanitizedIncoming.html,
+                        deployUrl = deployUrl,
+                        versionCode = versionCode,
+                        versionName = versionName,
+                        updatedAt = now
+                    )
+                if (htmlChanged || existing.deployUrl != deployUrl || note?.isNotBlank() == true) {
+                    upsertSavedAppVersionEntry(savedVersions, updated, note = note)
+                }
+                updated
             } else {
-                sanitizedIncoming.copy(updatedAt = System.currentTimeMillis())
+                val versionCode = sanitizedIncoming.versionCode.coerceAtLeast(1)
+                val created =
+                    sanitizedIncoming.copy(
+                        versionCode = versionCode,
+                        versionName = sanitizedIncoming.versionName.ifBlank { buildSavedAppVersionName(versionCode) },
+                        updatedAt = now
+                    )
+                upsertSavedAppVersionEntry(savedVersions, created, note = note)
+                created
             }
 
         if (matchIndex >= 0) {
@@ -821,15 +974,50 @@ class AppRepository(context: Context) {
         }
         dataStore.edit { prefs ->
             prefs[savedAppsKey] = gson.toJson(savedApps)
+            prefs[savedAppVersionsKey] = gson.toJson(savedVersions)
         }
+        return merged
+    }
+
+    suspend fun listSavedAppVersions(appId: String): List<SavedAppVersion> {
+        val key = appId.trim()
+        if (key.isBlank()) return emptyList()
+        return savedAppVersionsFlow.first()
+            .filter { version -> version.appId == key }
+            .sortedByDescending { it.versionCode }
+    }
+
+    suspend fun restoreSavedAppVersion(appId: String, versionCode: Int): SavedApp? {
+        val key = appId.trim()
+        val targetCode = versionCode.coerceAtLeast(1)
+        if (key.isBlank()) return null
+        val app = savedAppsFlow.first().firstOrNull { it.id == key } ?: return null
+        val targetVersion =
+            listSavedAppVersions(key).firstOrNull { it.versionCode == targetCode }
+                ?: return null
+        val restoredVersionCode = app.versionCode + 1
+        val restored =
+            app.copy(
+                html = targetVersion.html,
+                deployUrl = targetVersion.deployUrl ?: app.deployUrl,
+                versionCode = restoredVersionCode,
+                versionName = buildSavedAppVersionName(restoredVersionCode),
+                updatedAt = System.currentTimeMillis()
+            )
+        return upsertSavedApp(
+            restored,
+            note = "Restored from ${targetVersion.versionName}"
+        )
     }
 
     suspend fun deleteSavedApp(appId: String) {
         val key = appId.trim()
         if (key.isBlank()) return
         val apps = savedAppsFlow.first().filterNot { it.id == key }
+        val versions = savedAppVersionsFlow.first().filterNot { it.appId == key }
         dataStore.edit { prefs ->
             prefs[savedAppsKey] = gson.toJson(apps)
+            prefs[savedAppVersionsKey] = gson.toJson(versions)
         }
     }
 

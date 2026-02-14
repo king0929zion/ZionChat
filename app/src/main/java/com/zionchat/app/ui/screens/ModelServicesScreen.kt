@@ -57,6 +57,32 @@ fun ModelServicesScreen(navController: NavController) {
 
     val configuredProviders by repository.providersFlow.collectAsState(initial = emptyList())
     val oauthPresetIds = remember { setOf("codex", "iflow") }
+    val builtInPresetIdSet = remember {
+        DEFAULT_PROVIDER_PRESETS.map { it.id.trim().lowercase() }.toSet()
+    }
+    val configuredProvidersForDisplay = remember(configuredProviders, builtInPresetIdSet) {
+        val seenBuiltInPresetIds = mutableSetOf<String>()
+        configuredProviders.filter { provider ->
+            val presetId = provider.presetId?.trim()?.lowercase().orEmpty()
+            if (presetId.isBlank() || !builtInPresetIdSet.contains(presetId)) {
+                true
+            } else {
+                seenBuiltInPresetIds.add(presetId)
+            }
+        }
+    }
+    val configuredBuiltInPresetIds = remember(configuredProvidersForDisplay, builtInPresetIdSet) {
+        configuredProvidersForDisplay
+            .mapNotNull { provider ->
+                provider.presetId?.trim()?.lowercase()?.takeIf { builtInPresetIdSet.contains(it) }
+            }
+            .toSet()
+    }
+    val availablePresetProviders = remember(configuredBuiltInPresetIds) {
+        DEFAULT_PROVIDER_PRESETS.filterNot { preset ->
+            configuredBuiltInPresetIds.contains(preset.id.trim().lowercase())
+        }
+    }
     var openedProviderId by remember { mutableStateOf<String?>(null) }
 
     Column(
@@ -97,7 +123,7 @@ fun ModelServicesScreen(navController: NavController) {
                 .padding(top = 12.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            configuredProviders.forEach { provider ->
+            configuredProvidersForDisplay.forEach { provider ->
                 SwipeableConfiguredProviderItem(
                     provider = provider,
                     iconAsset = resolveProviderIconAsset(provider),
@@ -127,13 +153,13 @@ fun ModelServicesScreen(navController: NavController) {
                 )
             }
 
-            if (configuredProviders.isNotEmpty() && DEFAULT_PROVIDER_PRESETS.isNotEmpty()) {
+            if (configuredProvidersForDisplay.isNotEmpty() && availablePresetProviders.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Divider(color = GrayLight, modifier = Modifier.fillMaxWidth())
                 Spacer(modifier = Modifier.height(4.dp))
             }
 
-            DEFAULT_PROVIDER_PRESETS.forEach { provider ->
+            availablePresetProviders.forEach { provider ->
                 ProviderItem(
                     provider = provider,
                     oauthBadge = oauthPresetIds.contains(provider.id),

@@ -91,8 +91,22 @@ data class SavedApp(
     val name: String,
     val description: String,
     val html: String,
+    val deployUrl: String? = null,
+    val versionCode: Int = 1,
+    val versionName: String = "v1",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
+)
+
+data class SavedAppVersion(
+    val id: String = UUID.randomUUID().toString(),
+    val appId: String,
+    val versionCode: Int,
+    val versionName: String,
+    val html: String,
+    val deployUrl: String? = null,
+    val note: String? = null,
+    val createdAt: Long = System.currentTimeMillis()
 )
 
 data class AppAutomationTask(
@@ -103,4 +117,13 @@ data class AppAutomationTask(
     val appHtml: String,
     val request: String,
     val createdAt: Long = System.currentTimeMillis()
+)
+
+data class WebHostingConfig(
+    val provider: String = "vercel",
+    val token: String = "",
+    val projectId: String = "",
+    val teamId: String = "",
+    val customDomain: String = "",
+    val autoDeploy: Boolean = true
 )

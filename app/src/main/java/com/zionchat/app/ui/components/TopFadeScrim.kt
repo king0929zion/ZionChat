@@ -2,6 +2,7 @@ package com.zionchat.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
@@ -21,15 +22,51 @@ fun TopFadeScrim(
         modifier = modifier
             .fillMaxWidth()
             .height(height)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        color,
-                        color.copy(alpha = 0f)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight()
+                .background(
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0f to color.copy(alpha = 0.98f),
+                            0.28f to color.copy(alpha = 0.72f),
+                            0.64f to color.copy(alpha = 0.24f),
+                            1f to color.copy(alpha = 0f)
+                        )
                     )
                 )
-            )
-    )
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.72f)
+                .background(
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0f to color.copy(alpha = 0.54f),
+                            0.42f to color.copy(alpha = 0.18f),
+                            1f to color.copy(alpha = 0f)
+                        )
+                    )
+                )
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.46f)
+                .background(
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0f to color.copy(alpha = 0.36f),
+                            0.58f to color.copy(alpha = 0.08f),
+                            1f to color.copy(alpha = 0f)
+                        )
+                    )
+                )
+        )
+    }
 }
 
 @Composable
@@ -42,13 +79,35 @@ fun BottomFadeScrim(
         modifier = modifier
             .fillMaxWidth()
             .height(height)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        color.copy(alpha = 0f),
-                        color
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight()
+                .background(
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0f to color.copy(alpha = 0f),
+                            0.36f to color.copy(alpha = 0.26f),
+                            0.72f to color.copy(alpha = 0.78f),
+                            1f to color.copy(alpha = 0.98f)
+                        )
                     )
                 )
-            )
-    )
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.7f)
+                .background(
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0f to color.copy(alpha = 0f),
+                            0.52f to color.copy(alpha = 0.2f),
+                            1f to color.copy(alpha = 0.64f)
+                        )
+                    )
+                )
+        )
+    }
 }

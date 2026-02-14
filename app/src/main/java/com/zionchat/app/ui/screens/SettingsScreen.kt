@@ -56,6 +56,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import com.zionchat.app.data.extractRemoteModelId
+import com.zionchat.app.data.WebHostingConfig
 import com.zionchat.app.ui.components.TopFadeScrim
 import com.zionchat.app.ui.components.liquidGlass
 import com.zionchat.app.ui.components.rememberResourceDrawablePainter
@@ -82,6 +83,7 @@ fun SettingsScreen(navController: NavController) {
     val avatarUri by repository.avatarUriFlow.collectAsState(initial = "")
     val appLanguage by repository.appLanguageFlow.collectAsState(initial = "system")
     val appAccentColor by repository.appAccentColorFlow.collectAsState(initial = "default")
+    val webHostingConfig by repository.webHostingConfigFlow.collectAsState(initial = WebHostingConfig())
 
     var showEditProfile by remember { mutableStateOf(false) }
 
@@ -221,7 +223,7 @@ fun SettingsScreen(navController: NavController) {
                 }
 
                 // AI Model 分组
-                SettingsGroup(title = stringResource(R.string.settings_group_ai_model), itemCount = 4) {
+                SettingsGroup(title = stringResource(R.string.settings_group_ai_model), itemCount = 5) {
                     SettingsItem(
                         icon = {
                             Icon(
@@ -250,6 +252,14 @@ fun SettingsScreen(navController: NavController) {
                         showChevron = true,
                         showDivider = true,
                         onClick = { navController.navigate("model_services") }
+                    )
+                    SettingsItem(
+                        icon = { Icon(AppIcons.Globe, null, Modifier.size(22.dp), tint = Color.Unspecified) },
+                        label = "Web hosting",
+                        value = if (webHostingConfig.token.isNotBlank()) "Configured" else "Not set",
+                        showChevron = true,
+                        showDivider = true,
+                        onClick = { navController.navigate("web_hosting") }
                     )
                     SettingsItem(
                         icon = { Icon(AppIcons.MCPTools, null, Modifier.size(22.dp), tint = Color.Unspecified) },
