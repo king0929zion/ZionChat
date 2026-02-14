@@ -308,7 +308,7 @@ fun ChatScreen(navController: NavController) {
     var lastAutoScrolledConversationId by remember { mutableStateOf<String?>(null) }
     var scrollToBottomToken by remember { mutableIntStateOf(0) }
 
-    // 进入新会话时定位到最新消息（reverseLayout后最新消息在顶部）
+    // 进入新会话时定位到最新消息
     LaunchedEffect(effectiveConversationId) {
         val convoId = effectiveConversationId?.trim().orEmpty()
         if (convoId.isBlank() || localMessages.isEmpty()) return@LaunchedEffect
@@ -316,16 +316,14 @@ fun ChatScreen(navController: NavController) {
         if (lastAutoScrolledConversationId != convoId) {
             lastAutoScrolledConversationId = convoId
             if (localMessages.isNotEmpty()) {
-                // reverseLayout: 滚动到最后一条（最新的），显示在顶部
                 listState.scrollToItem(localMessages.size - 1, scrollOffset = 0)
             }
         }
     }
 
-    // 发送消息时滚动到最新消息（reverseLayout后自动在顶部）
+    // 发送消息时滚动到最新消息
     LaunchedEffect(scrollToBottomToken, localMessages.size) {
         if (scrollToBottomToken > 0 && localMessages.isNotEmpty()) {
-            // reverseLayout: 滚动到最后一条（最新的），显示在顶部
             listState.scrollToItem(localMessages.size - 1, scrollOffset = 0)
         }
     }
@@ -338,7 +336,6 @@ fun ChatScreen(navController: NavController) {
             if (convoId.isNotBlank() && convoId == streamingConversationId && latestShouldAutoScroll) {
                 val lastIndex = latestLocalMessagesSize - 1
                 if (lastIndex >= 0) {
-                    // reverseLayout: 滚动到最后一条（最新的），显示在顶部
                     listState.scrollToItem(lastIndex, scrollOffset = 0)
                 }
             }
@@ -1740,11 +1737,10 @@ fun ChatScreen(navController: NavController) {
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
-                        top = bottomContentPadding + 8.dp,
-                        bottom = listTopPadding
+                        top = listTopPadding,
+                        bottom = bottomContentPadding + 8.dp
                     ),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    reverseLayout = true
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     itemsIndexed(localMessages, key = { _, item -> item.id }) { index, message ->
                         val showToolbar = !isStreaming || (streamingMessageId == null) ||
@@ -2171,7 +2167,7 @@ private fun AttachmentGrid(
 
     val spacing = 6.dp
 
-    // Simple Column for attachments, alignment handled by alignEnd parameter
+    // Column with proper alignment
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(spacing),
@@ -2179,7 +2175,8 @@ private fun AttachmentGrid(
     ) {
         for (row in 0 until rows) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(spacing, alignment = if (alignEnd) Alignment.End else Alignment.Start)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = if (alignEnd) Arrangement.End else Arrangement.Start
             ) {
                 val startIndex = row * columns
                 val endIndex = minOf(startIndex + columns, count)
@@ -2187,6 +2184,7 @@ private fun AttachmentGrid(
                     val attachment = attachments[index]
                     Box(
                         modifier = Modifier
+                            .padding(if (index > startIndex) PaddingValues(start = spacing) else PaddingValues(0.dp))
                             .size(imageSize)
                             .clip(RoundedCornerShape(12.dp))
                             .background(GrayLighter)
