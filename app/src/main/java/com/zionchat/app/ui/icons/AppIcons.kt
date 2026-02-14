@@ -932,7 +932,7 @@ object AppIcons {
         viewportHeight = 24f
     ).apply {
         path(
-            fill = SolidColor(Color(0xFFE3E3E8)),
+            fill = SolidColor(Color(0xFF141413)),
             stroke = null,
             pathFillType = PathFillType.EvenOdd
         ) {
@@ -974,18 +974,49 @@ object AppIcons {
             curveTo(4f, 13.982f, 4.144f, 13.733f, 4.377f, 13.6f)
             curveTo(4.609f, 13.466f, 4.896f, 13.467f, 5.128f, 13.602f)
             lineTo(6.75f, 14.548f)
+            lineTo(8.372f, 13.602f)
+            close()
+            // Inner gear detail
+            moveTo(7.128f, 16.063f)
+            curveTo(6.895f, 16.199f, 6.605f, 16.199f, 6.372f, 16.063f)
+            lineTo(5.5f, 15.555f)
+            lineTo(5.5f, 16.583f)
+            curveTo(5.5f, 16.85f, 5.358f, 17.096f, 5.128f, 17.23f)
+            lineTo(4.237f, 17.749f)
+            lineTo(5.128f, 18.269f)
+            curveTo(5.358f, 18.403f, 5.5f, 18.649f, 5.5f, 18.916f)
+            lineTo(5.5f, 19.944f)
+            lineTo(6.372f, 19.435f)
+            lineTo(6.462f, 19.391f)
+            curveTo(6.677f, 19.301f, 6.924f, 19.316f, 7.128f, 19.435f)
+            lineTo(8f, 19.944f)
+            lineTo(8f, 18.916f)
+            curveTo(8f, 18.649f, 8.142f, 18.403f, 8.372f, 18.269f)
+            lineTo(9.262f, 17.749f)
+            lineTo(8.372f, 17.23f)
+            curveTo(8.142f, 17.096f, 8f, 16.85f, 8f, 16.583f)
+            lineTo(8f, 15.555f)
+            lineTo(7.128f, 16.063f)
             close()
             // Diamond at top left
             moveTo(6.183f, 2.183f)
             curveTo(6.476f, 1.89f, 6.95f, 1.89f, 7.243f, 2.183f)
             lineTo(11.212f, 6.151f)
             curveTo(11.352f, 6.292f, 11.432f, 6.484f, 11.432f, 6.683f)
-            curveTo(11.432f, 6.881f, 11.352f, 7.072f, 11.212f, 7.213f)
+            curveTo(11.431f, 6.881f, 11.352f, 7.072f, 11.212f, 7.213f)
             lineTo(7.243f, 11.182f)
             curveTo(6.95f, 11.474f, 6.475f, 11.474f, 6.183f, 11.182f)
             lineTo(2.213f, 7.213f)
             curveTo(2.072f, 7.072f, 1.993f, 6.881f, 1.993f, 6.683f)
             curveTo(1.993f, 6.484f, 2.073f, 6.292f, 2.213f, 6.151f)
+            lineTo(6.183f, 2.183f)
+            close()
+            // Inner diamond detail
+            moveTo(3.804f, 6.683f)
+            lineTo(6.713f, 9.591f)
+            lineTo(9.621f, 6.683f)
+            lineTo(6.713f, 3.773f)
+            lineTo(3.804f, 6.683f)
             close()
             // Funnel at top right
             moveTo(21.014f, 2f)
@@ -998,6 +1029,18 @@ object AppIcons {
             lineTo(15.726f, 6.25f)
             lineTo(14.084f, 3.515f)
             curveTo(13.684f, 2.848f, 14.164f, 2f, 14.941f, 2f)
+            lineTo(21.014f, 2f)
+            close()
+            // Inner funnel detail
+            moveTo(17.166f, 5.735f)
+            curveTo(17.356f, 6.052f, 17.356f, 6.448f, 17.166f, 6.765f)
+            lineTo(15.824f, 9f)
+            lineTo(20.142f, 9f)
+            lineTo(18.827f, 6.756f)
+            curveTo(18.644f, 6.444f, 18.645f, 6.056f, 18.827f, 5.744f)
+            lineTo(20.142f, 3.5f)
+            lineTo(15.824f, 3.5f)
+            lineTo(17.166f, 5.735f)
             close()
         }
     }.build()
@@ -2130,7 +2173,7 @@ object AppIcons {
         viewportHeight = 960f
     ).apply {
         path(
-            fill = SolidColor(Color(0xFFE3E3E8)),
+            fill = SolidColor(Color(0xFF141413)),
             stroke = null,
             pathFillType = PathFillType.NonZero
         ) {
