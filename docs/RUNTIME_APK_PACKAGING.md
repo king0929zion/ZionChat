@@ -62,6 +62,15 @@ The app will call:
 - `GET /v1/runtime/builds/{requestId}`
 - `GET /v1/runtime/builds/{requestId}/artifact`
 
+When APP developer triggers packaging, the request now declares:
+
+- `runtimeTemplate: "builtin_shell_plugin"`
+- `runtimeShellPackage`
+- `runtimeShellDownloadUrl`
+
+`runtimeShellPackage` is validated by the bridge in `builtin_shell_plugin` mode.
+Users must install this Runtime shell plugin from Apps before APP developer can run packaging.
+
 ## GitHub Actions packaging
 
 Use workflow **Package Runtime APK** (`.github/workflows/runtime-packager.yml`) with:

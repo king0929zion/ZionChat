@@ -63,6 +63,8 @@ class LocalBridgeRuntimePackagingService(
                 val runtimeVersionCode = computeRuntimeVersionCode(app.versionCode, safeVersionModel)
                 val runtimeVersionName = computeRuntimeVersionName(app.versionName, app.versionCode, safeVersionModel)
                 val packageSuffix = buildPackageSuffix(app.id)
+                val runtimeShellPackage = RuntimeShellPlugin.packageName()
+                val runtimeShellDownloadUrl = RuntimeShellPlugin.downloadUrl()
                 val requestBody =
                     buildString {
                         append("{")
@@ -77,6 +79,13 @@ class LocalBridgeRuntimePackagingService(
                         append("\",")
                         append("\"packageSuffix\":\"")
                         append(escapeJson(packageSuffix))
+                        append("\",")
+                        append("\"runtimeTemplate\":\"builtin_shell_plugin\",")
+                        append("\"runtimeShellPackage\":\"")
+                        append(escapeJson(runtimeShellPackage))
+                        append("\",")
+                        append("\"runtimeShellDownloadUrl\":\"")
+                        append(escapeJson(runtimeShellDownloadUrl))
                         append("\",")
                         append("\"versionName\":\"")
                         append(escapeJson(runtimeVersionName))

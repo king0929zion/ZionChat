@@ -219,14 +219,23 @@ fun AppsScreen(navController: NavController) {
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 28.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (!runtimeShellInstalled) {
-                    item(key = "runtime_shell_required") {
-                        RuntimeShellRequiredCard(
-                            packageName = RuntimeShellPlugin.packageName(),
-                            onDownload = { openRuntimeShellDownload() },
-                            onRefresh = { runtimeShellInstalled = RuntimeShellPlugin.isInstalled(context) }
-                        )
-                    }
+                item(key = "runtime_shell_required_section") {
+                    Text(
+                        text = stringResource(R.string.runtime_shell_required_section),
+                        fontSize = 13.sp,
+                        fontFamily = SourceSans3,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 4.dp)
+                    )
+                }
+
+                item(key = "runtime_shell_required") {
+                    RuntimeShellRequiredCard(
+                        packageName = RuntimeShellPlugin.packageName(),
+                        isInstalled = runtimeShellInstalled,
+                        onDownload = { openRuntimeShellDownload() },
+                        onRefresh = { runtimeShellInstalled = RuntimeShellPlugin.isInstalled(context) }
+                    )
                 }
 
                 item(key = "saved_title") {
@@ -382,6 +391,7 @@ fun AppsScreen(navController: NavController) {
 @Composable
 private fun RuntimeShellRequiredCard(
     packageName: String,
+    isInstalled: Boolean,
     onDownload: () -> Unit,
     onRefresh: () -> Unit
 ) {
@@ -394,12 +404,42 @@ private fun RuntimeShellRequiredCard(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(
-                text = stringResource(R.string.runtime_shell_required_title),
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.runtime_shell_required_title),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary
+                )
+                Box(
+                    modifier = Modifier
+                        .background(
+                            if (isInstalled) Color.White else Color.Black,
+                            RoundedCornerShape(999.dp)
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = if (isInstalled) Color.Black else Color.Black,
+                            shape = RoundedCornerShape(999.dp)
+                        )
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text =
+                            stringResource(
+                                if (isInstalled) R.string.runtime_shell_status_installed
+                                else R.string.runtime_shell_status_missing
+                            ),
+                        fontSize = 11.sp,
+                        color = if (isInstalled) Color.Black else Color.White
+                    )
+                }
+            }
             Text(
                 text = stringResource(R.string.runtime_shell_required_subtitle, packageName),
                 fontSize = 13.sp,

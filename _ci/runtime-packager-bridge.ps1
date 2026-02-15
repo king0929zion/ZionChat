@@ -204,6 +204,9 @@ function Get-StateResponse {
         versionName = (Get-StringProperty -Object $State -Name "versionName" -DefaultValue "1.0.0")
         versionCode = Get-IntProperty -Object $State -Name "versionCode" -DefaultValue 1
         versionModel = Get-IntProperty -Object $State -Name "versionModel" -DefaultValue 1
+        runtimeTemplate = (Get-StringProperty -Object $State -Name "runtimeTemplate" -DefaultValue "runtime_module")
+        runtimeShellPackage = (Get-StringProperty -Object $State -Name "runtimeShellPackage" -DefaultValue "")
+        runtimeShellDownloadUrl = (Get-StringProperty -Object $State -Name "runtimeShellDownloadUrl" -DefaultValue "")
         updatedAt = Get-LongProperty -Object $State -Name "updatedAt" -DefaultValue (Get-NowMs)
     }
 }
@@ -404,6 +407,9 @@ try {
                 $appId = Get-StringProperty -Object $payload -Name "appId"
                 $appName = Get-StringProperty -Object $payload -Name "appName" -DefaultValue "Runtime App"
                 $appUrl = Get-StringProperty -Object $payload -Name "appUrl"
+                $runtimeTemplate = Get-StringProperty -Object $payload -Name "runtimeTemplate" -DefaultValue "runtime_module"
+                $runtimeShellPackage = Get-StringProperty -Object $payload -Name "runtimeShellPackage"
+                $runtimeShellDownloadUrl = Get-StringProperty -Object $payload -Name "runtimeShellDownloadUrl"
                 $versionName = Get-StringProperty -Object $payload -Name "versionName" -DefaultValue "1.0.0"
                 $versionCode = [Math]::Max((Get-IntProperty -Object $payload -Name "versionCode" -DefaultValue 1), 1)
                 $versionModel = [Math]::Max((Get-IntProperty -Object $payload -Name "versionModel" -DefaultValue 1), 1)
@@ -418,6 +424,18 @@ try {
                 if (-not ($appUrl.StartsWith("https://") -or $appUrl.StartsWith("http://"))) {
                     Write-JsonResponse -Context $context -StatusCode 400 -Body ([ordered]@{
                             error = "appUrl must start with http:// or https://"
+                        })
+                    continue
+                }
+                if ($runtimeTemplate -ne "runtime_module" -and $runtimeTemplate -ne "builtin_shell_plugin") {
+                    Write-JsonResponse -Context $context -StatusCode 400 -Body ([ordered]@{
+                            error = "runtimeTemplate must be runtime_module or builtin_shell_plugin"
+                        })
+                    continue
+                }
+                if ($runtimeTemplate -eq "builtin_shell_plugin" -and [string]::IsNullOrWhiteSpace($runtimeShellPackage)) {
+                    Write-JsonResponse -Context $context -StatusCode 400 -Body ([ordered]@{
+                            error = "runtimeShellPackage is required when runtimeTemplate is builtin_shell_plugin"
                         })
                     continue
                 }
@@ -436,6 +454,9 @@ try {
                     appName = $appName
                     appUrl = $appUrl
                     packageSuffix = $packageSuffix
+                    runtimeTemplate = $runtimeTemplate
+                    runtimeShellPackage = $runtimeShellPackage
+                    runtimeShellDownloadUrl = $runtimeShellDownloadUrl
                     versionName = $versionName
                     versionCode = $versionCode
                     versionModel = $versionModel
