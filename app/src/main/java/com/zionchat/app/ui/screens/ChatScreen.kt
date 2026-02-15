@@ -418,7 +418,7 @@ fun ChatScreen(navController: NavController) {
                         ?: "Deploy failed"
                 DeployOutcome(app = app, errorText = errorText, deployedNow = false)
             }
-        )
+        }
     }
 
     suspend fun triggerRuntimePackagingIfNeeded(
