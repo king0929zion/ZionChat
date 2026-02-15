@@ -1,5 +1,6 @@
 package com.zionchat.app.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -54,6 +55,7 @@ fun WebHostingScreen(navController: NavController) {
     var customDomain by rememberSaveable { mutableStateOf("") }
     var autoDeploy by rememberSaveable { mutableStateOf(true) }
     var versionModel by rememberSaveable { mutableStateOf(1) }
+    var showAdvanced by rememberSaveable { mutableStateOf(false) }
     var isValidating by remember { mutableStateOf(false) }
     var statusText by remember { mutableStateOf<String?>(null) }
     var initialized by rememberSaveable { mutableStateOf(false) }
@@ -125,24 +127,6 @@ fun WebHostingScreen(navController: NavController) {
                 onValueChange = { token = it },
                 placeholder = "vercel_access_token"
             )
-            FormField(
-                label = "Project ID or Name",
-                value = projectId,
-                onValueChange = { projectId = it },
-                placeholder = "zionchat-project"
-            )
-            FormField(
-                label = "Team ID (optional)",
-                value = teamId,
-                onValueChange = { teamId = it },
-                placeholder = "team_xxx"
-            )
-            FormField(
-                label = "Custom domain (optional)",
-                value = customDomain,
-                onValueChange = { customDomain = it },
-                placeholder = "apps.example.com"
-            )
 
             Row(
                 modifier = Modifier
@@ -173,54 +157,104 @@ fun WebHostingScreen(navController: NavController) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Surface, RoundedCornerShape(20.dp))
+                    .pressableScale(pressedScale = 0.98f) { showAdvanced = !showAdvanced }
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Version model",
-                        color = TextPrimary,
-                        fontFamily = SourceSans3
+                Text(
+                    text = "Advanced settings",
+                    color = TextPrimary,
+                    fontFamily = SourceSans3,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = if (showAdvanced) "Hide" else "Show",
+                    color = TextSecondary,
+                    fontFamily = SourceSans3
+                )
+            }
+
+            AnimatedVisibility(visible = showAdvanced) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    FormField(
+                        label = "Project ID or Name",
+                        value = projectId,
+                        onValueChange = { projectId = it },
+                        placeholder = "zionchat-project"
                     )
+                    FormField(
+                        label = "Team ID (optional)",
+                        value = teamId,
+                        onValueChange = { teamId = it },
+                        placeholder = "team_xxx"
+                    )
+                    FormField(
+                        label = "Custom domain (optional)",
+                        value = customDomain,
+                        onValueChange = { customDomain = it },
+                        placeholder = "apps.example.com"
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Surface, RoundedCornerShape(20.dp))
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Version model",
+                                color = TextPrimary,
+                                fontFamily = SourceSans3
+                            )
+                            Text(
+                                text = "Schema version for future module expansion",
+                                color = TextSecondary,
+                                fontFamily = SourceSans3
+                            )
+                        }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            androidx.compose.foundation.layout.Box(
+                                modifier = Modifier
+                                    .height(32.dp)
+                                    .background(Background, RoundedCornerShape(10.dp))
+                                    .pressableScale(pressedScale = 0.96f) {
+                                        versionModel = (versionModel - 1).coerceAtLeast(1)
+                                    }
+                                    .padding(horizontal = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = "-", color = TextPrimary)
+                            }
+                            Text(
+                                text = "v$versionModel",
+                                color = TextPrimary,
+                                fontFamily = SourceSans3
+                            )
+                            androidx.compose.foundation.layout.Box(
+                                modifier = Modifier
+                                    .height(32.dp)
+                                    .background(Background, RoundedCornerShape(10.dp))
+                                    .pressableScale(pressedScale = 0.96f) {
+                                        versionModel = (versionModel + 1).coerceAtMost(99)
+                                    }
+                                    .padding(horizontal = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = "+", color = TextPrimary)
+                            }
+                        }
+                    }
+
                     Text(
-                        text = "Schema version for future module expansion",
+                        text = "SavedApp versioning is active with history and rollback.",
                         color = TextSecondary,
                         fontFamily = SourceSans3
                     )
-                }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    androidx.compose.foundation.layout.Box(
-                        modifier = Modifier
-                            .height(32.dp)
-                            .background(Background, RoundedCornerShape(10.dp))
-                            .pressableScale(pressedScale = 0.96f) {
-                                versionModel = (versionModel - 1).coerceAtLeast(1)
-                            }
-                            .padding(horizontal = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = "-", color = TextPrimary)
-                    }
-                    Text(
-                        text = "v$versionModel",
-                        color = TextPrimary,
-                        fontFamily = SourceSans3
-                    )
-                    androidx.compose.foundation.layout.Box(
-                        modifier = Modifier
-                            .height(32.dp)
-                            .background(Background, RoundedCornerShape(10.dp))
-                            .pressableScale(pressedScale = 0.96f) {
-                                versionModel = (versionModel + 1).coerceAtMost(99)
-                            }
-                            .padding(horizontal = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = "+", color = TextPrimary)
-                    }
                 }
             }
 
@@ -296,13 +330,7 @@ fun WebHostingScreen(navController: NavController) {
                     modifier = Modifier.padding(start = 4.dp)
                 )
             }
-
             Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "SavedApp versioning is active with history and rollback.",
-                color = TextSecondary,
-                fontFamily = SourceSans3
-            )
         }
     }
 }

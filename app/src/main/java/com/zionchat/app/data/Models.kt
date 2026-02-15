@@ -127,3 +127,11 @@ data class WebHostingConfig(
     val customDomain: String = "",
     val autoDeploy: Boolean = true
 )
+
+data class RuntimePackagingConfig(
+    val githubToken: String = "",
+    val repoOwner: String = "king0929zion",
+    val repoName: String = "ZionChat",
+    val ref: String = "main",
+    val workflowFile: String = "runtime-packager.yml"
+)
