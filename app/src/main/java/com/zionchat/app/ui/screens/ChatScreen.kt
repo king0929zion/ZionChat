@@ -77,6 +77,7 @@ import com.zionchat.app.R
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.LocalChatApiClient
 import com.zionchat.app.LocalProviderAuthManager
+import com.zionchat.app.LocalRuntimePackagingService
 import com.zionchat.app.LocalWebHostingService
 import com.zionchat.app.data.AppRepository
 import com.zionchat.app.data.AppAutomationTask
@@ -134,6 +135,7 @@ fun ChatScreen(navController: NavController) {
     val repository = LocalAppRepository.current
     val chatApiClient = LocalChatApiClient.current
     val providerAuthManager = LocalProviderAuthManager.current
+    val runtimePackagingService = LocalRuntimePackagingService.current
     val webHostingService = LocalWebHostingService.current
     val mcpClient = remember { McpClient() }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -376,10 +378,16 @@ fun ChatScreen(navController: NavController) {
         keyboardController?.hide()
     }
 
-    suspend fun deploySavedAppIfEnabled(app: SavedApp): Pair<SavedApp, String?> {
+    data class DeployOutcome(
+        val app: SavedApp,
+        val errorText: String?,
+        val deployedNow: Boolean
+    )
+
+    suspend fun deploySavedAppIfEnabled(app: SavedApp): DeployOutcome {
         val hostingConfig = repository.getWebHostingConfig()
         if (!hostingConfig.autoDeploy || hostingConfig.token.isBlank()) {
-            return app to null
+            return DeployOutcome(app = app, errorText = null, deployedNow = false)
         }
         return webHostingService.deployApp(
             appId = app.id,
@@ -387,13 +395,127 @@ fun ChatScreen(navController: NavController) {
             config = hostingConfig
         ).fold(
             onSuccess = { deployUrl ->
-                app.copy(deployUrl = deployUrl.trim()) to null
+                DeployOutcome(
+                    app =
+                        app.copy(
+                            deployUrl = deployUrl.trim(),
+                            runtimeBuildStatus = "",
+                            runtimeBuildRequestId = null,
+                            runtimeBuildRunId = null,
+                            runtimeBuildRunUrl = null,
+                            runtimeBuildArtifactName = null,
+                            runtimeBuildArtifactUrl = null,
+                            runtimeBuildError = null,
+                            runtimeBuildUpdatedAt = System.currentTimeMillis()
+                        ),
+                    errorText = null,
+                    deployedNow = true
+                )
             },
             onFailure = { throwable ->
                 val errorText =
                     throwable.message?.trim()?.takeIf { it.isNotBlank() }
                         ?: "Deploy failed"
-                app to errorText
+                DeployOutcome(app = app, errorText = errorText, deployedNow = false)
+            }
+        )
+    }
+
+    suspend fun triggerRuntimePackagingIfNeeded(
+        app: SavedApp,
+        deployedNow: Boolean
+    ): SavedApp {
+        if (!deployedNow) return app
+        val deployUrl = app.deployUrl?.trim().orEmpty()
+        if (deployUrl.isBlank()) {
+            return app.copy(
+                runtimeBuildStatus = "skipped",
+                runtimeBuildError = "Deploy URL is missing",
+                runtimeBuildUpdatedAt = System.currentTimeMillis()
+            )
+        }
+
+        val versionModel = repository.appModuleVersionModelFlow.first().coerceAtLeast(1)
+        return runtimePackagingService
+            .triggerRuntimePackaging(
+                app = app,
+                deployUrl = deployUrl,
+                versionModel = versionModel
+            )
+            .getOrElse { throwable ->
+                app.copy(
+                    runtimeBuildStatus = "failed",
+                    runtimeBuildError = throwable.message?.trim()?.takeIf { it.isNotBlank() } ?: "Runtime packaging failed",
+                    runtimeBuildVersionModel = versionModel,
+                    runtimeBuildUpdatedAt = System.currentTimeMillis()
+                )
+            }
+    }
+
+    fun runtimeBuildStatusText(status: String?, errorText: String?): String? {
+        val value = status?.trim()?.lowercase().orEmpty()
+        return when (value) {
+            "queued" -> "APK packaging queued"
+            "in_progress" -> "APK packaging in progress"
+            "success" -> "APK is ready"
+            "failed" -> errorText?.takeIf { it.isNotBlank() } ?: "APK packaging failed"
+            "disabled" -> errorText?.takeIf { it.isNotBlank() } ?: "APK packaging is disabled"
+            "skipped" -> errorText?.takeIf { it.isNotBlank() } ?: "APK packaging skipped"
+            else -> null
+        }
+    }
+
+    fun shouldTrackRuntimeBuild(status: String?): Boolean {
+        return when (status?.trim()?.lowercase()) {
+            "queued", "in_progress" -> true
+            else -> false
+        }
+    }
+
+    fun startRuntimeBuildTracking(
+        appId: String,
+        conversationId: String,
+        messageId: String,
+        tagId: String
+    ) {
+        scope.launch {
+            repeat(30) {
+                delay(4000)
+                val currentApp =
+                    repository.savedAppsFlow.first().firstOrNull { it.id == appId }
+                        ?: return@launch
+                if (!shouldTrackRuntimeBuild(currentApp.runtimeBuildStatus)) {
+                    return@launch
+                }
+                val synced =
+                    runtimePackagingService.syncRuntimePackaging(currentApp)
+                        .getOrElse { return@launch }
+                if (synced == currentApp) return@repeat
+
+                val persisted = repository.upsertSavedApp(synced) ?: synced
+                repository.updateMessageTag(
+                    conversationId = conversationId,
+                    messageId = messageId,
+                    tagId = tagId
+                ) { current ->
+                    val existingPayload =
+                        parseAppDevTagPayload(
+                            content = current.content,
+                            fallbackName = current.title.ifBlank { "App development" },
+                            fallbackStatus = current.status
+                        )
+                    val runtimeText = runtimeBuildStatusText(persisted.runtimeBuildStatus, persisted.runtimeBuildError)
+                    val updatedPayload =
+                        existingPayload.copy(
+                            runtimeStatus = persisted.runtimeBuildStatus.takeIf { it.isNotBlank() },
+                            runtimeMessage = runtimeText,
+                            runtimeRunUrl = persisted.runtimeBuildRunUrl
+                        )
+                    current.copy(
+                        content = encodeAppDevTagPayload(updatedPayload),
+                        status = if (persisted.runtimeBuildStatus == "failed") "error" else current.status
+                    )
+                }
             }
         )
     }
@@ -1352,12 +1474,22 @@ fun ChatScreen(navController: NavController) {
                                             createdAt = targetSavedApp?.createdAt ?: System.currentTimeMillis(),
                                             updatedAt = System.currentTimeMillis()
                                         )
-                                    val (deployReadyApp, deployErrorText) = deploySavedAppIfEnabled(baseSavedApp)
+                                    val deployOutcome = deploySavedAppIfEnabled(baseSavedApp)
+                                    val packagingReadyApp =
+                                        triggerRuntimePackagingIfNeeded(
+                                            app = deployOutcome.app,
+                                            deployedNow = deployOutcome.deployedNow
+                                        )
                                     val persistedApp =
                                         repository.upsertSavedApp(
-                                            deployReadyApp,
+                                            packagingReadyApp,
                                             note = if (parsedSpec.mode == "edit") "AI edited app" else "AI generated app"
-                                        ) ?: deployReadyApp
+                                        ) ?: packagingReadyApp
+                                    val runtimeText =
+                                        runtimeBuildStatusText(
+                                            status = persistedApp.runtimeBuildStatus,
+                                            errorText = persistedApp.runtimeBuildError
+                                        )
                                     val payload =
                                         pendingPayload.copy(
                                             name = finalName,
@@ -1370,7 +1502,10 @@ fun ChatScreen(navController: NavController) {
                                             html = html,
                                             error = null,
                                             sourceAppId = persistedApp.id,
-                                            mode = parsedSpec.mode
+                                            mode = parsedSpec.mode,
+                                            runtimeStatus = persistedApp.runtimeBuildStatus.takeIf { it.isNotBlank() },
+                                            runtimeMessage = runtimeText,
+                                            runtimeRunUrl = persistedApp.runtimeBuildRunUrl
                                         )
                                     updateAssistantTag(pendingTag.id) {
                                         it.copy(
@@ -1386,14 +1521,28 @@ fun ChatScreen(navController: NavController) {
                                     roundSummary.append(" in ")
                                     roundSummary.append(formatElapsedDuration(elapsedMs))
                                     roundSummary.append('\n')
-                                    if (!persistedApp.deployUrl.isNullOrBlank()) {
+                                    if (deployOutcome.deployedNow && !persistedApp.deployUrl.isNullOrBlank()) {
                                         roundSummary.append("- app_developer: deployed to ")
                                         roundSummary.append(persistedApp.deployUrl)
                                         roundSummary.append('\n')
-                                    } else if (!deployErrorText.isNullOrBlank()) {
+                                    } else if (!deployOutcome.errorText.isNullOrBlank()) {
                                         roundSummary.append("- app_developer: deploy failed (")
-                                        roundSummary.append(deployErrorText.take(140))
+                                        roundSummary.append(deployOutcome.errorText.take(140))
                                         roundSummary.append(")\n")
+                                    }
+                                    runtimeText?.let {
+                                        roundSummary.append("- app_developer: ")
+                                        roundSummary.append(it.take(140))
+                                        roundSummary.append('\n')
+                                    }
+
+                                    if (shouldTrackRuntimeBuild(persistedApp.runtimeBuildStatus)) {
+                                        startRuntimeBuildTracking(
+                                            appId = persistedApp.id,
+                                            conversationId = safeConversationId,
+                                            messageId = assistantMessage.id,
+                                            tagId = pendingTag.id
+                                        )
                                     }
                                 } else {
                                     val error = htmlResult.exceptionOrNull()
@@ -2175,11 +2324,63 @@ fun ChatScreen(navController: NavController) {
                                     description = payload.description.ifBlank { payload.subtitle },
                                     html = payload.html
                                 )
-                            val (deployReadyApp, _) = deploySavedAppIfEnabled(baseSavedApp)
-                            repository.upsertSavedApp(
-                                deployReadyApp,
-                                note = "Manual save from workspace"
-                            )
+                            val deployOutcome = deploySavedAppIfEnabled(baseSavedApp)
+                            val packagingReadyApp =
+                                triggerRuntimePackagingIfNeeded(
+                                    app = deployOutcome.app,
+                                    deployedNow = deployOutcome.deployedNow
+                                )
+                            val persistedApp =
+                                repository.upsertSavedApp(
+                                    packagingReadyApp,
+                                    note = "Manual save from workspace"
+                                ) ?: packagingReadyApp
+
+                            val convoId = effectiveConversationId?.trim().orEmpty()
+                            val messageId = appWorkspaceMessageId?.trim().orEmpty()
+                            if (convoId.isNotBlank() && messageId.isNotBlank() && tagId.isNotBlank()) {
+                                val runtimeText =
+                                    runtimeBuildStatusText(
+                                        status = persistedApp.runtimeBuildStatus,
+                                        errorText = persistedApp.runtimeBuildError
+                                    )
+                                repository.updateMessageTag(
+                                    conversationId = convoId,
+                                    messageId = messageId,
+                                    tagId = tagId
+                                ) { current ->
+                                    val existingPayload =
+                                        parseAppDevTagPayload(
+                                            content = current.content,
+                                            fallbackName = current.title.ifBlank { "App development" },
+                                            fallbackStatus = current.status
+                                        )
+                                    current.copy(
+                                        content =
+                                            encodeAppDevTagPayload(
+                                                existingPayload.copy(
+                                                    runtimeStatus = persistedApp.runtimeBuildStatus.takeIf { it.isNotBlank() },
+                                                    runtimeMessage = runtimeText,
+                                                    runtimeRunUrl = persistedApp.runtimeBuildRunUrl
+                                                )
+                                            ),
+                                        status = if (persistedApp.runtimeBuildStatus == "failed") "error" else current.status
+                                    )
+                                }
+                            }
+
+                            if (shouldTrackRuntimeBuild(persistedApp.runtimeBuildStatus)) {
+                                val convoId = effectiveConversationId?.trim().orEmpty()
+                                val messageId = appWorkspaceMessageId?.trim().orEmpty()
+                                if (convoId.isNotBlank() && messageId.isNotBlank() && tagId.isNotBlank()) {
+                                    startRuntimeBuildTracking(
+                                        appId = persistedApp.id,
+                                        conversationId = convoId,
+                                        messageId = messageId,
+                                        tagId = tagId
+                                    )
+                                }
+                            }
                         }
                     }
                 )
@@ -2595,6 +2796,7 @@ private fun AppDevToolTagCard(
         )
     }
     val progressFraction = (payload.progress.coerceIn(0, 100) / 100f)
+    val runtimeMessage = payload.runtimeMessage?.trim()?.takeIf { it.isNotBlank() }
 
     Row(
         modifier = Modifier
@@ -2633,6 +2835,20 @@ private fun AppDevToolTagCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            if (!runtimeMessage.isNullOrBlank()) {
+                Text(
+                    text = runtimeMessage,
+                    fontSize = 11.sp,
+                    color =
+                        when (payload.runtimeStatus?.trim()?.lowercase()) {
+                            "failed" -> Color(0xFFFF3B30)
+                            "success" -> Color(0xFF34C759)
+                            else -> Color(0xFF8E8E93)
+                        },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             Spacer(modifier = Modifier.height(2.dp))
             Box(
                 modifier = Modifier
@@ -2764,6 +2980,19 @@ private fun AppDevTagDetailCard(tag: MessageTag) {
             fontWeight = FontWeight.Medium,
             color = TextPrimary
         )
+
+        payload.runtimeMessage?.trim()?.takeIf { it.isNotBlank() }?.let { runtimeText ->
+            Text(
+                text = runtimeText,
+                fontSize = 13.sp,
+                color =
+                    when (payload.runtimeStatus?.trim()?.lowercase()) {
+                        "failed" -> Color(0xFFFF3B30)
+                        "success" -> Color(0xFF34C759)
+                        else -> TextSecondary
+                    }
+            )
+        }
 
         if (html.isBlank()) {
             Text(
@@ -4334,7 +4563,10 @@ private data class AppDevTagPayload(
     val html: String,
     val error: String? = null,
     val sourceAppId: String? = null,
-    val mode: String = "create"
+    val mode: String = "create",
+    val runtimeStatus: String? = null,
+    val runtimeMessage: String? = null,
+    val runtimeRunUrl: String? = null
 )
 
 private data class PlannedMcpToolCall(
@@ -4527,6 +4759,25 @@ private fun parseAppDevTagPayload(
     val error = json?.get("error")?.takeIf { it.isJsonPrimitive }?.asString?.trim()?.takeIf { it.isNotBlank() }
     val sourceAppId = json?.get("sourceAppId")?.takeIf { it.isJsonPrimitive }?.asString?.trim()?.takeIf { it.isNotBlank() }
     val mode = json?.get("mode")?.takeIf { it.isJsonPrimitive }?.asString?.trim()?.takeIf { it.isNotBlank() } ?: "create"
+    val runtimeStatus =
+        json?.get("runtimeStatus")
+            ?.takeIf { it.isJsonPrimitive }
+            ?.asString
+            ?.trim()
+            ?.lowercase()
+            ?.takeIf { it.isNotBlank() }
+    val runtimeMessage =
+        json?.get("runtimeMessage")
+            ?.takeIf { it.isJsonPrimitive }
+            ?.asString
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+    val runtimeRunUrl =
+        json?.get("runtimeRunUrl")
+            ?.takeIf { it.isJsonPrimitive }
+            ?.asString
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
     val compactDescription = compactAppDescription(descriptionRaw, subtitleRaw)
     val compactSubtitle = compactAppDescription(subtitleRaw, compactDescription)
     return AppDevTagPayload(
@@ -4540,7 +4791,10 @@ private fun parseAppDevTagPayload(
         html = html,
         error = error,
         sourceAppId = sourceAppId,
-        mode = mode
+        mode = mode,
+        runtimeStatus = runtimeStatus,
+        runtimeMessage = runtimeMessage,
+        runtimeRunUrl = runtimeRunUrl
     )
 }
 

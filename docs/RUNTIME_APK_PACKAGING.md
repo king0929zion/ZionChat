@@ -2,6 +2,14 @@
 
 This project supports direct runtime packaging for a hosted web app URL.
 
+## Prebuilt template APK
+
+A prebuilt runtime template APK is available from workflow run `22029116211` and downloaded locally to:
+
+```text
+.tmp/runtime-template/Runtime-template-v1.0.0/runtime-release.apk
+```
+
 ## Local one-line packaging
 
 ```powershell
@@ -29,6 +37,30 @@ You can also use the helper script:
   -VersionName "1.0.0" `
   -VersionCode 1
 ```
+
+## Local bridge mode (used by APP developer auto packaging)
+
+Start the local bridge:
+
+```powershell
+.\_ci\runtime-packager-bridge.ps1 `
+  -BindAddress "127.0.0.1" `
+  -Port 17856 `
+  -AuthToken "<optional-token>"
+```
+
+Then set app build config inputs:
+
+```text
+RUNTIME_PACKAGER_BASE_URL=http://127.0.0.1:17856
+RUNTIME_PACKAGER_TOKEN=<optional-token>
+```
+
+The app will call:
+
+- `POST /v1/runtime/builds`
+- `GET /v1/runtime/builds/{requestId}`
+- `GET /v1/runtime/builds/{requestId}/artifact`
 
 ## GitHub Actions packaging
 

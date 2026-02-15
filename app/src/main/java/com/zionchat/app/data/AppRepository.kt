@@ -52,6 +52,8 @@ class AppRepository(context: Context) {
     private val webHostingAutoDeployKey = booleanPreferencesKey("web_hosting_auto_deploy")
     private val appModuleVersionModelKey = intPreferencesKey("app_module_version_model")
     private val supportedAccentKeys = setOf("default", "blue", "pink", "orange", "black")
+    private val supportedRuntimeBuildStatuses =
+        setOf("queued", "in_progress", "success", "failed", "disabled", "skipped")
 
     private val providerListType = object : TypeToken<List<ProviderConfig>>() {}.type
     private val modelListType = object : TypeToken<List<ModelConfig>>() {}.type
@@ -218,6 +220,8 @@ class AppRepository(context: Context) {
         val updatedAt = app.updatedAt.takeIf { it > 0 } ?: createdAt
         val versionCode = app.versionCode.coerceAtLeast(1)
         val versionName = safeTrim(app.versionName).ifBlank { buildSavedAppVersionName(versionCode) }
+        val runtimeBuildStatus =
+            app.runtimeBuildStatus.trim().lowercase().takeIf { supportedRuntimeBuildStatuses.contains(it) }.orEmpty()
         return SavedApp(
             id = id,
             sourceTagId = safeTrimOrNull(app.sourceTagId),
@@ -225,6 +229,17 @@ class AppRepository(context: Context) {
             description = safeTrim(app.description).take(180),
             html = html,
             deployUrl = safeTrimOrNull(app.deployUrl),
+            runtimeBuildStatus = runtimeBuildStatus,
+            runtimeBuildRequestId = safeTrimOrNull(app.runtimeBuildRequestId)?.take(80),
+            runtimeBuildRunId = app.runtimeBuildRunId?.takeIf { it > 0 },
+            runtimeBuildRunUrl = safeTrimOrNull(app.runtimeBuildRunUrl)?.take(400),
+            runtimeBuildArtifactName = safeTrimOrNull(app.runtimeBuildArtifactName)?.take(180),
+            runtimeBuildArtifactUrl = safeTrimOrNull(app.runtimeBuildArtifactUrl)?.take(600),
+            runtimeBuildError = safeTrimOrNull(app.runtimeBuildError)?.take(240),
+            runtimeBuildVersionName = safeTrimOrNull(app.runtimeBuildVersionName)?.take(48),
+            runtimeBuildVersionCode = app.runtimeBuildVersionCode?.coerceAtLeast(1),
+            runtimeBuildVersionModel = app.runtimeBuildVersionModel?.coerceAtLeast(1),
+            runtimeBuildUpdatedAt = app.runtimeBuildUpdatedAt?.takeIf { it > 0 },
             versionCode = versionCode,
             versionName = versionName.take(24),
             createdAt = createdAt,
@@ -940,6 +955,18 @@ class AppRepository(context: Context) {
                     } else {
                         existing.versionName.ifBlank { buildSavedAppVersionName(versionCode) }
                     }
+                val hasRuntimeUpdate =
+                    sanitizedIncoming.runtimeBuildStatus.isNotBlank() ||
+                        !sanitizedIncoming.runtimeBuildRequestId.isNullOrBlank() ||
+                        sanitizedIncoming.runtimeBuildRunId != null ||
+                        !sanitizedIncoming.runtimeBuildRunUrl.isNullOrBlank() ||
+                        !sanitizedIncoming.runtimeBuildArtifactName.isNullOrBlank() ||
+                        !sanitizedIncoming.runtimeBuildArtifactUrl.isNullOrBlank() ||
+                        !sanitizedIncoming.runtimeBuildError.isNullOrBlank() ||
+                        !sanitizedIncoming.runtimeBuildVersionName.isNullOrBlank() ||
+                        sanitizedIncoming.runtimeBuildVersionCode != null ||
+                        sanitizedIncoming.runtimeBuildVersionModel != null ||
+                        sanitizedIncoming.runtimeBuildUpdatedAt != null
                 val updated =
                     existing.copy(
                         sourceTagId = sanitizedIncoming.sourceTagId ?: existing.sourceTagId,
@@ -947,6 +974,17 @@ class AppRepository(context: Context) {
                         description = sanitizedIncoming.description,
                         html = sanitizedIncoming.html,
                         deployUrl = deployUrl,
+                        runtimeBuildStatus = if (hasRuntimeUpdate) sanitizedIncoming.runtimeBuildStatus else existing.runtimeBuildStatus,
+                        runtimeBuildRequestId = if (hasRuntimeUpdate) sanitizedIncoming.runtimeBuildRequestId else existing.runtimeBuildRequestId,
+                        runtimeBuildRunId = if (hasRuntimeUpdate) sanitizedIncoming.runtimeBuildRunId else existing.runtimeBuildRunId,
+                        runtimeBuildRunUrl = if (hasRuntimeUpdate) sanitizedIncoming.runtimeBuildRunUrl else existing.runtimeBuildRunUrl,
+                        runtimeBuildArtifactName = if (hasRuntimeUpdate) sanitizedIncoming.runtimeBuildArtifactName else existing.runtimeBuildArtifactName,
+                        runtimeBuildArtifactUrl = if (hasRuntimeUpdate) sanitizedIncoming.runtimeBuildArtifactUrl else existing.runtimeBuildArtifactUrl,
+                        runtimeBuildError = if (hasRuntimeUpdate) sanitizedIncoming.runtimeBuildError else existing.runtimeBuildError,
+                        runtimeBuildVersionName = if (hasRuntimeUpdate) sanitizedIncoming.runtimeBuildVersionName else existing.runtimeBuildVersionName,
+                        runtimeBuildVersionCode = if (hasRuntimeUpdate) sanitizedIncoming.runtimeBuildVersionCode else existing.runtimeBuildVersionCode,
+                        runtimeBuildVersionModel = if (hasRuntimeUpdate) sanitizedIncoming.runtimeBuildVersionModel else existing.runtimeBuildVersionModel,
+                        runtimeBuildUpdatedAt = if (hasRuntimeUpdate) sanitizedIncoming.runtimeBuildUpdatedAt else existing.runtimeBuildUpdatedAt,
                         versionCode = versionCode,
                         versionName = versionName,
                         updatedAt = now

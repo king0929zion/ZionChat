@@ -76,7 +76,8 @@ class MainActivity : AppCompatActivity() {
                         LocalChatApiClient provides appContainer.chatApiClient,
                         LocalOAuthClient provides appContainer.oauthClient,
                         LocalProviderAuthManager provides appContainer.providerAuthManager,
-                        LocalWebHostingService provides appContainer.webHostingService
+                        LocalWebHostingService provides appContainer.webHostingService,
+                        LocalRuntimePackagingService provides appContainer.runtimePackagingService
                     ) {
                         val appLanguage by appContainer.repository.appLanguageFlow.collectAsState(initial = "__pending__")
                         LaunchedEffect(appLanguage) {

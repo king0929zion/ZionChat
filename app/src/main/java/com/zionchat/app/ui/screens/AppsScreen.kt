@@ -49,6 +49,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -75,6 +76,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
 import com.zionchat.app.LocalAppRepository
+import com.zionchat.app.LocalRuntimePackagingService
 import com.zionchat.app.LocalWebHostingService
 import com.zionchat.app.R
 import com.zionchat.app.data.AppAutomationTask
@@ -88,6 +90,9 @@ import com.zionchat.app.ui.theme.TextPrimary
 import com.zionchat.app.ui.theme.TextSecondary
 import com.zionchat.app.ui.theme.Surface as SurfaceColor
 import androidx.compose.ui.res.stringResource
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 private data class AppItemUi(
@@ -110,12 +115,39 @@ private enum class AppIconStyle {
 @Composable
 fun AppsScreen(navController: NavController) {
     val repository = LocalAppRepository.current
+    val runtimePackagingService = LocalRuntimePackagingService.current
     val webHostingService = LocalWebHostingService.current
     val scope = rememberCoroutineScope()
     val savedApps by repository.savedAppsFlow.collectAsState(initial = emptyList())
     val savedAppVersions by repository.savedAppVersionsFlow.collectAsState(initial = emptyList())
     val webHostingConfig by repository.webHostingConfigFlow.collectAsState(initial = WebHostingConfig())
+    val appVersionModel by repository.appModuleVersionModelFlow.collectAsState(initial = 1)
     var selectedSavedApp by remember { mutableStateOf<SavedApp?>(null) }
+
+    LaunchedEffect(Unit) {
+        val activeStatuses = setOf("queued", "in_progress")
+        while (isActive) {
+            val snapshot = repository.savedAppsFlow.first()
+            val pendingApps =
+                snapshot.filter { app ->
+                    activeStatuses.contains(app.runtimeBuildStatus.trim().lowercase())
+                }
+
+            if (pendingApps.isNotEmpty()) {
+                pendingApps.forEach { app ->
+                    val synced = runtimePackagingService.syncRuntimePackaging(app).getOrNull() ?: return@forEach
+                    if (synced != app) {
+                        repository.upsertSavedApp(synced)
+                        if (selectedSavedApp?.id == synced.id) {
+                            selectedSavedApp = synced
+                        }
+                    }
+                }
+            }
+
+            delay(if (pendingApps.isEmpty()) 12_000L else 4_000L)
+        }
+    }
 
     Scaffold(
         containerColor = Background,
@@ -219,10 +251,36 @@ fun AppsScreen(navController: NavController) {
                         val updated =
                             targetApp.copy(
                                 deployUrl = url.trim(),
+                                runtimeBuildStatus = "",
+                                runtimeBuildRequestId = null,
+                                runtimeBuildRunId = null,
+                                runtimeBuildRunUrl = null,
+                                runtimeBuildArtifactName = null,
+                                runtimeBuildArtifactUrl = null,
+                                runtimeBuildError = null,
+                                runtimeBuildUpdatedAt = System.currentTimeMillis(),
                                 updatedAt = System.currentTimeMillis()
                             )
-                        repository.upsertSavedApp(updated, note = "Manual redeploy")
-                        selectedSavedApp = updated
+                        val persisted = repository.upsertSavedApp(updated, note = "Manual redeploy") ?: updated
+                        val packaged =
+                            runtimePackagingService
+                                .triggerRuntimePackaging(
+                                    app = persisted,
+                                    deployUrl = url.trim(),
+                                    versionModel = appVersionModel
+                                )
+                                .getOrElse { throwable ->
+                                    persisted.copy(
+                                        runtimeBuildStatus = "failed",
+                                        runtimeBuildError =
+                                            throwable.message?.trim()?.takeIf { it.isNotBlank() }
+                                                ?: "Runtime packaging failed",
+                                        runtimeBuildVersionModel = appVersionModel.coerceAtLeast(1),
+                                        runtimeBuildUpdatedAt = System.currentTimeMillis()
+                                    )
+                                }
+                        val finalApp = repository.upsertSavedApp(packaged) ?: packaged
+                        selectedSavedApp = finalApp
                     }
                 }
             },
@@ -312,6 +370,8 @@ private fun SavedAppRow(
     app: SavedApp,
     onClick: () -> Unit
 ) {
+    val runtimeStatusText = runtimeBuildStatusText(app.runtimeBuildStatus, app.runtimeBuildError)
+    val runtimeStatusColor = runtimeBuildStatusColor(app.runtimeBuildStatus)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val pressedBackground by animateColorAsState(
@@ -362,6 +422,15 @@ private fun SavedAppRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            if (!runtimeStatusText.isNullOrBlank()) {
+                Text(
+                    text = runtimeStatusText,
+                    fontSize = 12.sp,
+                    color = runtimeStatusColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
         Icon(
             imageVector = AppIcons.ChevronRight,
@@ -419,6 +488,8 @@ private fun SavedAppPreviewDialog(
         if (chromeColor.luminance() < 0.45f) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.08f)
     val controlsTint =
         if (chromeColor.luminance() < 0.45f) Color.White else TextPrimary
+    val runtimeStatusText = runtimeBuildStatusText(app.runtimeBuildStatus, app.runtimeBuildError)
+    val runtimeStatusColor = runtimeBuildStatusColor(app.runtimeBuildStatus)
     val reportIssue = rememberUpdatedState<(String) -> Unit> { raw ->
         val normalized = raw.trim().replace(Regex("\\s+"), " ").take(480)
         if (normalized.isBlank()) return@rememberUpdatedState
@@ -606,11 +677,22 @@ private fun SavedAppPreviewDialog(
                     .background(controlsBackground, RoundedCornerShape(12.dp))
                     .padding(horizontal = 10.dp, vertical = 6.dp)
             ) {
-                Text(
-                    text = "${app.versionName.ifBlank { "v${app.versionCode}" }} • $versionCount versions",
-                    color = controlsTint,
-                    fontSize = 12.sp
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "${app.versionName.ifBlank { "v${app.versionCode}" }} • $versionCount versions",
+                        color = controlsTint,
+                        fontSize = 12.sp
+                    )
+                    if (!runtimeStatusText.isNullOrBlank()) {
+                        Text(
+                            text = runtimeStatusText,
+                            color = if (runtimeStatusColor == TextSecondary) controlsTint else runtimeStatusColor,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
 
             if (versionCount > 1) {
@@ -702,6 +784,27 @@ private fun SavedAppPreviewDialog(
                 }
             }
         )
+    }
+}
+
+private fun runtimeBuildStatusText(status: String?, errorText: String?): String? {
+    return when (status?.trim()?.lowercase()) {
+        "queued" -> "APK packaging queued"
+        "in_progress" -> "APK packaging in progress"
+        "success" -> "APK ready"
+        "failed" -> errorText?.trim()?.takeIf { it.isNotBlank() } ?: "APK packaging failed"
+        "disabled" -> errorText?.trim()?.takeIf { it.isNotBlank() } ?: "Local packager is disabled"
+        "skipped" -> errorText?.trim()?.takeIf { it.isNotBlank() } ?: "APK packaging skipped"
+        else -> null
+    }
+}
+
+private fun runtimeBuildStatusColor(status: String?): Color {
+    return when (status?.trim()?.lowercase()) {
+        "success" -> Color(0xFF34C759)
+        "failed" -> Color(0xFFFF3B30)
+        "queued", "in_progress" -> Color(0xFF007AFF)
+        else -> TextSecondary
     }
 }
 

@@ -3,6 +3,19 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.compose'
 }
 
+def escapeForBuildConfig = { value ->
+    return value.toString().replace("\\", "\\\\").replace("\"", "\\\"")
+}
+
+def runtimePackagerBaseUrl =
+    (project.findProperty("RUNTIME_PACKAGER_BASE_URL")
+        ?: System.getenv("RUNTIME_PACKAGER_BASE_URL")
+        ?: "http://127.0.0.1:17856").toString()
+def runtimePackagerToken =
+    (project.findProperty("RUNTIME_PACKAGER_TOKEN")
+        ?: System.getenv("RUNTIME_PACKAGER_TOKEN")
+        ?: "").toString()
+
 android {
     namespace 'com.zionchat.app'
     compileSdk 36
@@ -18,6 +31,8 @@ android {
         vectorDrawables {
             useSupportLibrary true
         }
+        buildConfigField "String", "RUNTIME_PACKAGER_BASE_URL", "\"${escapeForBuildConfig(runtimePackagerBaseUrl)}\""
+        buildConfigField "String", "RUNTIME_PACKAGER_TOKEN", "\"${escapeForBuildConfig(runtimePackagerToken)}\""
     }
 
     def signingKeystorePath = System.getenv("SIGNING_KEYSTORE_PATH")

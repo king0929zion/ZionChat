@@ -92,6 +92,17 @@ data class SavedApp(
     val description: String,
     val html: String,
     val deployUrl: String? = null,
+    val runtimeBuildStatus: String = "",
+    val runtimeBuildRequestId: String? = null,
+    val runtimeBuildRunId: Long? = null,
+    val runtimeBuildRunUrl: String? = null,
+    val runtimeBuildArtifactName: String? = null,
+    val runtimeBuildArtifactUrl: String? = null,
+    val runtimeBuildError: String? = null,
+    val runtimeBuildVersionName: String? = null,
+    val runtimeBuildVersionCode: Int? = null,
+    val runtimeBuildVersionModel: Int? = null,
+    val runtimeBuildUpdatedAt: Long? = null,
     val versionCode: Int = 1,
     val versionName: String = "v1",
     val createdAt: Long = System.currentTimeMillis(),
@@ -129,9 +140,7 @@ data class WebHostingConfig(
 )
 
 data class RuntimePackagingConfig(
-    val githubToken: String = "",
-    val repoOwner: String = "king0929zion",
-    val repoName: String = "ZionChat",
-    val ref: String = "main",
-    val workflowFile: String = "runtime-packager.yml"
+    val localBridgeBaseUrl: String = "http://127.0.0.1:17856",
+    val localBridgeToken: String = "",
+    val requestTimeoutMs: Long = 30_000L
 )

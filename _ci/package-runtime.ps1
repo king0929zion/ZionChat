@@ -41,5 +41,18 @@ Write-Host "ID  : $PackageSuffix"
 
 & .\gradlew.bat @args
 
-Write-Host "Done. APK output path: runtime\build\outputs\apk\release\"
+if ($LASTEXITCODE -ne 0) {
+    throw "Gradle packaging failed with exit code $LASTEXITCODE."
+}
 
+$apkOutputDir = "runtime\build\outputs\apk\release"
+if (-not (Test-Path $apkOutputDir)) {
+    throw "APK output directory was not found: $apkOutputDir"
+}
+
+$apkFile = Get-ChildItem -Path $apkOutputDir -Filter *.apk -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if ($null -eq $apkFile) {
+    throw "APK output file was not found in: $apkOutputDir"
+}
+
+Write-Host "Done. APK output path: $($apkFile.FullName)"
