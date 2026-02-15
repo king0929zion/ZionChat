@@ -15,6 +15,14 @@ def runtimePackagerToken =
     (project.findProperty("RUNTIME_PACKAGER_TOKEN")
         ?: System.getenv("RUNTIME_PACKAGER_TOKEN")
         ?: "").toString()
+def runtimeShellPluginPackage =
+    (project.findProperty("RUNTIME_SHELL_PLUGIN_PACKAGE")
+        ?: System.getenv("RUNTIME_SHELL_PLUGIN_PACKAGE")
+        ?: "com.zionchat.runtime.core_runtime_shell").toString()
+def runtimeShellPluginDownloadUrl =
+    (project.findProperty("RUNTIME_SHELL_PLUGIN_DOWNLOAD_URL")
+        ?: System.getenv("RUNTIME_SHELL_PLUGIN_DOWNLOAD_URL")
+        ?: "https://github.com/king0929zion/core/releases/latest/download/runtime-release-unsigned.apk").toString()
 
 android {
     namespace 'com.zionchat.app'
@@ -24,8 +32,8 @@ android {
         applicationId "com.zionchat.app"
         minSdk 24
         targetSdk 36
-        versionCode 177
-        versionName "0.18.144"
+        versionCode 178
+        versionName "0.18.145"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -33,6 +41,8 @@ android {
         }
         buildConfigField "String", "RUNTIME_PACKAGER_BASE_URL", "\"${escapeForBuildConfig(runtimePackagerBaseUrl)}\""
         buildConfigField "String", "RUNTIME_PACKAGER_TOKEN", "\"${escapeForBuildConfig(runtimePackagerToken)}\""
+        buildConfigField "String", "RUNTIME_SHELL_PLUGIN_PACKAGE", "\"${escapeForBuildConfig(runtimeShellPluginPackage)}\""
+        buildConfigField "String", "RUNTIME_SHELL_PLUGIN_DOWNLOAD_URL", "\"${escapeForBuildConfig(runtimeShellPluginDownloadUrl)}\""
     }
 
     def signingKeystorePath = System.getenv("SIGNING_KEYSTORE_PATH")

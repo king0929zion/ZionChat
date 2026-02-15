@@ -127,6 +127,12 @@
     <string name="apps_featured">Featured</string>
     <string name="apps_empty_saved">No saved apps yet. Save from the app developer card to see it here.</string>
     <string name="apps_saved_from_chat">Saved from chat</string>
+    <string name="runtime_shell_required_title">Runtime shell plugin required</string>
+    <string name="runtime_shell_required_subtitle">Install runtime shell (%1$s) before using App developer and runtime packaging.</string>
+    <string name="runtime_shell_download_button">Download shell</string>
+    <string name="runtime_shell_check_button">I have installed it</string>
+    <string name="runtime_shell_required_toast">Install Runtime shell plugin first from Apps.</string>
+    <string name="runtime_shell_download_failed">Failed to open Runtime shell download page.</string>
 
     <!-- About -->
     <string name="about_title">About</string>

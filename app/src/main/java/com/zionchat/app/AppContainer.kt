@@ -20,6 +20,7 @@ class AppContainer(context: Context) {
     val webHostingService: WebHostingService = VercelDeployService()
     val runtimePackagingService: RuntimePackagingService =
         LocalBridgeRuntimePackagingService(
+            appContext = context.applicationContext,
             config =
                 RuntimePackagingConfig(
                     localBridgeBaseUrl = BuildConfig.RUNTIME_PACKAGER_BASE_URL,

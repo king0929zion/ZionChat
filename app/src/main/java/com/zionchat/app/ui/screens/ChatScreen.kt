@@ -91,6 +91,7 @@ import com.zionchat.app.data.McpClient
 import com.zionchat.app.data.McpConfig
 import com.zionchat.app.data.McpToolCall
 import com.zionchat.app.data.ProviderConfig
+import com.zionchat.app.data.RuntimeShellPlugin
 import com.zionchat.app.data.SavedApp
 import com.zionchat.app.data.extractRemoteModelId
 import com.zionchat.app.ui.components.TopFadeScrim
@@ -426,6 +427,13 @@ fun ChatScreen(navController: NavController) {
         deployedNow: Boolean
     ): SavedApp {
         if (!deployedNow) return app
+        if (!RuntimeShellPlugin.isInstalled(context)) {
+            return app.copy(
+                runtimeBuildStatus = "disabled",
+                runtimeBuildError = "Runtime shell plugin is required. Open Apps and install it first.",
+                runtimeBuildUpdatedAt = System.currentTimeMillis()
+            )
+        }
         val deployUrl = app.deployUrl?.trim().orEmpty()
         if (deployUrl.isBlank()) {
             return app.copy(
@@ -459,7 +467,7 @@ fun ChatScreen(navController: NavController) {
             "in_progress" -> "APK packaging in progress"
             "success" -> "APK is ready"
             "failed" -> errorText?.takeIf { it.isNotBlank() } ?: "APK packaging failed"
-            "disabled" -> errorText?.takeIf { it.isNotBlank() } ?: "APK packaging is disabled"
+            "disabled" -> errorText?.takeIf { it.isNotBlank() } ?: "Runtime shell plugin is required"
             "skipped" -> errorText?.takeIf { it.isNotBlank() } ?: "APK packaging skipped"
             else -> null
         }
@@ -1282,6 +1290,20 @@ fun ChatScreen(navController: NavController) {
                                         it.copy(content = encodeAppDevTagPayload(payload), status = "error")
                                     }
                                     roundSummary.append("- app_developer: disabled\n")
+                                    return@forEach
+                                }
+
+                                if (!RuntimeShellPlugin.isInstalled(context)) {
+                                    val payload =
+                                        pendingPayload.copy(
+                                            progress = 0,
+                                            status = "error",
+                                            error = "Runtime shell plugin is required. Open Apps and install it first."
+                                        )
+                                    updateAssistantTag(pendingTag.id) {
+                                        it.copy(content = encodeAppDevTagPayload(payload), status = "error")
+                                    }
+                                    roundSummary.append("- app_developer: runtime shell missing\n")
                                     return@forEach
                                 }
 

@@ -1,6 +1,7 @@
 package com.zionchat.app.ui.screens
 
 import android.graphics.Color as AndroidColor
+import android.widget.Toast
 import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
@@ -57,6 +58,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,12 +77,15 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavController
 import com.zionchat.app.LocalAppRepository
 import com.zionchat.app.LocalRuntimePackagingService
 import com.zionchat.app.LocalWebHostingService
 import com.zionchat.app.R
 import com.zionchat.app.data.AppAutomationTask
+import com.zionchat.app.data.RuntimeShellPlugin
 import com.zionchat.app.data.SavedApp
 import com.zionchat.app.data.WebHostingConfig
 import com.zionchat.app.ui.components.pressableScale
@@ -114,6 +120,8 @@ private enum class AppIconStyle {
 
 @Composable
 fun AppsScreen(navController: NavController) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val repository = LocalAppRepository.current
     val runtimePackagingService = LocalRuntimePackagingService.current
     val webHostingService = LocalWebHostingService.current
@@ -122,7 +130,39 @@ fun AppsScreen(navController: NavController) {
     val savedAppVersions by repository.savedAppVersionsFlow.collectAsState(initial = emptyList())
     val webHostingConfig by repository.webHostingConfigFlow.collectAsState(initial = WebHostingConfig())
     val appVersionModel by repository.appModuleVersionModelFlow.collectAsState(initial = 1)
+    var runtimeShellInstalled by remember { mutableStateOf(RuntimeShellPlugin.isInstalled(context)) }
     var selectedSavedApp by remember { mutableStateOf<SavedApp?>(null) }
+
+    fun notifyRuntimeShellRequired() {
+        Toast.makeText(
+            context,
+            context.getString(R.string.runtime_shell_required_toast),
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    fun openRuntimeShellDownload() {
+        val opened = RuntimeShellPlugin.openDownloadPage(context)
+        if (!opened) {
+            Toast.makeText(
+                context,
+                context.getString(R.string.runtime_shell_download_failed),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                runtimeShellInstalled = RuntimeShellPlugin.isInstalled(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     LaunchedEffect(Unit) {
         val activeStatuses = setOf("queued", "in_progress")
@@ -154,7 +194,14 @@ fun AppsScreen(navController: NavController) {
         topBar = {
             AppsTopBar(
                 onBack = { navController.popBackStack() },
-                onAdd = { navController.navigate("chat") }
+                onAdd = {
+                    if (!runtimeShellInstalled) {
+                        notifyRuntimeShellRequired()
+                        openRuntimeShellDownload()
+                        return@AppsTopBar
+                    }
+                    navController.navigate("chat")
+                }
             )
         }
     ) { padding ->
@@ -171,6 +218,16 @@ fun AppsScreen(navController: NavController) {
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 28.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                if (!runtimeShellInstalled) {
+                    item(key = "runtime_shell_required") {
+                        RuntimeShellRequiredCard(
+                            packageName = RuntimeShellPlugin.packageName(),
+                            onDownload = { openRuntimeShellDownload() },
+                            onRefresh = { runtimeShellInstalled = RuntimeShellPlugin.isInstalled(context) }
+                        )
+                    }
+                }
+
                 item(key = "saved_title") {
                     Text(
                         text = stringResource(R.string.apps_my_apps),
@@ -213,6 +270,11 @@ fun AppsScreen(navController: NavController) {
             app = app,
             onDismiss = { selectedSavedApp = null },
             onRequestEdit = { request ->
+                if (!runtimeShellInstalled) {
+                    notifyRuntimeShellRequired()
+                    openRuntimeShellDownload()
+                    return@SavedAppPreviewDialog
+                }
                 repository.enqueueAppAutomationTask(
                     AppAutomationTask(
                         mode = "edit",
@@ -226,6 +288,11 @@ fun AppsScreen(navController: NavController) {
                 navController.navigate("chat")
             },
             onRequestAutoFix = { issue ->
+                if (!runtimeShellInstalled) {
+                    notifyRuntimeShellRequired()
+                    openRuntimeShellDownload()
+                    return@SavedAppPreviewDialog
+                }
                 repository.enqueueAppAutomationTask(
                     AppAutomationTask(
                         mode = "debug_fix",
@@ -239,6 +306,11 @@ fun AppsScreen(navController: NavController) {
                 navController.navigate("chat")
             },
             onRedeploy = { targetApp ->
+                if (!runtimeShellInstalled) {
+                    notifyRuntimeShellRequired()
+                    openRuntimeShellDownload()
+                    return@SavedAppPreviewDialog
+                }
                 if (!webHostingConfig.autoDeploy || webHostingConfig.token.isBlank()) {
                     return@SavedAppPreviewDialog
                 }
@@ -303,6 +375,67 @@ fun AppsScreen(navController: NavController) {
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun RuntimeShellRequiredCard(
+    packageName: String,
+    onDownload: () -> Unit,
+    onRefresh: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = SurfaceColor
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.runtime_shell_required_title),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary
+            )
+            Text(
+                text = stringResource(R.string.runtime_shell_required_subtitle, packageName),
+                fontSize = 13.sp,
+                color = TextSecondary
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(42.dp)
+                        .background(Color.Black, RoundedCornerShape(14.dp))
+                        .pressableScale(pressedScale = 0.98f, onClick = onDownload),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.runtime_shell_download_button),
+                        color = Color.White,
+                        fontSize = 13.sp
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(42.dp)
+                        .background(Color.White, RoundedCornerShape(14.dp))
+                        .border(width = 1.dp, color = Color.Black, shape = RoundedCornerShape(14.dp))
+                        .pressableScale(pressedScale = 0.98f, onClick = onRefresh),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.runtime_shell_check_button),
+                        color = Color.Black,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -793,7 +926,7 @@ private fun runtimeBuildStatusText(status: String?, errorText: String?): String?
         "in_progress" -> "APK packaging in progress"
         "success" -> "APK ready"
         "failed" -> errorText?.trim()?.takeIf { it.isNotBlank() } ?: "APK packaging failed"
-        "disabled" -> errorText?.trim()?.takeIf { it.isNotBlank() } ?: "Local packager is disabled"
+        "disabled" -> errorText?.trim()?.takeIf { it.isNotBlank() } ?: "Runtime shell plugin is required"
         "skipped" -> errorText?.trim()?.takeIf { it.isNotBlank() } ?: "APK packaging skipped"
         else -> null
     }

@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 
 class LocalBridgeRuntimePackagingService(
+    private val appContext: android.content.Context,
     private val config: RuntimePackagingConfig
 ) : RuntimePackagingService {
     private val requestTimeoutMs = config.requestTimeoutMs.coerceIn(5_000L, 120_000L)
@@ -32,6 +33,14 @@ class LocalBridgeRuntimePackagingService(
     ): Result<SavedApp> {
         return withContext(Dispatchers.IO) {
             runCatching {
+                if (!RuntimeShellPlugin.isInstalled(appContext)) {
+                    return@runCatching app.copy(
+                        runtimeBuildStatus = "disabled",
+                        runtimeBuildError = "Runtime shell plugin is required. Install it from Apps page.",
+                        runtimeBuildUpdatedAt = System.currentTimeMillis()
+                    )
+                }
+
                 val normalizedUrl = deployUrl.trim()
                 if (normalizedUrl.isBlank()) {
                     return@runCatching app.copy(
@@ -126,6 +135,14 @@ class LocalBridgeRuntimePackagingService(
     override suspend fun syncRuntimePackaging(app: SavedApp): Result<SavedApp> {
         return withContext(Dispatchers.IO) {
             runCatching {
+                if (!RuntimeShellPlugin.isInstalled(appContext)) {
+                    return@runCatching app.copy(
+                        runtimeBuildStatus = "disabled",
+                        runtimeBuildError = "Runtime shell plugin is required. Install it from Apps page.",
+                        runtimeBuildUpdatedAt = System.currentTimeMillis()
+                    )
+                }
+
                 val requestId = app.runtimeBuildRequestId?.trim().orEmpty()
                 if (requestId.isBlank()) return@runCatching app
 
