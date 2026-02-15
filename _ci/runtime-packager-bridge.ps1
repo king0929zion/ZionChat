@@ -327,7 +327,17 @@ function Start-PackagingJob {
             Save-StateToPath -State $state -Path $StatePath
         } catch {
             $state.status = "failed"
-            $state.error = $_.Exception.Message
+            $errorMessage = $_.Exception.Message
+            if ([string]::IsNullOrWhiteSpace($errorMessage)) {
+                $errorMessage = ($_ | Out-String).Trim()
+            }
+            if ([string]::IsNullOrWhiteSpace($errorMessage) -and (Test-Path $logPath)) {
+                $errorMessage = (Get-Content -Path $logPath -Tail 30 | Out-String).Trim()
+            }
+            if ([string]::IsNullOrWhiteSpace($errorMessage)) {
+                $errorMessage = "Runtime packaging failed. See logPath for details."
+            }
+            $state.error = $errorMessage
             $state.logPath = $logPath
             Save-StateToPath -State $state -Path $StatePath
         } finally {

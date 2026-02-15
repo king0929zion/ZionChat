@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -149,7 +150,16 @@ fun WebHostingScreen(navController: NavController) {
                 }
                 Switch(
                     checked = autoDeploy,
-                    onCheckedChange = { autoDeploy = it }
+                    onCheckedChange = { autoDeploy = it },
+                    colors =
+                        SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = Color.Black,
+                            checkedBorderColor = Color.Black,
+                            uncheckedThumbColor = Color.Black,
+                            uncheckedTrackColor = Color.White,
+                            uncheckedBorderColor = Color.Black
+                        )
                 )
             }
 
