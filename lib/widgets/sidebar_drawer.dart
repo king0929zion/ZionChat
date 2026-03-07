@@ -71,7 +71,7 @@ class SidebarDrawer extends StatelessWidget {
               child: Column(
                 children: [
                   _SidebarActionRow(
-                    icon: Icons.edit_square_outlined,
+                    icon: Icons.edit_outlined,
                     label: 'New chat',
                     onTap: onNewChat,
                   ),
