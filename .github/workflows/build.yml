@@ -1,0 +1,142 @@
+name: Build and Release ZionChat
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Create GitHub release"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CI_FAST_BUILD: "true"
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-home-cache-cleanup: true
+
+    - name: Restore Kotlin incremental caches
+      uses: actions/cache@v4
+      with:
+        path: |
+          .gradle/configuration-cache
+          .gradle/kotlin
+          app/build/kotlin
+          app/build/tmp/kotlin-classes/release
+          app/build/intermediates/javac/release
+          app/build/intermediates/compile_and_runtime_not_namespaced_r_class_jar/release
+        key: ${{ runner.os }}-kotlin-incremental-${{ github.ref_name }}-${{ hashFiles('build.gradle', 'settings.gradle', 'gradle.properties', 'gradle/wrapper/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-kotlin-incremental-${{ github.ref_name }}-
+          ${{ runner.os }}-kotlin-incremental-
+
+    - name: Ensure Gradle wrapper executable
+      run: chmod +x gradlew
+
+    - name: Configure signing (optional)
+      env:
+        SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+        SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+        SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+      run: |
+        if [ -n "$SIGNING_KEYSTORE_BASE64" ]; then
+          echo "$SIGNING_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/zionchat-release.jks"
+          echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/zionchat-release.jks" >> $GITHUB_ENV
+          echo "SIGNING_STORE_PASSWORD=$SIGNING_STORE_PASSWORD" >> $GITHUB_ENV
+          echo "SIGNING_KEY_ALIAS=$SIGNING_KEY_ALIAS" >> $GITHUB_ENV
+          echo "SIGNING_KEY_PASSWORD=$SIGNING_KEY_PASSWORD" >> $GITHUB_ENV
+        else
+          echo "Signing secrets not set; building unsigned release."
+        fi
+
+    - name: Build APK
+      run: |
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          ./gradlew :app:assembleDebug --stacktrace --max-workers=4 --build-cache --configuration-cache -Dkotlin.compiler.execution.strategy=daemon -Pkotlin.incremental=true -Pkotlin.incremental.useClasspathSnapshot=true -PCI_FAST_BUILD=true
+        else
+          ./gradlew :app:assembleRelease --stacktrace --max-workers=4 --build-cache --configuration-cache -Dkotlin.compiler.execution.strategy=daemon -Pkotlin.incremental=true -Pkotlin.incremental.useClasspathSnapshot=true -PCI_FAST_BUILD=true -Pandroid.enableResourceOptimizations=false
+        fi
+
+    - name: Run tests
+      if: github.event_name == 'pull_request'
+      run: ./gradlew :app:testDebugUnitTest --stacktrace --max-workers=4 --build-cache --configuration-cache -Dkotlin.compiler.execution.strategy=daemon -Pkotlin.incremental=true -Pkotlin.incremental.useClasspathSnapshot=true -PCI_FAST_BUILD=true
+      continue-on-error: true
+
+    - name: Get version from build.gradle
+      id: get_version
+      run: |
+        VERSION=$(grep "versionName" app/build.gradle | head -1 | sed 's/.*versionName.*"\([0-9.]*\)".*/\1/')
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Upload Release APK to Artifacts
+      uses: actions/upload-artifact@v4
+      if: github.event_name != 'pull_request'
+      with:
+        name: ZionChat-v${{ steps.get_version.outputs.version }}
+        compression-level: 0
+        path: |
+          app/build/outputs/apk/release/*.apk
+
+    - name: Upload Debug APK to Artifacts
+      uses: actions/upload-artifact@v4
+      if: github.event_name == 'pull_request'
+      with:
+        name: ZionChat-debug-v${{ steps.get_version.outputs.version }}
+        compression-level: 0
+        path: |
+          app/build/outputs/apk/debug/*.apk
+
+    - name: Create Release
+      if: |
+        (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) ||
+        (github.event_name == 'workflow_dispatch' && inputs.publish_release == true)
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ steps.get_version.outputs.version }}
+        name: ZionChat v${{ steps.get_version.outputs.version }}
+        body_path: docs/release-notes/latest.md
+        files: |
+          app/build/outputs/apk/release/*.apk
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload build reports
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: build-reports
+        path: |
+          app/build/reports/
+          build/reports/
